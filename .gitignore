@@ -1,4 +1,5 @@
 *.xml
 *.iml
+*.log
 .git
 .idea

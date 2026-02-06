@@ -1067,21 +1067,22 @@ def main():
     optimize_pytables_for_network()
 
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    evsong_directory = os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or', 'or16or22',
-                                    'labeled_song_final')
+    evsong_directory = os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or')
 
     # Get file paths and copy locally in one step
     metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(
         wav_directory=evsong_directory,
         save_path=evsong_test_directory,
         batch_file_naming='batch.txt.labeled',
-        copy_locally=True  # Copy files as we discover them
+        copy_locally=True,  # Copy files as we discover them
+        bird_subset=['or16or22', 'or18or24']
     )
 
     # Process spectrograms using local files
     save_specs_for_evsonganaly_birds(
         metadata_file_paths=metadata_file_paths,
         save_path=evsong_test_directory,
+        songs_per_bird=15,
         prefer_local=True  # Use local copies
     )
 
@@ -1093,7 +1094,7 @@ def main():
         seg_directory=wseg_directory,
         save_path=wseg_test_directory,
         song_or_call='song',
-        bird_subset=['bu68bu81'],
+        bird_subset=['bu68bu81', 'bu85bu97'],
         copy_locally=True
     )
 
@@ -1101,7 +1102,7 @@ def main():
     save_specs_for_wseg_birds(
         metadata_file_paths=wseg_metadata_paths,
         save_path=wseg_test_directory,
-        songs_per_bird=5,
+        songs_per_bird=15,
         prefer_local=True
     )
 

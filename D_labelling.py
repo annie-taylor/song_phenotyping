@@ -4,19 +4,20 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import os
 import logging
-from collections import Counter
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, normalized_mutual_info_score
 from scipy.spatial.distance import euclidean, cdist
 import hdbscan
 import matplotlib.pyplot as plt
-import seaborn as sn
+import seaborn as sns
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from tqdm import tqdm
 import shutil
 from pathlib import Path
 import tables
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
 
 from tools.system_utils import check_sys_for_macaw_root
 
@@ -275,6 +276,220 @@ def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path
     summary_df = pd.DataFrame(results)
 
     return summary_df
+
+
+def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path, figure_path,
+                          candidate_params: list = None, true_labels: np.ndarray = None,
+                          metrics: list = None, sample_size: int = None, use_parallel: bool = True,
+                          max_workers: int = None):
+    """
+    Search through candidate clustering parameters and evaluate performance.
+
+    Args:
+        embeddings: UMAP embeddings array
+        hashes: Sample hash identifiers
+        algorithm: Clustering algorithm name
+        umap_id: UMAP parameter identifier
+        directory_path: Base directory for saving results
+        figure_path: Directory for saving plots
+        candidate_params: List of parameter dictionaries to test
+        true_labels: Ground truth labels for evaluation
+        metrics: List of evaluation metrics to compute
+        sample_size: Total number of samples (for efficiency, pass if known)
+        use_parallel: Whether to use parallel processing (default: True)
+        max_workers: Maximum number of parallel workers (default: CPU count)
+
+    Returns:
+        pd.DataFrame: Summary of results for all parameter combinations
+    """
+    if candidate_params is None:
+        candidate_params = []
+
+    if metrics is None:
+        metrics = ['silhouette', 'dbi', 'ch']
+
+    # Calculate sample size if not provided
+    if sample_size is None:
+        sample_size = len(embeddings)
+
+    # Create algorithm-specific directory
+    algorithm_path = os.path.join(directory_path, algorithm)
+    os.makedirs(algorithm_path, exist_ok=True)
+
+    # Choose parallel or sequential processing
+    if use_parallel and len(candidate_params) > 1:
+        try:
+            return _search_cluster_params_parallel(
+                embeddings, hashes, algorithm, umap_id, algorithm_path, figure_path,
+                candidate_params, true_labels, metrics, sample_size, max_workers
+            )
+        except Exception as e:
+            logging.warning(f"Parallel processing failed, falling back to sequential: {e}")
+            return _search_cluster_params_sequential(
+                embeddings, hashes, algorithm, umap_id, algorithm_path, figure_path,
+                candidate_params, true_labels, metrics, sample_size
+            )
+    else:
+        return _search_cluster_params_sequential(
+            embeddings, hashes, algorithm, umap_id, algorithm_path, figure_path,
+            candidate_params, true_labels, metrics, sample_size
+        )
+
+
+def _search_cluster_params_parallel(embeddings, hashes, algorithm, umap_id, algorithm_path,
+                                    figure_path, candidate_params, true_labels, metrics,
+                                    sample_size, max_workers):
+    """Parallel implementation of parameter search."""
+
+    # Control worker count
+    if max_workers is None:
+        max_workers = min(mp.cpu_count(), len(candidate_params))
+    else:
+        max_workers = min(max_workers, len(candidate_params))
+
+    logging.info(f"Using {max_workers} parallel workers for parameter search")
+
+    # Prepare arguments for parallel processing
+    args_list = []
+    for params in candidate_params:
+        args_list.append((
+            embeddings, hashes, algorithm, params, algorithm_path,
+            figure_path, umap_id, true_labels, metrics, sample_size
+        ))
+
+    results = []
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all jobs
+        future_to_params = {executor.submit(_cluster_single_params, args): args for args in args_list}
+
+        # Collect results with progress tracking
+        completed = 0
+        for future in as_completed(future_to_params):
+            result = future.result()
+            completed += 1
+
+            if result is not None:
+                results.append(result)
+                # Log success/failure
+                if not pd.isna(result.get('n_syls', np.nan)):
+                    logging.debug(f"✅ {completed}/{len(args_list)}: Completed parameter combination")
+                else:
+                    logging.debug(f"❌ {completed}/{len(args_list)}: Failed parameter combination")
+
+    # Clear embeddings from memory
+    del embeddings
+
+    return pd.DataFrame(results)
+
+
+def _search_cluster_params_sequential(embeddings, hashes, algorithm, umap_id, algorithm_path,
+                                      figure_path, candidate_params, true_labels, metrics, sample_size):
+    """Sequential implementation of parameter search (original logic)."""
+
+    logging.info("Using sequential processing for parameter search")
+
+    results = []
+
+    # Process each parameter combination sequentially
+    for params in tqdm(candidate_params, desc="Searching cluster parameters..."):
+        try:
+            labels, hashes_returned, scores, label_path, fig_path = cluster_embeddings(
+                embeddings=embeddings,
+                hashes=hashes,
+                method=algorithm,
+                cluster_params=params,
+                return_scores=True,
+                path_to_clusters=algorithm_path,
+                path_to_imgs=figure_path,
+                true_labels=true_labels,
+                umap_id=umap_id,
+                metrics=metrics
+            )
+
+            # Build result row
+            result_row = {
+                'sample_size': sample_size,
+                'n_syls': len(np.unique(labels)),
+                'png_path': Path(fig_path) if fig_path else None,
+                'label_path': Path(label_path) if label_path else None,
+            }
+
+            # Add parameter values
+            result_row.update(params)
+
+            # Add metric scores (raw values for cross-bird comparison)
+            result_row.update(scores)
+
+            results.append(result_row)
+
+        except Exception as e:
+            logging.error(f"Error processing parameters {params}: {e}")
+            # Add failed result with NaN scores
+            result_row = {
+                'sample_size': sample_size,
+                'n_syls': np.nan,
+                'png_path': None,
+                'label_path': None,
+            }
+            result_row.update(params)
+            result_row.update({metric: np.nan for metric in metrics})
+            results.append(result_row)
+
+    # Clear embeddings from memory since we're done with clustering
+    del embeddings
+
+    # Create summary DataFrame
+    return pd.DataFrame(results)
+
+
+def _cluster_single_params(args):
+    """Worker function for parallel parameter search."""
+    (embeddings, hashes, algorithm, params, algorithm_path,
+     figure_path, umap_id, true_labels, metrics, sample_size) = args
+
+    try:
+        labels, hashes_returned, scores, label_path, fig_path = cluster_embeddings(
+            embeddings=embeddings,
+            hashes=hashes,
+            method=algorithm,
+            cluster_params=params,
+            return_scores=True,
+            path_to_clusters=algorithm_path,
+            path_to_imgs=figure_path,
+            true_labels=true_labels,
+            umap_id=umap_id,
+            metrics=metrics
+        )
+
+        # Build result row
+        result_row = {
+            'sample_size': sample_size,
+            'n_syls': len(np.unique(labels)),
+            'png_path': Path(fig_path) if fig_path else None,
+            'label_path': Path(label_path) if label_path else None,
+        }
+
+        # Add parameter values
+        result_row.update(params)
+
+        # Add metric scores
+        result_row.update(scores)
+
+        return result_row
+
+    except Exception as e:
+        logging.error(f"Error processing parameters {params}: {e}")
+        # Return failed result with NaN scores
+        result_row = {
+            'sample_size': sample_size,
+            'n_syls': np.nan,
+            'png_path': None,
+            'label_path': None,
+        }
+        result_row.update(params)
+        result_row.update({metric: np.nan for metric in metrics})
+        return result_row
 
 
 def information_criterion(embeddings, labels, type=['aic', 'bic', 'log-likelihood']):
@@ -540,9 +755,9 @@ def parse_embedding_filename(filename: str):
 # ============================================================================
 
 def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=None,
-                            target_clusters=20, penalty_decay=0.1):
+                            target_clusters=20, penalty_decay=0.1, use_cluster_penalty=False):
     """
-    Compute composite scores with normalization and cluster count penalty.
+    Compute composite scores with normalization and optional cluster count penalty.
 
     Args:
         summary_df: DataFrame with raw metric scores
@@ -551,6 +766,7 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
         weights: Weights for each metric (equal weights if None)
         target_clusters: Target number of clusters for penalty function
         penalty_decay: Decay rate for cluster penalty
+        use_cluster_penalty: Whether to apply cluster count penalty (default: False)
 
     Returns:
         pd.DataFrame: DataFrame with added normalized scores and composite score
@@ -597,14 +813,19 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
         df[f'normalized_{metric}'] = norm_metric
         normalized_scores.append(norm_metric)
 
-    # Compute cluster penalties
-    cluster_penalties = [score_cluster_penalty(n, target_clusters, penalty_decay) for n in n_syls]
-
     # Compute weighted composite score
     if normalized_scores:
         weighted_scores = [w * norm.fillna(0) for w, norm in zip(weights, normalized_scores)]
         composite_base = sum(weighted_scores) / sum(weights)  # Weighted average
-        df['composite_score'] = composite_base * cluster_penalties
+
+        # Apply cluster penalty only if requested
+        if use_cluster_penalty:
+            cluster_penalties = [score_cluster_penalty(n, target_clusters, penalty_decay) for n in n_syls]
+            df['composite_score'] = composite_base * cluster_penalties
+            logging.info("Applied cluster count penalty to composite scores")
+        else:
+            df['composite_score'] = composite_base
+
     else:
         df['composite_score'] = np.nan
 
@@ -1175,7 +1396,8 @@ def compute_cross_bird_composite_scores(aggregated_df, metrics, weights=None):
         aggregated_df,
         metrics=metrics,
         weights=weights,
-        n_syls=aggregated_df['n_syls'].tolist()
+        n_syls=aggregated_df['n_syls'].tolist(),
+        use_cluster_penalty=False  # Add this parameter
     )
 
     # Add cross-bird ranking
@@ -1432,7 +1654,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
             hdbscan_params = [
                 {'min_cluster_size': n, 'min_samples': m}
                 for n in [5, 10, 20, 40, 60]
-                for m in [1, 5, 10, 20, 40]
+                for m in [1, 5]
             ]
 
         # Process each embedding file
@@ -1474,7 +1696,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                     candidate_params=hdbscan_params,
                     true_labels=labels,
                     metrics=metrics,
-                    sample_size=sample_size
+                    sample_size=sample_size,
+                    use_parallel=True
                 )
 
                 # Add UMAP parameters to summary
@@ -1502,7 +1725,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         master_summary_df = compute_composite_score(
             master_summary_df,
             metrics=metrics,
-            n_syls=master_summary_df['n_syls'].tolist()
+            n_syls=master_summary_df['n_syls'].tolist(),
+            use_cluster_penalty=False  # Add this parameter
         )
 
         # Reorder columns and sort by performance
@@ -1540,13 +1764,9 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         return False
 
 
-def main():
+def main(save_path: str) -> None:
     """Main function to run the clustering pipeline."""
     try:
-        # Setup paths and parameters
-        path_to_macaw = check_sys_for_macaw_root()
-        save_path = os.path.join(path_to_macaw, 'annietaylor', 'x-foster', 'songdata')
-
         # Define evaluation metrics
         metrics = ['silhouette', 'dbi', 'aic']
 
@@ -1639,6 +1859,111 @@ def main():
         raise
 
 
+def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = True):
+    """
+    Clear clustering label files and images to avoid clutter.
+
+    Args:
+        save_path: Root directory containing bird data
+        bird: Specific bird to clear (all birds if None)
+        confirm: Whether to ask for confirmation before deleting
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Get birds to process
+        if bird is not None:
+            birds_to_clear = [bird]
+        else:
+            birds_to_clear = _get_available_birds(save_path)
+
+        if not birds_to_clear:
+            logging.info("No birds found to clear")
+            return True
+
+        # Calculate what will be removed
+        total_items = 0
+        paths_to_remove = []
+
+        for bird_name in birds_to_clear:
+            bird_path = os.path.join(save_path, bird_name)
+
+            # Labelling directory (contains all cluster labels)
+            labelling_path = os.path.join(bird_path, 'data', 'labelling')
+            if os.path.exists(labelling_path):
+                paths_to_remove.append(('labelling', labelling_path))
+                # Count files for reporting
+                for root, dirs, files in os.walk(labelling_path):
+                    total_items += len(files)
+
+            # Cluster figures directory
+            cluster_figures_path = os.path.join(bird_path, 'figures', 'clusters')
+            if os.path.exists(cluster_figures_path):
+                paths_to_remove.append(('cluster_figures', cluster_figures_path))
+                # Count files for reporting
+                for root, dirs, files in os.walk(cluster_figures_path):
+                    total_items += len(files)
+
+            # Master summary CSV
+            master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+            if os.path.exists(master_summary_path):
+                paths_to_remove.append(('master_summary', master_summary_path))
+                total_items += 1
+
+            # PDF report
+            pdf_path = os.path.join(bird_path, f'{bird_name}_cluster_summary.pdf')
+            if os.path.exists(pdf_path):
+                paths_to_remove.append(('pdf_report', pdf_path))
+                total_items += 1
+
+        if not paths_to_remove:
+            logging.info("No clustering outputs found to clear")
+            return True
+
+        # Show what will be removed
+        logging.info(f"Found {total_items} items to remove across {len(birds_to_clear)} bird(s):")
+        for bird_name in birds_to_clear:
+            bird_items = [path for path_type, path in paths_to_remove if bird_name in path]
+            if bird_items:
+                logging.info(f"  {bird_name}: {len(bird_items)} directories/files")
+
+        # Confirmation
+        if confirm:
+            response = input(f"\nAre you sure you want to delete {total_items} clustering output items? (y/N): ")
+            if response.lower() not in ['y', 'yes']:
+                logging.info("Deletion cancelled")
+                return False
+
+        # Remove items
+        removed_count = 0
+        failed_count = 0
+
+        for path_type, path in paths_to_remove:
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                    logging.debug(f"Removed directory: {path}")
+                else:
+                    os.remove(path)
+                    logging.debug(f"Removed file: {path}")
+                removed_count += 1
+            except Exception as e:
+                logging.error(f"Failed to remove {path}: {e}")
+                failed_count += 1
+
+        # Report results
+        if failed_count == 0:
+            logging.info(f"✅ Successfully removed all {removed_count} items")
+        else:
+            logging.warning(f"⚠️ Removed {removed_count} items, failed to remove {failed_count} items")
+
+        return failed_count == 0
+
+    except Exception as e:
+        logging.error(f"Error clearing clustering outputs: {e}")
+        return False
+
 if __name__ == '__main__':
     # Setup logging
     logging.basicConfig(
@@ -1649,5 +1974,13 @@ if __name__ == '__main__':
             logging.StreamHandler()
         ]
     )
+    # Setup paths and parameters
+    #path_to_macaw = check_sys_for_macaw_root()
 
-    main()
+    save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    clear_clustering_outputs(save_path=save_path)
+    main(save_path=save_path)
+    save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    clear_clustering_outputs(save_path=save_path)
+    main(save_path=save_path)
+
