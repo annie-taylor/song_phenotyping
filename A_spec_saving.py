@@ -3,9 +3,11 @@ from sys import platform
 from scipy.io import loadmat
 import numpy as np
 import hashlib
-from typing import Any
+from typing import Any, Dict, List
 from random import sample
 import gc
+import shutil
+from tqdm import tqdm
 
 from tools.song_io import save_segmented_audio_data, get_song_specs
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network

@@ -8,7 +8,6 @@ import numpy as np
 import logging
 import random
 import tables
-import shutil
 
 
 def create_song_spectrograms_pdf(project_directory: str,
