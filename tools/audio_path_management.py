@@ -1,56 +1,6 @@
 import os
 import logging
-from typing import Dict, List
-from tqdm import tqdm
-from pathlib import Path
-import shutil
-
-
-def copy_audio_files_locally(audio_file_paths: Dict[str, List[str]],
-                             project_directory: str) -> Dict[str, List[str]]:
-    """
-    Copy audio files to local 'copied_data' directory and return new paths.
-
-    Parameters:
-    - audio_file_paths: Dictionary mapping bird names to lists of audio file paths
-    - project_directory: Root project directory (e.g., "evsong test" or "wseg test")
-
-    Returns:
-    - Dictionary mapping bird names to lists of local file paths
-    """
-    copied_data_dir = os.path.join(project_directory, 'copied_data')
-    os.makedirs(copied_data_dir, exist_ok=True)
-
-    local_paths = {}
-
-    for bird, file_paths in audio_file_paths.items():
-        # Create bird directory
-        bird_dir = os.path.join(copied_data_dir, bird)
-        os.makedirs(bird_dir, exist_ok=True)
-
-        local_paths[bird] = []
-
-        for file_path in tqdm(file_paths, desc=f"Copying {bird} files"):
-            try:
-                # Get original filename
-                filename = os.path.basename(file_path)
-                local_file_path = os.path.join(bird_dir, filename)
-
-                # Copy file if it doesn't exist locally
-                if not os.path.exists(local_file_path):
-                    shutil.copy2(file_path, local_file_path)
-                    logging.info(f"Copied {file_path} to {local_file_path}")
-                else:
-                    logging.debug(f"File already exists locally: {local_file_path}")
-
-                local_paths[bird].append(local_file_path)
-
-            except Exception as e:
-                logging.error(f"Failed to copy {file_path}: {e}")
-                # Keep original path if copy fails
-                local_paths[bird].append(file_path)
-
-    return local_paths
+from typing import Dict
 
 
 def extract_base_name(filepath: str) -> str:

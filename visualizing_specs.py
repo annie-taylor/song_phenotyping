@@ -10,9 +10,6 @@ import random
 import tables
 import shutil
 
-from tools.audio_path_management import copy_audio_files_locally
-from A_spec_saving import filepaths_from_wseg, filepaths_from_wseg
-
 
 def create_song_spectrograms_pdf(project_directory: str,
                                  target_duration: float = 8.0,
