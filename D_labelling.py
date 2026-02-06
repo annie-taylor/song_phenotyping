@@ -1204,3 +1204,450 @@ def _get_available_birds(save_path: str):
     except Exception as e:
         logging.error(f"Error getting available birds: {e}")
         return []
+
+
+def _estimate_sample_size_from_paths(results_df):
+    """Estimate sample size from embedding files if not directly available."""
+    sample_sizes = []
+
+    for _, row in results_df.iterrows():
+        try:
+            # Try to get from existing column first
+            if 'sample_size' in row and pd.notna(row['sample_size']):
+                sample_sizes.append(int(row['sample_size']))
+                continue
+
+            # Otherwise estimate from label path by loading the file
+            if 'label_path' in row and pd.notna(row['label_path']):
+                try:
+                    labels, _, _ = load_labels(str(row['label_path']))
+                    if labels is not None:
+                        sample_sizes.append(len(labels))
+                        continue
+                except Exception as e:
+                    logging.debug(f"Could not load labels from {row['label_path']}: {e}")
+
+            # Fallback: use a default estimate or NaN
+            logging.warning(f"Could not determine sample size for row, using NaN")
+            sample_sizes.append(np.nan)
+
+        except Exception as e:
+            logging.error(f"Error estimating sample size: {e}")
+            sample_sizes.append(np.nan)
+
+    return sample_sizes
+
+
+def _reorder_for_cross_bird_analysis(combined_df):
+    """Reorder columns for cross-bird analysis readability."""
+    priority_cols = ['bird', 'sample_size', 'composite_score', 'n_syls']
+
+    # Add parameter columns
+    param_cols = ['n_neighbors', 'min_dist', 'metric', 'min_cluster_size', 'min_samples']
+    priority_cols.extend([col for col in param_cols if col in combined_df.columns])
+
+    # Add metric columns (raw scores)
+    metric_cols = [col for col in combined_df.columns
+                   if col not in priority_cols + ['png_path', 'label_path']
+                   and not col.startswith('normalized_')]
+    priority_cols.extend(metric_cols)
+
+    # Add path columns last
+    path_cols = ['png_path', 'label_path']
+    priority_cols.extend([col for col in path_cols if col in combined_df.columns])
+
+    # Ensure all columns are included
+    remaining_cols = [col for col in combined_df.columns if col not in priority_cols]
+    final_columns = priority_cols + remaining_cols
+
+    return combined_df[final_columns]
+
+
+def save_cross_bird_analysis(aggregated_df, analysis_by_size, save_path: str, filename_prefix: str = 'cross_bird'):
+    """
+    Save cross-bird analysis results to CSV files.
+
+    Args:
+        aggregated_df: Aggregated raw scores DataFrame
+        analysis_by_size: Sample size analysis DataFrame
+        save_path: Directory to save files
+        filename_prefix: Prefix for output filenames
+
+    Returns:
+        dict: Paths to saved files
+    """
+    saved_files = {}
+
+    try:
+        # Save aggregated raw scores
+        aggregated_path = os.path.join(save_path, f'{filename_prefix}_aggregated_scores.csv')
+        aggregated_df.to_csv(aggregated_path, index=False)
+        saved_files['aggregated_scores'] = aggregated_path
+
+        # Save sample size analysis
+        if not analysis_by_size.empty:
+            analysis_path = os.path.join(save_path, f'{filename_prefix}_sample_size_analysis.csv')
+            analysis_by_size.to_csv(analysis_path, index=False)
+            saved_files['sample_size_analysis'] = analysis_path
+
+        logging.info(f"Saved cross-bird analysis files: {list(saved_files.keys())}")
+        return saved_files
+
+    except Exception as e:
+        logging.error(f"Error saving cross-bird analysis: {e}")
+        return {}
+
+
+def identify_optimal_parameters_by_sample_size(analysis_by_size_df):
+    """
+    Identify which parameter combinations work best for different sample size ranges.
+
+    Args:
+        analysis_by_size_df: DataFrame from analyze_parameter_performance_by_sample_size
+
+    Returns:
+        dict: Recommendations by sample size bin
+    """
+    recommendations = {}
+
+    for _, row in analysis_by_size_df.iterrows():
+        bin_name = row['sample_size_bin']
+
+        # Extract parameter recommendations
+        param_recommendations = {}
+        param_cols = [col for col in row.index if col.endswith('_mode')]
+
+        for col in param_cols:
+            param_name = col.replace('_mode', '')
+            if pd.notna(row[col]):
+                param_recommendations[param_name] = row[col]
+
+        # Extract performance metrics
+        performance_summary = {}
+        metric_cols = [col for col in row.index if col.endswith('_mean')]
+
+        for col in metric_cols:
+            metric_name = col.replace('_mean', '')
+            if pd.notna(row[col]):
+                performance_summary[metric_name] = {
+                    'mean': row[col],
+                    'std': row.get(f'{metric_name}_std', np.nan)
+                }
+
+        recommendations[bin_name] = {
+            'sample_info': {
+                'n_birds': row['n_birds'],
+                'n_parameter_combinations': row['n_parameter_combinations'],
+                'avg_sample_size': row['avg_sample_size'],
+                'avg_n_clusters': row['avg_n_clusters']
+            },
+            'recommended_parameters': param_recommendations,
+            'expected_performance': performance_summary
+        }
+
+    return recommendations
+
+
+# ============================================================================
+# MAIN PIPELINE FUNCTIONS
+# ============================================================================
+
+def remove_directory(path: str):
+    """
+    Safely remove directory and all contents.
+
+    Args:
+        path: Directory path to remove
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+            logging.info(f"Successfully removed {path}")
+            return True
+        else:
+            logging.info(f"Directory {path} does not exist")
+            return True
+    except Exception as e:
+        logging.error(f"Error removing directory {path}: {e}")
+        return False
+
+
+def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = False,
+               hdbscan_params: list = None, top_n_for_pdf: int = 20):
+    """
+    Complete labeling pipeline for a single bird: clustering, evaluation, and reporting.
+
+    Args:
+        save_path: Root directory containing bird data
+        bird: Bird identifier
+        metrics: List of evaluation metrics to compute
+        replace_labels: Whether to overwrite existing labels
+        hdbscan_params: Custom HDBSCAN parameter grid (uses default if None)
+        top_n_for_pdf: Number of top results to include in PDF report
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        logging.info(f"Starting labeling pipeline for bird {bird}")
+
+        # Setup paths
+        bird_path = os.path.join(save_path, bird)
+        data_path = os.path.join(bird_path, 'data')
+        labelling_path = os.path.join(data_path, 'labelling')
+        embedding_path = os.path.join(data_path, 'embeddings')
+        figure_path = os.path.join(bird_path, 'figures', 'clusters')
+
+        # Create directories
+        os.makedirs(figure_path, exist_ok=True)
+        os.makedirs(labelling_path, exist_ok=True)
+
+        # Handle replacement of existing labels
+        if replace_labels and os.path.exists(labelling_path):
+            if not remove_directory(labelling_path):
+                logging.error(f"Failed to remove existing labelling directory for {bird}")
+                return False
+            os.makedirs(labelling_path, exist_ok=True)
+
+            # Remove existing master summary
+            master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+            if os.path.exists(master_summary_path):
+                os.remove(master_summary_path)
+
+        # Check for embeddings
+        if not os.path.exists(embedding_path):
+            logging.error(f"No embeddings directory found for bird {bird}")
+            return False
+
+        embeddings_files = [f for f in os.listdir(embedding_path) if f.endswith('.h5')]
+        if not embeddings_files:
+            logging.error(f"No embedding files found for bird {bird}")
+            return False
+
+        # Default HDBSCAN parameters if not provided
+        if hdbscan_params is None:
+            hdbscan_params = [
+                {'min_cluster_size': n, 'min_samples': m}
+                for n in [5, 10, 20, 40, 60]
+                for m in [1, 5, 10, 20, 40]
+            ]
+
+        # Process each embedding file
+        all_summaries = []
+
+        for embedding_file in tqdm(embeddings_files, desc=f'Processing embeddings for {bird}'):
+            try:
+                # Parse UMAP parameters from filename
+                parsed_params = parse_embedding_filename(embedding_file)
+                if parsed_params is None:
+                    logging.warning(f"Could not parse filename {embedding_file}, skipping")
+                    continue
+
+                metric, n_neighbors, min_dist, umap_id = parsed_params
+
+                # Load embeddings
+                embeddings, hashes, labels = load_umap_embeddings(
+                    os.path.join(embedding_path, embedding_file)
+                )
+
+                if embeddings is None:
+                    logging.warning(f"Could not load embeddings from {embedding_file}, skipping")
+                    continue
+
+                # Calculate sample size
+                sample_size = len(embeddings)
+
+                # Setup directory for this embedding
+                embedding_labelling_path = os.path.join(labelling_path, umap_id)
+
+                # Search clustering parameters
+                summary_df = search_cluster_params(
+                    embeddings=embeddings,
+                    hashes=hashes,
+                    algorithm='hdbscan',
+                    umap_id=umap_id,
+                    directory_path=embedding_labelling_path,
+                    figure_path=figure_path,
+                    candidate_params=hdbscan_params,
+                    true_labels=labels,
+                    metrics=metrics,
+                    sample_size=sample_size
+                )
+
+                # Add UMAP parameters to summary
+                summary_df['n_neighbors'] = n_neighbors
+                summary_df['min_dist'] = min_dist
+                summary_df['metric'] = metric
+
+                all_summaries.append(summary_df)
+
+                # Clear embeddings from memory
+                del embeddings
+
+            except Exception as e:
+                logging.error(f"Error processing {embedding_file} for bird {bird}: {e}")
+                continue
+
+        if not all_summaries:
+            logging.error(f"No valid embeddings processed for bird {bird}")
+            return False
+
+        # Combine all summaries
+        master_summary_df = pd.concat(all_summaries, ignore_index=True)
+
+        # Compute composite scores across all parameter combinations
+        master_summary_df = compute_composite_score(
+            master_summary_df,
+            metrics=metrics,
+            n_syls=master_summary_df['n_syls'].tolist()
+        )
+
+        # Reorder columns and sort by performance
+        master_summary_df = reorder_columns(master_summary_df, metrics)
+
+        # Sort by primary metric (NMI if available, otherwise composite score)
+        if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
+            master_summary_df = master_summary_df.sort_values('nmi', ascending=False)
+        else:
+            master_summary_df = master_summary_df.sort_values('composite_score', ascending=False)
+
+        master_summary_df = master_summary_df.reset_index(drop=True)
+
+        # Save master summary
+        if not save_master_summary(master_summary_df, bird_path):
+            logging.error(f"Failed to save master summary for bird {bird}")
+            return False
+
+        # Create PDF report
+        pdf_success = create_cluster_summary_pdf(
+            master_summary_df,
+            bird=bird,
+            save_path=bird_path,
+            top_n=top_n_for_pdf
+        )
+
+        if not pdf_success:
+            logging.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
+
+        logging.info(f"Successfully completed labeling pipeline for bird {bird}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Error in labeling pipeline for bird {bird}: {e}")
+        return False
+
+
+def main():
+    """Main function to run the clustering pipeline."""
+    try:
+        # Setup paths and parameters
+        path_to_macaw = check_sys_for_macaw_root()
+        save_path = os.path.join(path_to_macaw, 'annietaylor', 'x-foster', 'songdata')
+
+        # Define evaluation metrics
+        metrics = ['silhouette', 'dbi', 'aic']
+
+        # Get available birds
+        birds = _get_available_birds(save_path)
+        if not birds:
+            logging.error("No birds found for processing")
+            return
+
+        logging.info(f"Found {len(birds)} birds for processing: {birds}")
+
+        # Process each bird
+        successful_birds = []
+        failed_birds = []
+
+        for bird in tqdm(birds, desc='Processing birds'):
+            success = label_bird(
+                save_path=save_path,
+                bird=bird,
+                metrics=metrics,
+                replace_labels=True
+            )
+
+            if success:
+                successful_birds.append(bird)
+            else:
+                failed_birds.append(bird)
+
+        # Report results
+        logging.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+        if failed_birds:
+            logging.warning(f"Failed birds: {failed_birds}")
+
+        # Perform cross-bird analysis if we have successful results
+        if len(successful_birds) >= 2:
+            logging.info("Starting cross-bird analysis...")
+
+            try:
+                # Aggregate raw scores across birds
+                aggregated_df = aggregate_raw_scores_across_birds(
+                    save_path=save_path,
+                    birds=successful_birds,
+                    top_n=10
+                )
+
+                if not aggregated_df.empty:
+                    # Analyze performance by sample size
+                    analysis_by_size = analyze_parameter_performance_by_sample_size(
+                        aggregated_df=aggregated_df,
+                        metrics=metrics
+                    )
+
+                    # Compute cross-bird composite scores
+                    aggregated_df = compute_cross_bird_composite_scores(
+                        aggregated_df=aggregated_df,
+                        metrics=metrics
+                    )
+
+                    # Save cross-bird analysis results
+                    saved_files = save_cross_bird_analysis(
+                        aggregated_df=aggregated_df,
+                        analysis_by_size=analysis_by_size,
+                        save_path=save_path,
+                        filename_prefix='cross_bird'
+                    )
+
+                    # Generate parameter recommendations
+                    if not analysis_by_size.empty:
+                        recommendations = identify_optimal_parameters_by_sample_size(analysis_by_size)
+
+                        # Log key recommendations
+                        logging.info("Parameter recommendations by sample size:")
+                        for bin_name, rec in recommendations.items():
+                            logging.info(f"  {bin_name}: {rec['recommended_parameters']}")
+
+                    logging.info(f"Cross-bird analysis complete. Files saved: {list(saved_files.keys())}")
+                else:
+                    logging.warning("No data available for cross-bird analysis")
+
+            except Exception as e:
+                logging.error(f"Error in cross-bird analysis: {e}")
+
+        else:
+            logging.info("Insufficient successful birds for cross-bird analysis (need at least 2)")
+
+        logging.info("Pipeline execution complete!")
+
+    except Exception as e:
+        logging.error(f"Error in main pipeline: {e}")
+        raise
+
+
+if __name__ == '__main__':
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('clustering_pipeline.log'),
+            logging.StreamHandler()
+        ]
+    )
+
+    main()
