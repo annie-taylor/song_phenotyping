@@ -521,15 +521,15 @@ def main():
     birds = os.listdir(evsong_test_directory)
     birds.remove('copied_data')
     for bird in birds:
-        explore_embedding_parameters(save_path=evsong_test_directory, bird=bird, min_dists=[0.1, 0.5],
-                                     n_neighbors_list=[3, 10], use_parallel=True, overwrite=True)
+        explore_embedding_parameters(save_path=evsong_test_directory, bird=bird, min_dists=[0.01, 0.1, 0.5],
+                                     n_neighbors_list=[10, 20, 50], use_parallel=True, overwrite=True)
 
     wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
     birds = os.listdir(wseg_test_directory)
     birds.remove('copied_data')
     for bird in birds:
-        explore_embedding_parameters(save_path=wseg_test_directory, bird=bird, min_dists=[0.1, 0.5],
-                                     n_neighbors_list=[3, 10], use_parallel=True, overwrite=True)
+        explore_embedding_parameters(save_path=wseg_test_directory, bird=bird, min_dists=[0.01, 0.1, 0.5],
+                                     n_neighbors_list=[10, 20, 50], use_parallel=True, overwrite=True)
 
 if __name__ == "__main__":
     main()
