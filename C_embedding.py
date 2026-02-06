@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import pickle as pkl
 
 
+from tools.system_utils import optimize_pytables_for_network
+
 @dataclass
 class UMAPParams:
     n_neighbors: int = 20
@@ -197,6 +199,20 @@ def create_embeddings(samples: np.ndarray, labels, hashes, params: UMAPParams, p
         raise
 
 
+def compute_single_umap(args):
+    """Single UMAP computation for parallel execution"""
+    samples, labels, hashes, n_neighbors, min_dist, paths = args
+
+    try:
+        params = UMAPParams(n_neighbors=n_neighbors, metric='euclidean', min_dist=min_dist)
+        embedding, _ = create_embeddings(samples=samples, labels=labels, hashes=hashes,
+                                         params=params, paths=paths, save_model=False)
+        return (n_neighbors, min_dist, embedding)
+    except Exception as e:
+        print(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
+        return (n_neighbors, min_dist, None)
+
+
 def generate_embedding_for_bird(save_path: str, bird: str) -> Tuple[
     Optional[np.ndarray], Optional[umap.UMAP], Optional[np.ndarray], Optional[np.ndarray]]:
     """
@@ -242,110 +258,6 @@ def generate_embedding_for_bird(save_path: str, bird: str) -> Tuple[
         logging.error(f"Failed to process UMAP for bird {bird}: {e}")
         logging.error(traceback.format_exc())
         return None, None, None, None
-
-
-def explore_embedding_parameters(save_path: str, bird: str,
-                                 min_dists: List[float] = None,
-                                 n_neighbors_list: List[int] = None,
-                                 use_parallel: bool = True) -> bool:
-    """
-    Explore different UMAP parameters for a bird and create comparison plots.
-
-    Args:
-        save_path: Root project directory
-        bird: Bird identifier
-        min_dists: List of min_dist values to test
-        n_neighbors_list: List of n_neighbors values to test
-        use_parallel: Whether to use parallel processing
-
-    Returns:
-        True if successful, False otherwise
-    """
-    try:
-        # Default parameter ranges
-        if min_dists is None:
-            min_dists = [0.01, 0.05, 0.1, 0.3, 0.5]
-        if n_neighbors_list is None:
-            n_neighbors_list = [5, 10, 20, 50, 100]
-
-        # Setup paths
-        bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'data')
-
-        paths = {
-            'specs': os.path.join(data_path, 'flattened'),
-            'model': os.path.join(data_path, 'models'),
-            'embeddings': os.path.join(data_path, 'embeddings'),
-            'figures': os.path.join(bird_path, 'figures')
-        }
-
-        # Load data
-        specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
-
-        # Compute parameter grid
-        if use_parallel:
-            compute_embedding_grid_parallel(
-                samples=specs.T,
-                labels=labels,
-                hashes=hashes,
-                min_dists=min_dists,
-                n_neighbors=n_neighbors_list,
-                paths=paths,
-                plot=True,
-                bird=bird
-            )
-        else:
-            compute_embedding_grid(
-                samples=specs.T,
-                labels=labels,
-                hashes=hashes,
-                min_dists=min_dists,
-                n_neighbors=n_neighbors_list,
-                paths=paths,
-                plot=True,
-                bird=bird
-            )
-
-        logging.info(f"Successfully explored UMAP parameters for bird {bird}")
-        return True
-
-    except Exception as e:
-        logging.error(f"Failed to explore UMAP parameters for bird {bird}: {e}")
-        logging.error(traceback.format_exc())
-        return False
-
-
-def compare_umap_embeddings_plot(embeddings, min_dists, n_neighbors, save: None or str = None, bird: str = ''):
-    import matplotlib.pyplot as plt
-    fig, axs = plt.subplots(len(n_neighbors), len(min_dists), figsize=(20, 20))
-    for i, ax_row in enumerate(axs):
-        for j, ax in enumerate(ax_row):
-            ax.scatter(embeddings[i, j, :, 0], embeddings[i, j, :, 1], alpha=0.5, s=1, )
-            ax.set_xticks([])
-            ax.set_yticks([])
-            if i == 0:
-                ax.set_title(f"min_dist = {min_dists[j]}", size=15)
-            if j == 0:
-                ax.set_ylabel(f"n_neighbors = {n_neighbors[i]}", size=15)
-    fig.suptitle("UMAP embedding with grid of parameters", y=0.92, size=20)
-    plt.subplots_adjust(wspace=0.05, hspace=0.05)
-    if save:
-        plt.savefig(os.path.join(save, "umap_embedding_grid.png"))
-        plt.close(fig)
-
-
-def compute_single_umap(args):
-    """Single UMAP computation for parallel execution"""
-    samples, labels, hashes, n_neighbors, min_dist, paths = args
-
-    try:
-        params = UMAPParams(n_neighbors=n_neighbors, metric='euclidean', min_dist=min_dist)
-        embedding, _ = create_embeddings(samples=samples, labels=labels, hashes=hashes,
-                                         params=params, paths=paths, save_model=False)
-        return (n_neighbors, min_dist, embedding)
-    except Exception as e:
-        print(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
-        return (n_neighbors, min_dist, None)
 
 
 def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighbors, paths,
@@ -445,3 +357,110 @@ def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, path
         compare_umap_embeddings_plot(all_embeddings, min_dists, n_neighbors, fig_savepath, bird)
 
     return all_embeddings
+
+
+def explore_embedding_parameters(save_path: str, bird: str,
+                                 min_dists: List[float] = None,
+                                 n_neighbors_list: List[int] = None,
+                                 use_parallel: bool = True) -> bool:
+    """
+    Explore different UMAP parameters for a bird and create comparison plots.
+
+    Args:
+        save_path: Root project directory
+        bird: Bird identifier
+        min_dists: List of min_dist values to test
+        n_neighbors_list: List of n_neighbors values to test
+        use_parallel: Whether to use parallel processing
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Default parameter ranges
+        if min_dists is None:
+            min_dists = [0.01, 0.05, 0.1, 0.3, 0.5]
+        if n_neighbors_list is None:
+            n_neighbors_list = [5, 10, 20, 50, 100]
+
+        # Setup paths
+        bird_path = os.path.join(save_path, bird)
+        data_path = os.path.join(bird_path, 'data')
+
+        paths = {
+            'specs': os.path.join(data_path, 'flattened'),
+            'model': os.path.join(data_path, 'models'),
+            'embeddings': os.path.join(data_path, 'embeddings'),
+            'figures': os.path.join(bird_path, 'figures')
+        }
+
+        # Load data
+        specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
+
+        # Compute parameter grid
+        if use_parallel:
+            compute_embedding_grid_parallel(
+                samples=specs.T,
+                labels=labels,
+                hashes=hashes,
+                min_dists=min_dists,
+                n_neighbors=n_neighbors_list,
+                paths=paths,
+                plot=True,
+                bird=bird
+            )
+        else:
+            compute_embedding_grid(
+                samples=specs.T,
+                labels=labels,
+                hashes=hashes,
+                min_dists=min_dists,
+                n_neighbors=n_neighbors_list,
+                paths=paths,
+                plot=True,
+                bird=bird
+            )
+
+        logging.info(f"Successfully explored UMAP parameters for bird {bird}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Failed to explore UMAP parameters for bird {bird}: {e}")
+        logging.error(traceback.format_exc())
+        return False
+
+
+def compare_umap_embeddings_plot(embeddings, min_dists, n_neighbors, save: None or str = None, bird: str = ''):
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(len(n_neighbors), len(min_dists), figsize=(20, 20))
+    for i, ax_row in enumerate(axs):
+        for j, ax in enumerate(ax_row):
+            ax.scatter(embeddings[i, j, :, 0], embeddings[i, j, :, 1], alpha=0.5, s=1, )
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if i == 0:
+                ax.set_title(f"min_dist = {min_dists[j]}", size=15)
+            if j == 0:
+                ax.set_ylabel(f"n_neighbors = {n_neighbors[i]}", size=15)
+    fig.suptitle("UMAP embedding with grid of parameters", y=0.92, size=20)
+    plt.subplots_adjust(wspace=0.05, hspace=0.05)
+    if save:
+        plt.savefig(os.path.join(save, "umap_embedding_grid.png"))
+        plt.close(fig)
+
+
+def main():
+    optimize_pytables_for_network()
+
+    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or16or22')
+    explore_embedding_parameters(save_path=evsong_test_directory, bird='or16or22', min_dists = [0.1],
+                                 n_neighbors_list = [10], use_parallel = True)
+
+    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu68bu81')
+    explore_embedding_parameters(save_path=wseg_test_directory, bird='bu68bu81', min_dists = [0.1],
+                                 n_neighbors_list = [10], use_parallel = True)
+
+
+
+if __name__ == "__main__":
+    main()
