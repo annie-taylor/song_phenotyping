@@ -24,7 +24,6 @@ class UMAPParams:
     def __post_init__(self):
         self.validate_params()
 
-
     def validate_params(self):
         if self.n_neighbors < 2:
             raise ValueError("n_neighbors must be at least 2")
@@ -87,7 +86,7 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
         raise ValueError("No valid syllables found in any flattened files")
 
     # Get dimensions from first valid file
-    first_file_path = os.path.join(paths_to_specs, flattened_syl_filenames[0])  # FIXED: was [1]
+    first_file_path = os.path.join(paths_to_specs, flattened_syl_filenames[0])
     with tables.open_file(first_file_path, mode='r') as f:
         spec_dim0 = f.root.flattened_specs.shape[0]
 
@@ -160,12 +159,36 @@ def save_umap_model(model_path: str, umap_model: umap.UMAP, params: UMAPParams) 
         return False
 
 
-def create_embeddings(samples: np.ndarray, labels, hashes, params: UMAPParams, paths: dict,
-                      save_model: bool = False) -> Tuple[np.ndarray, umap.UMAP]:
+def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParams,
+                          model_path: str, embedding_path: str, save_model: bool = False,
+                          overwrite: bool = False) -> Tuple[Optional[np.ndarray], Optional[umap.UMAP], bool]:
     """
-    Create UMAP embeddings from samples and save results.
+    Core function: Create UMAP embeddings, save results, and return objects
+
+    Args:
+        samples: Input data for UMAP
+        labels: Sample labels
+        hashes: Sample hashes
+        params: UMAP parameters
+        model_path: Path to save UMAP model
+        embedding_path: Path to save embeddings
+        save_model: Whether to save the UMAP model
+        overwrite: Whether to overwrite existing files
+
+    Returns:
+        Tuple of (embeddings, umap_model, success) where success is True if file exists or was created
     """
+    # Check if files already exist
+    if not overwrite and os.path.exists(embedding_path):
+        logging.debug(f"⏭️ Skipped existing embedding: {os.path.basename(embedding_path)}")
+        return None, None, True  # File exists = success
+
+    if not overwrite and save_model and os.path.exists(model_path):
+        logging.debug(f"⏭️ Skipped existing model: {os.path.basename(model_path)}")
+        return None, None, True  # File exists = success
+
     try:
+        # Create UMAP model
         umap_model = umap.UMAP(
             n_components=params.n_components,
             metric=params.metric,
@@ -174,105 +197,76 @@ def create_embeddings(samples: np.ndarray, labels, hashes, params: UMAPParams, p
             n_epochs=params.n_epochs
         )
 
+        # Fit and transform
         embeddings = umap_model.fit_transform(samples)
 
         # Create output directories
-        os.makedirs(paths['model'], exist_ok=True)
-        os.makedirs(paths['embeddings'], exist_ok=True)
-
-        # Create filenames based on parameters - FIXED: removed repeat_cluster logic
-        model_path = os.path.join(paths['model'],
-                                  f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
-        embedding_path = os.path.join(paths['embeddings'],
-                                      f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
 
         # Save results
         if save_model:
             save_umap_model(model_path, umap_model, params)
         save_umap_embeddings(embedding_path, embeddings, hashes, labels)
 
-        return embeddings, umap_model
+        logging.info(f"✅ Computed new embedding: n_neighbors={params.n_neighbors}, min_dist={params.min_dist}")
+        return embeddings, umap_model, True  # Successfully created
 
     except Exception as e:
         logging.error(f"Error creating UMAP embeddings: {e}")
         logging.error(traceback.format_exc())
-        raise
+        return None, None, False  # Failed to create
 
 
-def compute_single_umap(args):
+def compute_single_umap_worker(args):
     """Single UMAP computation for parallel execution"""
-    samples, labels, hashes, n_neighbors, min_dist, paths = args
+    samples, labels, hashes, n_neighbors, min_dist, paths, overwrite = args
 
     try:
         params = UMAPParams(n_neighbors=n_neighbors, metric='euclidean', min_dist=min_dist)
-        embedding, _ = create_embeddings(samples=samples, labels=labels, hashes=hashes,
-                                         params=params, paths=paths, save_model=False)
-        return (n_neighbors, min_dist, embedding)
-    except Exception as e:
-        print(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
-        return (n_neighbors, min_dist, None)
 
+        # Generate file paths
+        model_path = os.path.join(paths['model'],
+                                  f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
+        embedding_path = os.path.join(paths['embeddings'],
+                                      f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
 
-def generate_embedding_for_bird(save_path: str, bird: str) -> Tuple[
-    Optional[np.ndarray], Optional[umap.UMAP], Optional[np.ndarray], Optional[np.ndarray]]:
-    """
-    Generate UMAP embedding for a single bird using default parameters.
-
-    Args:
-        save_path: Root project directory
-        bird: Bird identifier
-
-    Returns:
-        Tuple of (embeddings, umap_model, specs, labels) or (None, None, None, None) if failed
-    """
-    try:
-        params = UMAPParams(n_neighbors=10, min_dist=0.2, metric='euclidean', n_components=2)
-
-        # Fixed path structure to match previous modules
-        bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'data')
-
-        paths = {
-            'specs': os.path.join(data_path, 'flattened'),
-            'model': os.path.join(data_path, 'models'),
-            'embeddings': os.path.join(data_path, 'embeddings')
-        }
-
-        # Load spectrograms
-        specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
-
-        # Create embeddings (transpose specs to get samples as rows)
-        embeddings, umap_model = create_embeddings(
-            samples=specs.T,
+        embeddings, model, success = compute_and_save_umap(  # Added the third value here
+            samples=samples,
             labels=labels,
             hashes=hashes,
             params=params,
-            paths=paths,
-            save_model=True  # Save model for single embedding
+            model_path=model_path,
+            embedding_path=embedding_path,
+            save_model=False,
+            overwrite=overwrite
         )
 
-        logging.info(f"Successfully processed UMAP for bird {bird}")
-        return embeddings, umap_model, specs, labels
+        return (n_neighbors, min_dist, success)
 
     except Exception as e:
-        logging.error(f"Failed to process UMAP for bird {bird}: {e}")
-        logging.error(traceback.format_exc())
-        return None, None, None, None
+        logging.error(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
+        return (n_neighbors, min_dist, False)
 
 
 def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighbors, paths,
-                                    plot: bool = True, bird: str = '', max_workers: int = None):
+                                    plot: bool = True, bird: str = '', max_workers: int = None,
+                                    overwrite: bool = False):
     """
     Parallel version of compute_embedding_grid function with worker control.
 
     Args:
         max_workers: Maximum number of parallel workers. If None, uses min(cpu_count(), num_tasks)
+        overwrite: Whether to overwrite existing embedding files
+
+    Returns:
+        List of successful (n_neighbors, min_dist) tuples
     """
     # Prepare arguments for parallel processing
     args_list = []
     for n in n_neighbors:
         for dist in min_dists:
-            args_list.append((samples, labels, hashes, n, dist, paths))
+            args_list.append((samples, labels, hashes, n, dist, paths, overwrite))
 
     print(f"    🚀 Computing {len(args_list)} UMAPs in parallel...")
 
@@ -284,23 +278,20 @@ def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighb
 
     print(f"    Using {max_workers} parallel workers")
 
-    all_embeddings = np.empty((len(n_neighbors), len(min_dists), len(samples), 2))
+    successful_params = []
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all jobs
-        future_to_params = {executor.submit(compute_single_umap, args): args for args in args_list}
+        future_to_params = {executor.submit(compute_single_umap_worker, args): args for args in args_list}
 
         # Collect results with progress tracking
         completed = 0
         for future in as_completed(future_to_params):
-            n_neighbors_val, min_dist_val, embedding = future.result()
+            n_neighbors_val, min_dist_val, success = future.result()
             completed += 1
 
-            if embedding is not None:
-                # Find indices for this parameter combination
-                i = n_neighbors.index(n_neighbors_val)
-                j = min_dists.index(min_dist_val)
-                all_embeddings[i, j] = embedding
+            if success:
+                successful_params.append((n_neighbors_val, min_dist_val))
                 print(f"    ✅ {completed}/{len(args_list)}: n_neighbors={n_neighbors_val}, min_dist={min_dist_val}")
             else:
                 print(
@@ -311,38 +302,57 @@ def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighb
         fig_savepath = paths['figures']
         if not os.path.isdir(fig_savepath):
             os.makedirs(fig_savepath)
-        compare_umap_embeddings_plot(all_embeddings, min_dists, n_neighbors, fig_savepath, bird)
+        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird)
 
-    return all_embeddings
+    return successful_params
 
 
 def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, paths,
-                           plot: bool = True, bird: str = ''):
+                           plot: bool = True, bird: str = '', overwrite: bool = False):
     """
     Non-parallel version of embedding grid computation.
+
+    Returns:
+        List of successful (n_neighbors, min_dist) tuples
     """
     print(f"    🔄 Computing {len(n_neighbors) * len(min_dists)} UMAPs sequentially...")
 
-    all_embeddings = np.empty((len(n_neighbors), len(min_dists), len(samples), 2))
-
+    successful_params = []
     completed = 0
     total_tasks = len(n_neighbors) * len(min_dists)
 
-    for i, n in enumerate(n_neighbors):
-        for j, dist in enumerate(min_dists):
+    for n in n_neighbors:
+        for dist in min_dists:
             try:
                 params = UMAPParams(n_neighbors=n, metric='euclidean', min_dist=dist)
-                embedding, _ = create_embeddings(
+
+                # Generate file paths
+                model_path = os.path.join(paths['model'],
+                                          f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
+                embedding_path = os.path.join(paths['embeddings'],
+                                              f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
+
+                embeddings, model, success = compute_and_save_umap(
                     samples=samples,
                     labels=labels,
                     hashes=hashes,
                     params=params,
-                    paths=paths,
-                    save_model=False
+                    model_path=model_path,
+                    embedding_path=embedding_path,
+                    save_model=False,
+                    overwrite=overwrite
                 )
-                all_embeddings[i, j] = embedding
-                completed += 1
-                print(f"    ✅ {completed}/{total_tasks}: n_neighbors={n}, min_dist={dist}")
+
+                if success:
+                    successful_params.append((n, dist))
+                    completed += 1
+                    if embeddings is not None:
+                        print(f"    ✅ {completed}/{total_tasks}: n_neighbors={n}, min_dist={dist}")
+                    else:
+                        print(f"    ⏭️ {completed}/{total_tasks}: SKIPPED n_neighbors={n}, min_dist={dist}")
+                else:
+                    completed += 1
+                    print(f"    ❌ {completed}/{total_tasks}: FAILED n_neighbors={n}, min_dist={dist}")
 
             except Exception as e:
                 print(f"    ❌ {completed + 1}/{total_tasks}: FAILED n_neighbors={n}, min_dist={dist}: {e}")
@@ -354,15 +364,16 @@ def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, path
         fig_savepath = paths['figures']
         if not os.path.isdir(fig_savepath):
             os.makedirs(fig_savepath)
-        compare_umap_embeddings_plot(all_embeddings, min_dists, n_neighbors, fig_savepath, bird)
+        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird)
 
-    return all_embeddings
+    return successful_params
 
 
 def explore_embedding_parameters(save_path: str, bird: str,
                                  min_dists: List[float] = None,
                                  n_neighbors_list: List[int] = None,
-                                 use_parallel: bool = True) -> bool:
+                                 use_parallel: bool = True,
+                                 overwrite: bool = False) -> bool:
     """
     Explore different UMAP parameters for a bird and create comparison plots.
 
@@ -372,6 +383,7 @@ def explore_embedding_parameters(save_path: str, bird: str,
         min_dists: List of min_dist values to test
         n_neighbors_list: List of n_neighbors values to test
         use_parallel: Whether to use parallel processing
+        overwrite: Whether to overwrite existing embedding files
 
     Returns:
         True if successful, False otherwise
@@ -399,7 +411,7 @@ def explore_embedding_parameters(save_path: str, bird: str,
 
         # Compute parameter grid
         if use_parallel:
-            compute_embedding_grid_parallel(
+            successful_params = compute_embedding_grid_parallel(
                 samples=specs.T,
                 labels=labels,
                 hashes=hashes,
@@ -407,10 +419,11 @@ def explore_embedding_parameters(save_path: str, bird: str,
                 n_neighbors=n_neighbors_list,
                 paths=paths,
                 plot=True,
-                bird=bird
+                bird=bird,
+                overwrite=overwrite
             )
         else:
-            compute_embedding_grid(
+            successful_params = compute_embedding_grid(
                 samples=specs.T,
                 labels=labels,
                 hashes=hashes,
@@ -418,10 +431,12 @@ def explore_embedding_parameters(save_path: str, bird: str,
                 n_neighbors=n_neighbors_list,
                 paths=paths,
                 plot=True,
-                bird=bird
+                bird=bird,
+                overwrite=overwrite
             )
 
-        logging.info(f"Successfully explored UMAP parameters for bird {bird}")
+        logging.info(f"Successfully explored UMAP parameters for bird {bird}. "
+                     f"Computed {len(successful_params)} parameter combinations.")
         return True
 
     except Exception as e:
@@ -430,37 +445,85 @@ def explore_embedding_parameters(save_path: str, bird: str,
         return False
 
 
-def compare_umap_embeddings_plot(embeddings, min_dists, n_neighbors, save: None or str = None, bird: str = ''):
+def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
+    """Load embeddings from HDF5 file"""
+    try:
+        with tables.open_file(embedding_path, mode='r') as f:
+            return f.root.embeddings[:]
+    except Exception as e:
+        logging.warning(f"Could not load embedding from {embedding_path}: {e}")
+        return None
+
+
+def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min_dists, n_neighbors,
+                                 paths: dict, save_path: str, bird: str = ''):
+    """
+    Create comparison plot by loading embeddings on-demand
+    """
     import matplotlib.pyplot as plt
+
     fig, axs = plt.subplots(len(n_neighbors), len(min_dists), figsize=(20, 20))
-    for i, ax_row in enumerate(axs):
-        for j, ax in enumerate(ax_row):
-            ax.scatter(embeddings[i, j, :, 0], embeddings[i, j, :, 1], alpha=0.5, s=1, )
+
+    # Handle different subplot configurations
+    if len(n_neighbors) == 1 and len(min_dists) == 1:
+        axs = [[axs]]
+    elif len(n_neighbors) == 1:
+        axs = [axs]
+    elif len(min_dists) == 1:
+        axs = [[ax] for ax in axs]
+
+    # Convert to set for faster lookup
+    successful_set = set(successful_params)
+
+    for i, n in enumerate(n_neighbors):
+        for j, dist in enumerate(min_dists):
+            ax = axs[i][j]
+
+            if (n, dist) in successful_set:
+                embedding_path = os.path.join(paths['embeddings'],
+                                              f'euclidean_{n}neighbors_{dist}dist.h5')
+                embeddings = load_embedding_from_file(embedding_path)
+
+                if embeddings is not None:
+                    ax.scatter(embeddings[:, 0], embeddings[:, 1], alpha=0.5, s=1)
+                else:
+                    ax.text(0.5, 0.5, 'Missing\nFile', ha='center', va='center',
+                            transform=ax.transAxes, fontsize=12)
+            else:
+                ax.text(0.5, 0.5, 'Missing', ha='center', va='center',
+                        transform=ax.transAxes, fontsize=12)
+
             ax.set_xticks([])
             ax.set_yticks([])
+
             if i == 0:
-                ax.set_title(f"min_dist = {min_dists[j]}", size=15)
+                ax.set_title(f"min_dist = {dist}", size=15)
             if j == 0:
-                ax.set_ylabel(f"n_neighbors = {n_neighbors[i]}", size=15)
-    fig.suptitle("UMAP embedding with grid of parameters", y=0.92, size=20)
+                ax.set_ylabel(f"n_neighbors = {n}", size=15)
+
+    fig.suptitle(f"UMAP embedding with grid of parameters - {bird}", y=0.92, size=20)
     plt.subplots_adjust(wspace=0.05, hspace=0.05)
-    if save:
-        plt.savefig(os.path.join(save, "umap_embedding_grid.png"))
+
+    if save_path:
+        # Create descriptive filename with all parameter values
+        n_str = "_".join(map(str, n_neighbors))
+        d_str = "_".join(map(str, min_dists))
+        filename = f"umap_grid_{bird}_n{n_str}_d{d_str}.png"
+
+        plt.savefig(os.path.join(save_path, filename))
         plt.close(fig)
 
 
 def main():
     optimize_pytables_for_network()
 
-    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or16or22')
-    explore_embedding_parameters(save_path=evsong_test_directory, bird='or16or22', min_dists = [0.1],
-                                 n_neighbors_list = [10], use_parallel = True)
+    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    explore_embedding_parameters(save_path=evsong_test_directory, bird='or16or22', min_dists=[0.1, 0.5],
+                                 n_neighbors_list=[3, 10], use_parallel=True, overwrite=False)
 
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu68bu81')
-    explore_embedding_parameters(save_path=wseg_test_directory, bird='bu68bu81', min_dists = [0.1],
-                                 n_neighbors_list = [10], use_parallel = True)
-
-
+    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    explore_embedding_parameters(save_path=wseg_test_directory, bird='bu68bu81', min_dists=[0.1, 0.5],
+                                 n_neighbors_list=[3, 10], use_parallel=True, overwrite=False)
 
 if __name__ == "__main__":
     main()
