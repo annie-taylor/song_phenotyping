@@ -206,24 +206,7 @@ def create_syllable_sample_pdfs(project_directory: str,
 
 
 def main():
-    # Get file paths
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    evsong_directory = os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or', 'or16or22',
-                                    'labeled_song_final')
-
-
-    metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(wav_directory=evsong_directory,
-                                                                     save_path=evsong_test_directory,
-                                                                     batch_file_naming='batch.txt.labeled')
-
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
-    wseg_metadata_paths = filepaths_from_wseg(seg_directory=wseg_directory, save_path=wseg_test_directory,
-                                              song_or_call='song', bird_subset=['bu68bu81'])
-
-    # Copy files locally
-    local_wav_paths = copy_audio_files_locally(wav_paths, project_directory)
-
     wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
 
     # Create visualization PDFs using local files
@@ -233,3 +216,6 @@ def main():
     # Create syllable sample PDFs (no changes needed)
     create_syllable_sample_pdfs(evsong_test_directory)
     create_syllable_sample_pdfs(wseg_test_directory)
+
+if __name__ == '__main__':
+    main()
