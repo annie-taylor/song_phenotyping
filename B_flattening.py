@@ -126,10 +126,11 @@ def find_syllable_files(syllables_dir: str) -> List[str]:
     ]
 
 
-def flatten_bird_spectrograms(bird_folder: str, bird: str) -> bool:
+def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
     """Process all syllable files for a bird."""
     try:
         # Setup paths
+        bird_folder = os.path.join(directory, bird)
         data_path = os.path.join(bird_folder, 'data')
         syllables_path = os.path.join(data_path, 'syllables')
 
