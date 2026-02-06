@@ -1,0 +1,1206 @@
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import os
+import logging
+from collections import Counter
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, normalized_mutual_info_score
+from scipy.spatial.distance import euclidean, cdist
+import hdbscan
+import matplotlib.pyplot as plt
+import seaborn as sn
+import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
+from tqdm import tqdm
+import shutil
+from pathlib import Path
+import tables
+
+from tools.system_utils import check_sys_for_macaw_root
+
+
+# ============================================================================
+# CORE CLUSTERING FUNCTIONS
+# ============================================================================
+
+def compute_scores(embeddings, labels: list, metrics: list, true_labels: list or None = None):
+    """
+    Compute clustering evaluation metrics for given embeddings and labels.
+
+    Args:
+        embeddings: UMAP embeddings array
+        labels: Cluster labels
+        metrics: List of metrics to compute
+        true_labels: Ground truth labels for NMI calculation (optional)
+
+    Returns:
+        dict: Dictionary of metric scores
+    """
+    scores = {}
+    n_unique_labels = len(np.unique(labels))
+
+    # Early return if only one cluster (most metrics undefined)
+    if n_unique_labels <= 1:
+        for metric in metrics:
+            scores[metric] = np.nan
+        return scores
+
+    # Compute each requested metric
+    if 'silhouette' in metrics:
+        scores['silhouette'] = silhouette_score(embeddings, labels)
+
+    if 'dbi' in metrics:
+        scores['dbi'] = davies_bouldin_score(embeddings, labels)
+
+    if 'ch' in metrics:
+        scores['ch'] = calinski_harabasz_score(embeddings, labels)
+
+    if 'dunn' in metrics:
+        scores['dunn'] = dunn_index(embeddings, labels)
+
+    # Handle NMI with ground truth labels
+    if 'nmi' in metrics and true_labels is not None:
+        scores['nmi'] = _compute_nmi(true_labels, labels)
+    elif 'nmi' in metrics:
+        scores['nmi'] = np.nan
+
+    # Handle information criteria
+    info_metrics = [m for m in metrics if m in ['aic', 'bic', 'log-likelihood']]
+    if info_metrics:
+        ll, aic, bic = information_criterion(embeddings, labels, type=info_metrics)
+        if 'log-likelihood' in metrics:
+            scores['log-likelihood'] = ll
+        if 'aic' in metrics:
+            scores['aic'] = aic
+        if 'bic' in metrics:
+            scores['bic'] = bic
+
+    return scores
+
+
+def _compute_nmi(true_labels, predicted_labels):
+    """Helper function to compute NMI, handling string labels and missing data."""
+    try:
+        # Handle string/byte labels
+        if isinstance(true_labels[0], (bytes, str, np.bytes_)):
+            # Find labeled indices (exclude '-' or similar missing indicators)
+            labeled_mask = np.array(true_labels) != '-'
+            if not np.any(labeled_mask):
+                return np.nan
+
+            # Convert to integer labels
+            _, true_int_labels = np.unique(true_labels, return_inverse=True)
+
+            # Use only labeled samples
+            true_subset = true_int_labels[labeled_mask]
+            pred_subset = np.array(predicted_labels)[labeled_mask]
+
+            return normalized_mutual_info_score(true_subset, pred_subset)
+        else:
+            return normalized_mutual_info_score(true_labels, predicted_labels)
+    except Exception as e:
+        logging.error(f"Error computing NMI: {e}")
+        return np.nan
+
+
+def cluster_embeddings(embeddings, hashes, method: str = 'hdbscan', cluster_params: dict = {},
+                       return_scores: bool = False, path_to_clusters: str = None,
+                       path_to_imgs: str = None, umap_id: str = None,
+                       true_labels: np.ndarray = None, metrics: list = None):
+    """
+    Cluster embeddings using specified method and parameters.
+
+    Args:
+        embeddings: UMAP embeddings array
+        hashes: Sample hash identifiers
+        method: Clustering method ('hdbscan' or 'kmeans')
+        cluster_params: Parameters for clustering algorithm
+        return_scores: Whether to compute and return evaluation scores
+        path_to_clusters: Directory to save cluster labels
+        path_to_imgs: Directory to save cluster plots
+        umap_id: Identifier for UMAP parameters (for filenames)
+        true_labels: Ground truth labels for evaluation
+        metrics: List of metrics to compute if return_scores=True
+
+    Returns:
+        tuple: (labels, hashes, scores, label_path, plot_path)
+    """
+    # Create directories
+    if path_to_clusters:
+        os.makedirs(path_to_clusters, exist_ok=True)
+    if path_to_imgs:
+        os.makedirs(path_to_imgs, exist_ok=True)
+
+    # Normalize method name and validate
+    normalized_method = method.strip().lower()
+    if normalized_method not in ['kmeans', 'hdbscan']:
+        raise ValueError(f"Invalid method '{method}'. Choose either 'kmeans' or 'hdbscan'.")
+
+    # Generate file paths
+    label_path = None
+    plot_path = None
+    if path_to_clusters:
+        cluster_id = '_'.join([f'{key}{value}' for key, value in cluster_params.items()])
+        label_path = os.path.join(path_to_clusters, f'{normalized_method}_{cluster_id}_labels.h5')
+        if path_to_imgs and umap_id:
+            plot_path = os.path.join(path_to_imgs, f'{umap_id}_{cluster_id}_clusters.jpg')
+
+    # Check if labels already exist (no overwrite for now)
+    if label_path and os.path.exists(label_path):
+        labels, hashes, scores = load_labels(label_path)
+        return labels, hashes, scores, label_path, plot_path
+
+    # Perform clustering
+    labels = _perform_clustering(embeddings, normalized_method, cluster_params)
+
+    # Compute scores if requested
+    scores = {}
+    if return_scores and metrics:
+        scores = compute_scores(embeddings, labels, metrics, true_labels)
+
+    # Save results
+    if label_path:
+        save_labels(label_path, labels, hashes, scores)
+
+    if plot_path:
+        plot_umap(embeddings, labels, save=plot_path)
+
+    return labels, hashes, scores, label_path, plot_path
+
+
+def _perform_clustering(embeddings, method, cluster_params):
+    """Helper function to perform the actual clustering."""
+    if method == 'kmeans':
+        kmeans = KMeans(**cluster_params)
+        return kmeans.fit_predict(embeddings)
+    elif method == 'hdbscan':
+        # Filter parameters to only valid HDBSCAN parameters
+        valid_params = {k: v for k, v in cluster_params.items()
+                        if k in hdbscan.HDBSCAN().get_params()}
+        clusterer = hdbscan.HDBSCAN(**valid_params)
+        return clusterer.fit_predict(embeddings)
+    else:
+        raise ValueError(f"Unknown clustering method: {method}")
+
+
+def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path, figure_path,
+                          candidate_params: dict = None, true_labels: np.ndarray = None,
+                          metrics: list = None, sample_size: int = None):
+    """
+    Search through candidate clustering parameters and evaluate performance.
+
+    Args:
+        embeddings: UMAP embeddings array
+        hashes: Sample hash identifiers
+        algorithm: Clustering algorithm name
+        umap_id: UMAP parameter identifier
+        directory_path: Base directory for saving results
+        figure_path: Directory for saving plots
+        candidate_params: List of parameter dictionaries to test
+        true_labels: Ground truth labels for evaluation
+        metrics: List of evaluation metrics to compute
+        sample_size: Total number of samples (for efficiency, pass if known)
+
+    Returns:
+        pd.DataFrame: Summary of results for all parameter combinations
+    """
+    if candidate_params is None:
+        candidate_params = []
+
+    if metrics is None:
+        metrics = ['silhouette', 'dbi', 'ch']
+
+    # Calculate sample size if not provided
+    if sample_size is None:
+        sample_size = len(embeddings)
+
+    # Create algorithm-specific directory
+    algorithm_path = os.path.join(directory_path, algorithm)
+    os.makedirs(algorithm_path, exist_ok=True)
+
+    # Initialize result containers
+    results = []
+
+    # Process each parameter combination
+    for params in tqdm(candidate_params, desc="Searching cluster parameters..."):
+        try:
+            labels, hashes_returned, scores, label_path, fig_path = cluster_embeddings(
+                embeddings=embeddings,
+                hashes=hashes,
+                method=algorithm,
+                cluster_params=params,
+                return_scores=True,
+                path_to_clusters=algorithm_path,
+                path_to_imgs=figure_path,
+                true_labels=true_labels,
+                umap_id=umap_id,
+                metrics=metrics
+            )
+
+            # Build result row
+            result_row = {
+                'sample_size': sample_size,
+                'n_syls': len(np.unique(labels)),
+                'png_path': Path(fig_path) if fig_path else None,
+                'label_path': Path(label_path) if label_path else None,
+            }
+
+            # Add parameter values
+            result_row.update(params)
+
+            # Add metric scores (raw values for cross-bird comparison)
+            result_row.update(scores)
+
+            results.append(result_row)
+
+        except Exception as e:
+            logging.error(f"Error processing parameters {params}: {e}")
+            # Add failed result with NaN scores
+            result_row = {
+                'sample_size': sample_size,
+                'n_syls': np.nan,
+                'png_path': None,
+                'label_path': None,
+            }
+            result_row.update(params)
+            result_row.update({metric: np.nan for metric in metrics})
+            results.append(result_row)
+
+    # Clear embeddings from memory since we're done with clustering
+    del embeddings
+
+    # Create summary DataFrame
+    summary_df = pd.DataFrame(results)
+
+    return summary_df
+
+
+def information_criterion(embeddings, labels, type=['aic', 'bic', 'log-likelihood']):
+    """
+    Compute information criteria (AIC, BIC) and log-likelihood for clustering results.
+
+    Args:
+        embeddings: UMAP embeddings array
+        labels: Cluster labels
+        type: List of criteria to compute
+
+    Returns:
+        tuple: (log_likelihood, aic, bic) - None for uncomputed metrics
+    """
+    try:
+        n_samples = len(labels)
+        unique_labels = np.unique(labels)
+        unique_labels = unique_labels[unique_labels != -1]  # Exclude noise points
+        k = len(unique_labels)
+
+        # Handle edge cases
+        if k == 0:  # All noise
+            return np.nan, np.nan, np.nan
+        if k == 1:  # Single cluster
+            return np.nan, np.nan, np.nan
+
+        # Compute Within-Cluster Sum of Squares (WCSS)
+        wcss = 0
+        for label in unique_labels:
+            cluster_points = embeddings[labels == label]
+            if len(cluster_points) > 0:
+                centroid = np.mean(cluster_points, axis=0)
+                wcss += np.sum(cdist(cluster_points, [centroid], 'euclidean') ** 2)
+
+        # Compute log-likelihood (simplified Gaussian assumption)
+        log_likelihood = -wcss / (2 * n_samples)
+
+        # Compute information criteria
+        aic = 2 * k - 2 * log_likelihood if 'aic' in type else None
+        bic = np.log(n_samples) * k - 2 * log_likelihood if 'bic' in type else None
+        log_likelihood = log_likelihood if 'log-likelihood' in type else None
+
+        return log_likelihood, aic, bic
+
+    except Exception as e:
+        logging.error(f"Error computing information criteria: {e}")
+        return np.nan, np.nan, np.nan
+
+
+def dunn_index(embeddings, labels):
+    """
+    Compute Dunn index for clustering evaluation.
+    Higher values indicate better clustering (compact clusters, well-separated).
+
+    Args:
+        embeddings: UMAP embeddings array
+        labels: Cluster labels
+
+    Returns:
+        float: Dunn index value
+    """
+    try:
+        unique_labels = np.unique(labels)
+        unique_labels = unique_labels[unique_labels != -1]  # Exclude noise
+
+        if len(unique_labels) < 2:
+            return np.nan
+
+        # Compute maximum intra-cluster distances
+        max_intra_distances = []
+        for label in unique_labels:
+            cluster_points = embeddings[labels == label]
+            if len(cluster_points) < 2:
+                max_intra_distances.append(0)
+                continue
+
+            # Compute all pairwise distances within cluster
+            intra_distances = cdist(cluster_points, cluster_points, 'euclidean')
+            # Get upper triangle (avoid diagonal and duplicates)
+            upper_triangle = intra_distances[np.triu_indices_from(intra_distances, k=1)]
+            max_intra_distances.append(np.max(upper_triangle) if len(upper_triangle) > 0 else 0)
+
+        # Compute minimum inter-cluster distances
+        min_inter_distances = []
+        for i, label_i in enumerate(unique_labels):
+            for label_j in unique_labels[i + 1:]:
+                cluster_i_points = embeddings[labels == label_i]
+                cluster_j_points = embeddings[labels == label_j]
+                inter_distances = cdist(cluster_i_points, cluster_j_points, 'euclidean')
+                min_inter_distances.append(np.min(inter_distances))
+
+        if not min_inter_distances or max(max_intra_distances) == 0:
+            return np.nan
+
+        return min(min_inter_distances) / max(max_intra_distances)
+
+    except Exception as e:
+        logging.error(f"Error calculating Dunn index: {e}")
+        return np.nan
+
+
+# ============================================================================
+# DATA MANAGEMENT & I/O
+# ============================================================================
+
+def load_umap_embeddings(embedding_path: str):
+    """
+    Load embeddings, hashes, and labels from HDF5 file using PyTables.
+
+    Args:
+        embedding_path: Path to HDF5 embedding file
+
+    Returns:
+        tuple: (embeddings, hashes, labels) or (None, None, None) on error
+    """
+    try:
+        with tables.open_file(embedding_path, mode='r') as f:
+            embeddings = f.root.embeddings.read()
+            hashes = [hash_id.decode('utf-8') for hash_id in f.root.hashes.read()]
+            labels = [label.decode('utf-8') for label in f.root.labels.read()]
+        return embeddings, hashes, labels
+    except Exception as e:
+        logging.error(f"Error loading embeddings from {embedding_path}: {e}")
+        return None, None, None
+
+
+def save_labels(label_save_path: str, labels, hashes, scores):
+    """
+    Save cluster labels, hashes, and evaluation scores to HDF5 file.
+
+    Args:
+        label_save_path: Path where to save the HDF5 file
+        labels: Cluster labels array
+        hashes: Sample hash identifiers
+        scores: Dictionary of evaluation scores
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        with tables.open_file(label_save_path, mode='w') as f:
+            # Save labels
+            f.create_array('/', 'labels', obj=np.array(labels))
+
+            # Save hashes as Unicode strings
+            f.create_array('/', 'hashes', obj=np.array(hashes, dtype='U'))
+
+            # Save each score as separate array
+            for key, value in scores.items():
+                if value is not None and not np.isnan(value):
+                    f.create_array('/', key, obj=np.array(value))
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Error saving labels to {label_save_path}: {e}")
+        return False
+
+
+def load_labels(label_save_path: str):
+    """
+    Load cluster labels, hashes, and evaluation scores from HDF5 file.
+
+    Args:
+        label_save_path: Path to HDF5 file
+
+    Returns:
+        tuple: (labels, hashes, scores) or (None, None, None) on error
+    """
+    try:
+        # Handle path resolution (simplified from original)
+        resolved_path = _resolve_file_path(label_save_path)
+
+        with tables.open_file(resolved_path, mode='r') as f:
+            # Load labels
+            labels = f.root.labels.read()
+
+            # Load hashes
+            hashes_raw = f.root.hashes.read()
+            hashes = [h.decode('utf-8') if isinstance(h, bytes) else str(h) for h in hashes_raw]
+
+            # Load scores (all arrays except labels and hashes)
+            scores = {}
+            for node in f.list_nodes(f.root, classname='Array'):
+                if node._v_name not in ['labels', 'hashes']:
+                    score_value = node.read()
+                    # Handle scalar vs array values
+                    scores[node._v_name] = float(score_value) if score_value.ndim == 0 else score_value
+
+        return labels, hashes, scores
+
+    except Exception as e:
+        logging.error(f"Error loading labels from {label_save_path}: {e}")
+        return None, None, None
+
+
+def _resolve_file_path(file_path: str) -> str:
+    """
+    Resolve file path, handling cross-platform and network path issues.
+
+    Args:
+        file_path: Original file path
+
+    Returns:
+        str: Resolved file path
+    """
+    # If file exists as-is, return it
+    if os.path.exists(file_path):
+        return file_path
+
+    try:
+        # Handle network path resolution (simplified from original complex logic)
+        path_to_macaw = check_sys_for_macaw_root()
+
+        # Extract relative path (last 9 components as in original)
+        path_parts = file_path.replace('\\', '/').split('/')
+        if len(path_parts) >= 9:
+            relative_path = '/'.join(path_parts[-9:])
+            resolved_path = os.path.join(path_to_macaw, relative_path)
+            if os.path.exists(resolved_path):
+                return resolved_path
+
+        # If all else fails, return original path
+        return file_path
+
+    except Exception as e:
+        logging.warning(f"Error resolving path {file_path}: {e}")
+        return file_path
+
+
+def parse_embedding_filename(filename: str):
+    """
+    Parse UMAP parameters from embedding filename.
+
+    Args:
+        filename: Embedding filename (e.g., 'euclidean_10neighbors_0.1dist.h5')
+
+    Returns:
+        tuple: (metric, n_neighbors, min_dist, umap_id) or None on error
+    """
+    try:
+        # Remove file extension
+        base_name = filename.replace('.h5', '')
+
+        # Split into components
+        parts = base_name.split('_')
+        if len(parts) != 3:
+            raise ValueError(f"Unexpected filename format: {filename}")
+
+        metric = parts[0]
+        n_neighbors = int(parts[1].replace('neighbors', ''))
+        min_dist = float(parts[2].replace('dist', ''))
+
+        return metric, n_neighbors, min_dist, base_name
+
+    except Exception as e:
+        logging.error(f"Error parsing embedding filename {filename}: {e}")
+        return None
+
+
+# ============================================================================
+# EVALUATION & RANKING
+# ============================================================================
+
+def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=None,
+                            target_clusters=20, penalty_decay=0.1):
+    """
+    Compute composite scores with normalization and cluster count penalty.
+
+    Args:
+        summary_df: DataFrame with raw metric scores
+        metrics: List of metrics to include in composite score
+        n_syls: List of cluster counts (extracted from summary_df if None)
+        weights: Weights for each metric (equal weights if None)
+        target_clusters: Target number of clusters for penalty function
+        penalty_decay: Decay rate for cluster penalty
+
+    Returns:
+        pd.DataFrame: DataFrame with added normalized scores and composite score
+    """
+    df = summary_df.copy()
+
+    # Get cluster counts
+    if n_syls is None:
+        n_syls = df['n_syls'].tolist()
+
+    # Set equal weights if not provided
+    if weights is None:
+        weights = [1.0] * len(metrics)
+
+    if len(weights) != len(metrics):
+        raise ValueError("Number of weights must match number of metrics")
+
+    # Normalize each metric
+    normalized_scores = []
+    for metric in metrics:
+        if metric not in df.columns:
+            logging.warning(f"Metric {metric} not found in DataFrame, skipping")
+            continue
+
+        metric_values = df[metric]
+
+        # Skip if all values are NaN
+        if metric_values.isna().all():
+            df[f'normalized_{metric}'] = np.nan
+            normalized_scores.append(pd.Series([0] * len(df)))
+            continue
+
+        # Normalize based on metric type (higher vs lower is better)
+        if metric in ['nmi', 'silhouette', 'ch', 'log-likelihood', 'dunn']:
+            # Higher is better
+            norm_metric = _normalize_higher_better(metric_values)
+        elif metric in ['dbi', 'aic', 'bic']:
+            # Lower is better
+            norm_metric = _normalize_lower_better(metric_values)
+        else:
+            logging.warning(f"Unknown metric {metric}, treating as higher-is-better")
+            norm_metric = _normalize_higher_better(metric_values)
+
+        df[f'normalized_{metric}'] = norm_metric
+        normalized_scores.append(norm_metric)
+
+    # Compute cluster penalties
+    cluster_penalties = [score_cluster_penalty(n, target_clusters, penalty_decay) for n in n_syls]
+
+    # Compute weighted composite score
+    if normalized_scores:
+        weighted_scores = [w * norm.fillna(0) for w, norm in zip(weights, normalized_scores)]
+        composite_base = sum(weighted_scores) / sum(weights)  # Weighted average
+        df['composite_score'] = composite_base * cluster_penalties
+    else:
+        df['composite_score'] = np.nan
+
+    return df
+
+
+def _normalize_higher_better(values):
+    """Normalize values where higher is better (0-1 scale)."""
+    min_val, max_val = values.min(), values.max()
+    if min_val == max_val:
+        return pd.Series([1.0] * len(values))
+    return (values - min_val) / (max_val - min_val)
+
+
+def _normalize_lower_better(values):
+    """Normalize values where lower is better (0-1 scale, inverted)."""
+    min_val, max_val = values.min(), values.max()
+    if min_val == max_val:
+        return pd.Series([1.0] * len(values))
+    return (max_val - values) / (max_val - min_val)
+
+
+def score_cluster_penalty(n, target=20, decay_rate=0.1):
+    """
+    Compute penalty for cluster count deviation from target.
+
+    Args:
+        n: Number of clusters
+        target: Target number of clusters
+        decay_rate: Exponential decay rate for penalty
+
+    Returns:
+        float: Penalty multiplier (1.0 = no penalty, <1.0 = penalty applied)
+    """
+    if n <= target:
+        return 1.0
+    else:
+        # Exponential decay penalty for too many clusters
+        return 0.8 * np.exp(-(n - target) / decay_rate)
+
+
+def select_best_params(summary_df, selection_method='composite', top_n=1):
+    """
+    Select best parameter combinations based on specified method.
+
+    Args:
+        summary_df: DataFrame with scores and composite scores
+        selection_method: Method for selection ('composite' or specific metric name)
+        top_n: Number of top parameter combinations to return
+
+    Returns:
+        pd.DataFrame: Top N parameter combinations sorted by selection criteria
+    """
+    if summary_df.empty:
+        return pd.DataFrame()
+
+    # Select based on method
+    if selection_method == 'composite':
+        if 'composite_score' not in summary_df.columns:
+            raise ValueError("Composite score not found. Run compute_composite_score first.")
+        sorted_df = summary_df.sort_values('composite_score', ascending=False)
+    else:
+        if selection_method not in summary_df.columns:
+            raise ValueError(f"Selection method '{selection_method}' not found in DataFrame")
+
+        # Determine sort order based on metric type
+        if selection_method in ['nmi', 'silhouette', 'ch', 'log-likelihood', 'dunn']:
+            ascending = False  # Higher is better
+        else:
+            ascending = True  # Lower is better
+
+        sorted_df = summary_df.sort_values(selection_method, ascending=ascending)
+
+    return sorted_df.head(top_n).reset_index(drop=True)
+
+
+def compute_metric_ranking(summary_df, metrics):
+    """
+    Compute individual metric rankings and aggregate rank.
+
+    Args:
+        summary_df: DataFrame with metric scores
+        metrics: List of metrics to rank
+
+    Returns:
+        pd.DataFrame: DataFrame with added ranking columns
+    """
+    df = summary_df.copy()
+
+    rank_columns = []
+    for metric in metrics:
+        if metric not in df.columns:
+            continue
+
+        rank_col = f'{metric}_rank'
+
+        # Rank based on metric type
+        if metric in ['nmi', 'silhouette', 'ch', 'log-likelihood', 'dunn']:
+            df[rank_col] = df[metric].rank(ascending=False, na_option='bottom')
+        else:
+            df[rank_col] = df[metric].rank(ascending=True, na_option='bottom')
+
+        rank_columns.append(rank_col)
+
+    # Compute aggregate rank (sum of individual ranks)
+    if rank_columns:
+        df['aggregate_rank'] = df[rank_columns].sum(axis=1)
+
+    return df
+
+
+# ============================================================================
+# VISUALIZATION & REPORTING
+# ============================================================================
+
+def plot_umap(embeddings, labels, save: str = None, figsize=(12, 10), title=None):
+    """
+    Create scatter plot of UMAP embeddings colored by cluster labels.
+
+    Args:
+        embeddings: UMAP embeddings array (N x 2)
+        labels: Cluster labels
+        save: Path to save plot (optional)
+        figsize: Figure size tuple
+        title: Plot title (optional)
+
+    Returns:
+        None
+    """
+    try:
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Handle string/byte labels
+        plot_labels = labels
+        if isinstance(labels[0], (str, bytes)):
+            # Convert to integer labels for coloring
+            unique_labels, plot_labels = np.unique(labels, return_inverse=True)
+
+        # Create scatter plot
+        scatter = ax.scatter(embeddings[:, 0], embeddings[:, 1],
+                             c=plot_labels, cmap='tab10', alpha=0.7, s=20)
+
+        # Customize plot
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if title:
+            ax.set_title(title, fontsize=14)
+
+        # Add legend for cluster labels
+        n_clusters = len(np.unique(plot_labels))
+        if n_clusters <= 20:  # Only show legend if reasonable number of clusters
+            legend = ax.legend(*scatter.legend_elements(),
+                               title="Clusters", bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax.add_artist(legend)
+
+        plt.tight_layout()
+
+        if save:
+            plt.savefig(save, dpi=150, bbox_inches='tight')
+            plt.close(fig)
+        else:
+            plt.show()
+
+    except Exception as e:
+        logging.error(f"Error creating UMAP plot: {e}")
+        if 'fig' in locals():
+            plt.close(fig)
+
+
+def plot_summary_matrix(summary_df, save_path: str, metrics: list, figsize=(12, 8)):
+    """
+    Create heatmap visualization of normalized metric scores.
+
+    Args:
+        summary_df: DataFrame with normalized scores
+        save_path: Path to save the plot
+        metrics: List of metrics to include
+        figsize: Figure size tuple
+
+    Returns:
+        None
+    """
+    try:
+        # Select normalized metrics and composite score
+        plot_columns = [f'normalized_{metric}' for metric in metrics if f'normalized_{metric}' in summary_df.columns]
+        if 'composite_score' in summary_df.columns:
+            plot_columns.append('composite_score')
+
+        if not plot_columns:
+            logging.warning("No normalized metrics found for plotting")
+            return
+
+        plot_data = summary_df[plot_columns]
+
+        # Create heatmap
+        plt.figure(figsize=figsize)
+        sns.heatmap(plot_data.T, annot=True, fmt=".3f", cmap="viridis",
+                    cbar_kws={'label': 'Normalized Score'})
+
+        plt.title('Clustering Performance Summary (Normalized Scores)', fontsize=14)
+        plt.xlabel('Parameter Combination')
+        plt.ylabel('Metric')
+        plt.tight_layout()
+
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+    except Exception as e:
+        logging.error(f"Error creating summary matrix plot: {e}")
+
+
+def create_cluster_summary_pdf(master_summary_df, bird: str, save_path: str, top_n: int = None):
+    """
+    Create comprehensive PDF report with cluster visualizations and scores.
+
+    Args:
+        master_summary_df: DataFrame with all clustering results
+        bird: Bird identifier
+        save_path: Directory to save PDF
+        top_n: Number of top results to include (all if None)
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        pdf_path = os.path.join(save_path, f'{bird}_cluster_summary.pdf')
+
+        # Select subset if requested
+        if top_n is not None:
+            plot_df = master_summary_df.head(top_n)
+        else:
+            plot_df = master_summary_df
+
+        with PdfPages(pdf_path) as pdf:
+            for index, row in plot_df.iterrows():
+                # Resolve PNG path
+                png_path = _resolve_plot_path(row['png_path'])
+
+                if not os.path.exists(png_path):
+                    logging.warning(f"PNG file not found: {png_path}")
+                    continue
+
+                try:
+                    # Create figure with plot and metadata
+                    fig = _create_summary_page(row, index, len(plot_df), png_path)
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close(fig)
+
+                except Exception as e:
+                    logging.error(f"Error processing page {index}: {e}")
+                    continue
+
+        logging.info(f"Created PDF summary: {pdf_path}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Error creating PDF summary: {e}")
+        return False
+
+
+def _resolve_plot_path(png_path):
+    """Resolve PNG path, handling different path formats."""
+    if isinstance(png_path, Path):
+        png_path = str(png_path)
+
+    # Handle Windows network paths
+    if 'Y:' in str(png_path):
+        png_path = str(png_path).replace(f'Y:{os.sep}', check_sys_for_macaw_root())
+
+    return png_path
+
+
+def _create_summary_page(row, index, total_rows, png_path):
+    """Create individual summary page for PDF report."""
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 16),
+                                   gridspec_kw={'height_ratios': [3, 1]})
+
+    # Top subplot: cluster visualization
+    img = plt.imread(png_path)
+    ax1.imshow(img)
+    ax1.axis('off')
+
+    # Create title with parameters and scores
+    title_lines = [
+        f"UMAP: n_neighbors={int(row['n_neighbors'])}, min_dist={row['min_dist']:.3f}, metric={row['metric']}",
+        f"Clustering: min_cluster_size={int(row['min_cluster_size'])}, min_samples={int(row['min_samples'])}",
+        f"Clusters: {int(row['n_syls'])} | Composite Score: {row['composite_score']:.3f} | Rank: {index + 1}/{total_rows}"
+    ]
+    ax1.set_title('\n'.join(title_lines), fontsize=12, pad=20)
+
+    # Bottom subplot: metrics table
+    _create_metrics_table(ax2, row)
+
+    plt.tight_layout()
+    return fig
+
+
+def _create_metrics_table(ax, row):
+    """Create metrics table for summary page."""
+    # Extract metric scores (exclude non-metric columns)
+    exclude_cols = ['sample_size', 'n_syls', 'png_path', 'label_path',
+                    'n_neighbors', 'min_dist', 'metric', 'min_cluster_size',
+                    'min_samples', 'composite_score']
+
+    metric_data = []
+    for col in row.index:
+        if col not in exclude_cols and not col.startswith('normalized_'):
+            value = row[col]
+            if pd.notna(value):
+                metric_data.append([col.upper(), f"{value:.4f}"])
+
+    if metric_data:
+        # Create table
+        table = ax.table(cellText=metric_data,
+                         colLabels=['Metric', 'Score'],
+                         cellLoc='center',
+                         loc='center',
+                         bbox=[0, 0, 1, 1])
+
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 2)
+
+        # Style the table
+        for i in range(len(metric_data) + 1):
+            for j in range(2):
+                cell = table[(i, j)]
+                if i == 0:  # Header row
+                    cell.set_facecolor('#40466e')
+                    cell.set_text_props(weight='bold', color='white')
+                else:
+                    cell.set_facecolor('#f1f1f2')
+
+    ax.axis('off')
+
+
+def reorder_columns(master_summary_df: pd.DataFrame, metrics: list):
+    """
+    Reorder DataFrame columns for better readability and analysis.
+
+    Args:
+        master_summary_df: DataFrame to reorder
+        metrics: List of metrics used
+
+    Returns:
+        pd.DataFrame: Reordered DataFrame
+    """
+    # Define column order priority
+    priority_cols = []
+
+    # Add NMI first if present (special handling for ground truth comparison)
+    if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
+        priority_cols.append('nmi')
+
+    # Core results columns
+    core_cols = ['composite_score', 'sample_size', 'n_syls']
+    priority_cols.extend([col for col in core_cols if col in master_summary_df.columns])
+
+    # Parameter columns
+    param_cols = ['n_neighbors', 'min_dist', 'metric', 'min_cluster_size', 'min_samples']
+    priority_cols.extend([col for col in param_cols if col in master_summary_df.columns])
+
+    # Raw metric scores (excluding NMI if already added)
+    metric_cols = [m for m in metrics if m in master_summary_df.columns and m not in priority_cols]
+    priority_cols.extend(metric_cols)
+
+    # Normalized scores
+    normalized_cols = [f'normalized_{m}' for m in metrics
+                       if f'normalized_{m}' in master_summary_df.columns]
+    priority_cols.extend(normalized_cols)
+
+    # Path columns last
+    path_cols = ['png_path', 'label_path']
+    priority_cols.extend([col for col in path_cols if col in master_summary_df.columns])
+
+    # Add any remaining columns
+    remaining_cols = [col for col in master_summary_df.columns if col not in priority_cols]
+    final_columns = priority_cols + remaining_cols
+
+    return master_summary_df[final_columns]
+
+
+def save_master_summary(master_summary_df, save_path: str):
+    """
+    Save master summary DataFrame to CSV.
+
+    Args:
+        master_summary_df: DataFrame to save
+        save_path: Directory path to save file
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        master_summary_path = os.path.join(save_path, 'master_summary.csv')
+        master_summary_df.to_csv(master_summary_path, index=False)
+        return True
+    except Exception as e:
+        logging.error(f"Error saving master summary: {e}")
+        return False
+
+
+def load_master_summary(save_path: str):
+    """
+    Load master summary DataFrame from CSV.
+
+    Args:
+        save_path: Directory path containing master_summary.csv
+
+    Returns:
+        pd.DataFrame: Loaded DataFrame or empty DataFrame if not found
+    """
+    try:
+        master_summary_path = os.path.join(save_path, 'master_summary.csv')
+        if os.path.exists(master_summary_path):
+            return pd.read_csv(master_summary_path)
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        logging.error(f"Error loading master summary: {e}")
+        return pd.DataFrame()
+
+
+# ============================================================================
+# CROSS-BIRD ANALYSIS
+# ============================================================================
+
+def aggregate_raw_scores_across_birds(save_path: str, birds: list = None, top_n: int = 10):
+    """
+    Aggregate raw clustering scores across multiple birds for cross-bird comparison.
+
+    Args:
+        save_path: Root directory containing bird subdirectories
+        birds: List of bird names to include (all birds if None)
+        top_n: Number of top parameter combinations to include per bird
+
+    Returns:
+        pd.DataFrame: Aggregated raw scores with bird identifiers
+    """
+    if birds is None:
+        birds = _get_available_birds(save_path)
+
+    aggregated_results = []
+
+    for bird in tqdm(birds, desc="Aggregating scores across birds"):
+        try:
+            bird_path = os.path.join(save_path, bird)
+
+            # Load bird's master summary
+            master_summary = load_master_summary(bird_path)
+            if master_summary.empty:
+                logging.warning(f"No master summary found for bird {bird}")
+                continue
+
+            # Select top N parameter combinations for this bird
+            top_results = select_best_params(master_summary, selection_method='composite', top_n=top_n)
+
+            # Add bird identifier
+            top_results['bird'] = bird
+
+            # Ensure sample_size is included (calculate if missing)
+            if 'sample_size' not in top_results.columns:
+                top_results['sample_size'] = _estimate_sample_size_from_paths(top_results)
+
+            aggregated_results.append(top_results)
+
+        except Exception as e:
+            logging.error(f"Error processing bird {bird}: {e}")
+            continue
+
+    if not aggregated_results:
+        logging.warning("No valid results found for cross-bird analysis")
+        return pd.DataFrame()
+
+    # Combine all results
+    combined_df = pd.concat(aggregated_results, ignore_index=True)
+
+    # Reorder columns for cross-bird analysis
+    combined_df = _reorder_for_cross_bird_analysis(combined_df)
+
+    return combined_df
+
+
+def analyze_parameter_performance_by_sample_size(aggregated_df, sample_size_bins=None,
+                                                 metrics=None):
+    """
+    Analyze how parameter combinations perform across different sample size ranges.
+
+    Args:
+        aggregated_df: DataFrame from aggregate_raw_scores_across_birds
+        sample_size_bins: List of bin edges for sample size categorization
+        metrics: List of metrics to analyze
+
+    Returns:
+        pd.DataFrame: Analysis results by sample size bins
+    """
+    if aggregated_df.empty:
+        return pd.DataFrame()
+
+    if sample_size_bins is None:
+        sample_size_bins = [0, 1000, 5000, 10000, 20000, np.inf]
+
+    if metrics is None:
+        metrics = ['silhouette', 'dbi', 'ch', 'aic']
+
+    # Create sample size categories
+    aggregated_df = aggregated_df.copy()
+    aggregated_df['sample_size_bin'] = pd.cut(aggregated_df['sample_size'],
+                                              bins=sample_size_bins,
+                                              labels=[
+                                                  f"{int(sample_size_bins[i])}-{int(sample_size_bins[i + 1]) if sample_size_bins[i + 1] != np.inf else 'inf'}"
+                                                  for i in range(len(sample_size_bins) - 1)])
+
+    # Group by sample size bin and parameter combinations
+    param_cols = ['n_neighbors', 'min_dist', 'min_cluster_size', 'min_samples']
+    available_param_cols = [col for col in param_cols if col in aggregated_df.columns]
+
+    if not available_param_cols:
+        logging.error("No parameter columns found for analysis")
+        return pd.DataFrame()
+
+    # Analyze performance by sample size bin
+    analysis_results = []
+
+    for bin_name, bin_group in aggregated_df.groupby('sample_size_bin'):
+        bin_analysis = {
+            'sample_size_bin': bin_name,
+            'n_birds': bin_group['bird'].nunique(),
+            'n_parameter_combinations': len(bin_group),
+            'avg_sample_size': bin_group['sample_size'].mean(),
+            'avg_n_clusters': bin_group['n_syls'].mean(),
+        }
+
+        # Add metric statistics
+        for metric in metrics:
+            if metric in bin_group.columns:
+                bin_analysis[f'{metric}_mean'] = bin_group[metric].mean()
+                bin_analysis[f'{metric}_std'] = bin_group[metric].std()
+
+        # Find most common parameter values
+        for param in available_param_cols:
+            if param in bin_group.columns:
+                mode_value = bin_group[param].mode()
+                bin_analysis[f'{param}_mode'] = mode_value.iloc[0] if len(mode_value) > 0 else np.nan
+
+        analysis_results.append(bin_analysis)
+
+    return pd.DataFrame(analysis_results)
+
+
+def compute_cross_bird_composite_scores(aggregated_df, metrics, weights=None):
+    """
+    Compute new composite scores based on raw scores across all birds.
+
+    Args:
+        aggregated_df: DataFrame with raw scores from multiple birds
+        metrics: List of metrics to include in composite score
+        weights: Metric weights (equal if None)
+
+    Returns:
+        pd.DataFrame: DataFrame with cross-bird composite scores
+    """
+    if aggregated_df.empty:
+        return aggregated_df
+
+    # Use the existing composite score function but on the full dataset
+    df_with_composite = compute_composite_score(
+        aggregated_df,
+        metrics=metrics,
+        weights=weights,
+        n_syls=aggregated_df['n_syls'].tolist()
+    )
+
+    # Add cross-bird ranking
+    df_with_composite['cross_bird_rank'] = df_with_composite['composite_score'].rank(ascending=False)
+
+    return df_with_composite
+
+
+def _get_available_birds(save_path: str):
+    """Get list of available bird directories."""
+    try:
+        all_items = os.listdir(save_path)
+        birds = []
+
+        for item in all_items:
+            item_path = os.path.join(save_path, item)
+            # Check if it's a directory and has expected structure
+            if os.path.isdir(item_path) and not item.startswith('.'):
+                # Check for master_summary.csv or data directory
+                if (os.path.exists(os.path.join(item_path, 'master_summary.csv')) or
+                        os.path.exists(os.path.join(item_path, 'data'))):
+                    birds.append(item)
+
+        return sorted(birds)
+
+    except Exception as e:
+        logging.error(f"Error getting available birds: {e}")
+        return []
