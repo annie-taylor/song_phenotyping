@@ -159,11 +159,17 @@ def flatten_bird_spectrograms(bird_folder: str, bird: str) -> bool:
 def main():
     optimize_pytables_for_network()
 
-    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or16or22')
-    flatten_bird_spectrograms(evsong_test_directory, 'or16or22')
+    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    birds = os.listdir(evsong_test_directory)
+    birds.remove('copied_data')
+    for bird in birds:
+        flatten_bird_spectrograms(evsong_test_directory, bird)
 
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu68bu81')
-    flatten_bird_spectrograms(wseg_test_directory, 'bu68bu81')
+    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    birds = os.listdir(wseg_test_directory)
+    birds.remove('copied_data')
+    for bird in birds:
+        flatten_bird_spectrograms(wseg_test_directory, bird)
 
 
 

@@ -518,12 +518,18 @@ def main():
     optimize_pytables_for_network()
 
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    explore_embedding_parameters(save_path=evsong_test_directory, bird='or16or22', min_dists=[0.1, 0.5],
-                                 n_neighbors_list=[3, 10], use_parallel=True, overwrite=False)
+    birds = os.listdir(evsong_test_directory)
+    birds.remove('copied_data')
+    for bird in birds:
+        explore_embedding_parameters(save_path=evsong_test_directory, bird=bird, min_dists=[0.1, 0.5],
+                                     n_neighbors_list=[3, 10], use_parallel=True, overwrite=True)
 
     wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    explore_embedding_parameters(save_path=wseg_test_directory, bird='bu68bu81', min_dists=[0.1, 0.5],
-                                 n_neighbors_list=[3, 10], use_parallel=True, overwrite=False)
+    birds = os.listdir(wseg_test_directory)
+    birds.remove('copied_data')
+    for bird in birds:
+        explore_embedding_parameters(save_path=wseg_test_directory, bird=bird, min_dists=[0.1, 0.5],
+                                     n_neighbors_list=[3, 10], use_parallel=True, overwrite=True)
 
 if __name__ == "__main__":
     main()

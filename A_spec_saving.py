@@ -8,11 +8,17 @@ from random import sample
 import gc
 import shutil
 from tqdm import tqdm
+import psutil
 
 from tools.song_io import save_segmented_audio_data, get_song_specs
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_path_management import *
+
+
+def get_memory_usage():
+    """Get current memory usage in MB"""
+    return psutil.Process().memory_info().rss / 1024 / 1024
 
 
 def filepaths_from_wseg(seg_directory: str, save_path: str = None,
@@ -22,74 +28,109 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         copy_locally: bool = False) -> Dict[str, List[str]]:
     """
     Extract WhisperSeg metadata file paths organized by bird and optionally copy audio files.
-
-    Parameters:
-    - copy_locally (bool): If True, copy audio files to local copied_data directory
     """
+    logging.info(f"🔍 Scanning wseg directory: {seg_directory}")
+    logging.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
+
     metadata_file_paths = {}
+    processed_files = 0
+    failed_files = 0
 
     for root, dirs, files in os.walk(seg_directory):
         if song_or_call.lower() not in root.lower():
             continue
 
-        for file in files:
-            if file.endswith(file_ext):
+        matching_files = [f for f in files if f.endswith(file_ext)]
+        if matching_files:
+            logging.info(f"  📁 Found {len(matching_files)} files in {root}")
+
+        for file in matching_files:
+            try:
                 file_path = os.path.join(root, file)
                 path_parts = root.split(os.sep)
                 bird = path_parts[-2]
 
+                # Apply bird subset filter early
+                if bird_subset is not None and bird not in bird_subset:
+                    continue
+
                 if bird not in metadata_file_paths:
                     metadata_file_paths[bird] = []
+                    logging.info(f"  🐦 Started processing bird: {bird}")
+
                 metadata_file_paths[bird].append(file_path)
 
                 # Handle copying and mapping for wseg files
                 if save_path and copy_locally:
-                    if (bird_subset is None) or (bird in bird_subset):
-                        bird_folder = os.path.join(save_path, bird)
-                        os.makedirs(bird_folder, exist_ok=True)
+                    bird_folder = os.path.join(save_path, bird)
+                    os.makedirs(bird_folder, exist_ok=True)
 
-                        # For wseg, we need to load metadata to get audio path
-                        try:
-                            metadata_matfile = loadmat(file_path, squeeze_me=True)
-                            audio_path, _ = resolve_audio_file_path(
-                                file_path, metadata_matfile, read_songpath_from_metadata=True
-                            )
+                    # For wseg, we need to load metadata to get audio path
+                    try:
+                        metadata_matfile = loadmat(file_path, squeeze_me=True)
+                        audio_path, _ = resolve_audio_file_path(
+                            file_path, metadata_matfile, read_songpath_from_metadata=True
+                        )
 
-                            if audio_path and os.path.exists(audio_path):
-                                filename = os.path.basename(audio_path)
+                        if audio_path and os.path.exists(audio_path):
+                            filename = os.path.basename(audio_path)
 
-                                # Copy file locally
-                                copied_data_dir = os.path.join(save_path, 'copied_data', bird)
-                                os.makedirs(copied_data_dir, exist_ok=True)
-                                local_path = os.path.join(copied_data_dir, filename)
+                            # Copy file locally
+                            copied_data_dir = os.path.join(save_path, 'copied_data', bird)
+                            os.makedirs(copied_data_dir, exist_ok=True)
+                            local_path = os.path.join(copied_data_dir, filename)
 
-                                if not os.path.exists(local_path):
-                                    try:
-                                        shutil.copy2(audio_path, local_path)
-                                        logging.debug(f"Copied {audio_path} to {local_path}")
-                                    except Exception as e:
-                                        logging.error(f"Failed to copy {audio_path}: {e}")
-                                        local_path = None
+                            if not os.path.exists(local_path):
+                                try:
+                                    shutil.copy2(audio_path, local_path)
+                                    logging.debug(f"  📋 Copied {filename}")
+                                except Exception as e:
+                                    logging.error(f"  ❌ Failed to copy {audio_path}: {e}")
+                                    local_path = None
 
-                                # Update mapping with both paths
-                                update_audio_paths_file(bird_folder, filename,
-                                                       local_path=local_path,
-                                                       server_path=audio_path)
-                            else:
-                                logging.warning(f"Could not resolve audio path for {file_path}")
+                            # Update mapping with both paths
+                            update_audio_paths_file(bird_folder, filename,
+                                                    local_path=local_path,
+                                                    server_path=audio_path)
+                        else:
+                            logging.warning(f"  ⚠️ Could not resolve audio path for {file_path}")
 
-                        except Exception as e:
-                            logging.error(f"Failed to process wseg metadata {file_path}: {e}")
+                        # Clean up metadata after processing
+                        del metadata_matfile
+
+                    except Exception as e:
+                        logging.error(f"  💥 Failed to process wseg metadata {file_path}: {e}")
+                        failed_files += 1
 
                 elif save_path:
                     # Just create bird folders without copying
-                    if (bird_subset is None) or (bird in bird_subset):
-                        bird_folder = os.path.join(save_path, bird)
-                        os.makedirs(bird_folder, exist_ok=True)
+                    bird_folder = os.path.join(save_path, bird)
+                    os.makedirs(bird_folder, exist_ok=True)
 
-    if bird_subset is not None:
-        metadata_file_paths = {bird: paths for bird, paths in metadata_file_paths.items()
-                               if bird in bird_subset}
+                processed_files += 1
+
+                # Periodic progress updates for large datasets
+                if processed_files % 100 == 0:
+                    logging.info(f"  📊 Processed {processed_files} files, memory: {get_memory_usage():.1f} MB")
+                    gc.collect()  # Periodic cleanup
+
+            except Exception as e:
+                logging.error(f"  💥 Error processing file {file}: {e}")
+                failed_files += 1
+
+    # Final summary
+    total_birds = len(metadata_file_paths)
+    total_files = sum(len(files) for files in metadata_file_paths.values())
+
+    logging.info(f"🎯 Wseg scanning complete:")
+    logging.info(f"  🐦 Found {total_birds} birds")
+    logging.info(f"  📄 Found {total_files} total metadata files")
+    logging.info(f"  ✅ Successfully processed: {processed_files}")
+    logging.info(f"  ❌ Failed: {failed_files}")
+    logging.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
+
+    for bird, files in metadata_file_paths.items():
+        logging.info(f"  {bird}: {len(files)} files")
 
     return metadata_file_paths
 
@@ -97,102 +138,149 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
 def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                batch_file_naming: str = 'batch.txt.keep',
                                bird_subset: None | list = None,
-                               copy_locally: bool = False) -> tuple[
-    dict[str, list[str]], dict[str, list[str]]]:
+                               copy_locally: bool = False) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """
     Extract file paths from evsonganaly batch files and optionally copy files locally.
-
-    Parameters:
-    - wav_directory (str): The root directory to search for audio files containing batch files.
-    - save_path (str): The directory where bird folders will be created and audio_paths.txt files saved.
-    - batch_file_naming (str): Specifies the name of the batch file we're referencing
-    - bird_subset (None | list): If not processing all birds in directory, list of birds to be processed
-    - copy_locally (bool): If True, copy audio files to local copied_data directory
-
-    Returns:
-    - tuple: (metadata_file_paths, wav_file_paths) where:
-        - metadata_file_paths (dict[str, list[str]]): Dictionary mapping bird names to lists of metadata file paths
-        - wav_file_paths (dict[str, list[str]]): Dictionary mapping bird names to lists of wav file paths
     """
+    logging.info(f"🔍 Scanning evsonganaly directory: {wav_directory}")
+    logging.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
+
     if save_path is not None:
         os.makedirs(save_path, exist_ok=True)
 
     birds = []
     metadata_file_paths = {}
     wav_file_paths = {}
+    processed_files = 0
+    failed_files = 0
+    batch_files_found = 0
 
     for root, dirs, files in os.walk(wav_directory, topdown=False):
-        for file in files:
-            if batch_file_naming in file:
+        batch_files = [f for f in files if batch_file_naming in f]
+
+        if batch_files:
+            batch_files_found += len(batch_files)
+            logging.info(f"  📁 Found {len(batch_files)} batch files in {root}")
+
+        for file in batch_files:
+            try:
                 song_metadata = []
                 song_audio = []
+                batch_file_path = os.path.join(root, file)
 
-                with open(os.path.join(root, file), 'r') as f:
-                    for line in f:
-                        song_name = line.replace('\n', '.not.mat')
-                        song_metadata_path = os.path.join(root, song_name)
+                logging.info(f"  📄 Processing batch file: {file}")
 
-                        if os.path.isfile(song_metadata_path):
-                            audio_path = os.path.join(root, line.replace('\n', ''))
-                            song_audio.append(audio_path)
-                            song_metadata.append(song_metadata_path)
+                with open(batch_file_path, 'r') as f:
+                    lines = f.readlines()
+                    logging.info(f"    📝 Found {len(lines)} entries in batch file")
 
-                            # Extract bird name
-                            try:
-                                [bird, _, _] = line.split('_')[0:3]
-                            except ValueError:
-                                logging.error(f"Trouble reading birdname from {line}: {ValueError}")
+                    for line_idx, line in enumerate(lines):
+                        try:
+                            song_name = line.replace('\n', '.not.mat')
+                            song_metadata_path = os.path.join(root, song_name)
+
+                            if os.path.isfile(song_metadata_path):
+                                audio_path = os.path.join(root, line.replace('\n', ''))
+                                song_audio.append(audio_path)
+                                song_metadata.append(song_metadata_path)
+
+                                # Extract bird name
                                 try:
-                                    [bird, _] = line.split('_')[0:2]
+                                    [bird, _, _] = line.split('_')[0:3]
                                 except ValueError:
-                                    logging.error(f"Trouble reading birdname from {line}: {ValueError}")
-                                    [bird, _] = line.split('.')[0:2]
+                                    logging.debug(f"    ⚠️ Trouble reading birdname from {line}, trying fallback")
+                                    try:
+                                        [bird, _] = line.split('_')[0:2]
+                                    except ValueError:
+                                        logging.debug(f"    ⚠️ Using final fallback for birdname from {line}")
+                                        [bird, _] = line.split('.')[0:2]
 
-                            # Create bird folder and handle copying/mapping
-                            if save_path:
-                                bird_folder = os.path.join(save_path, bird)
-                                os.makedirs(bird_folder, exist_ok=True)
+                                # Apply bird subset filter
+                                if bird_subset is not None and bird not in bird_subset:
+                                    continue
 
-                                filename = os.path.basename(audio_path)
+                                # Create bird folder and handle copying/mapping
+                                if save_path:
+                                    bird_folder = os.path.join(save_path, bird)
+                                    os.makedirs(bird_folder, exist_ok=True)
 
-                                if copy_locally:
-                                    # Copy file locally
-                                    copied_data_dir = os.path.join(save_path, 'copied_data', bird)
-                                    os.makedirs(copied_data_dir, exist_ok=True)
-                                    local_path = os.path.join(copied_data_dir, filename)
+                                    filename = os.path.basename(audio_path)
 
-                                    if not os.path.exists(local_path):
-                                        try:
-                                            shutil.copy2(audio_path, local_path)
-                                            logging.debug(f"Copied {audio_path} to {local_path}")
-                                        except Exception as e:
-                                            logging.error(f"Failed to copy {audio_path}: {e}")
-                                            local_path = None
+                                    if copy_locally:
+                                        # Copy file locally
+                                        copied_data_dir = os.path.join(save_path, 'copied_data', bird)
+                                        os.makedirs(copied_data_dir, exist_ok=True)
+                                        local_path = os.path.join(copied_data_dir, filename)
 
-                                    # Update mapping with both paths
-                                    update_audio_paths_file(bird_folder, filename,
-                                                            local_path=local_path,
-                                                            server_path=audio_path)
+                                        if not os.path.exists(local_path):
+                                            try:
+                                                shutil.copy2(audio_path, local_path)
+                                                logging.debug(f"      📋 Copied {filename}")
+                                            except Exception as e:
+                                                logging.error(f"      ❌ Failed to copy {audio_path}: {e}")
+                                                local_path = None
+
+                                        # Update mapping with both paths
+                                        update_audio_paths_file(bird_folder, filename,
+                                                              local_path=local_path,
+                                                              server_path=audio_path)
+                                    else:
+                                        # Just update with server path
+                                        update_audio_paths_file(bird_folder, filename,
+                                                              server_path=audio_path)
+
+                                # Collect paths by bird
+                                if bird not in birds:
+                                    birds.append(bird)
+                                    metadata_file_paths[bird] = song_metadata.copy()
+                                    wav_file_paths[bird] = song_audio.copy()
+                                    logging.info(f"    🐦 Started processing bird: {bird}")
                                 else:
-                                    # Just update with server path
-                                    update_audio_paths_file(bird_folder, filename,
-                                                            server_path=audio_path)
+                                    metadata_file_paths[bird].extend(song_metadata)
+                                    wav_file_paths[bird].extend(song_audio)
 
-                            # Collect paths by bird
-                            if bird not in birds:
-                                birds.append(bird)
-                                metadata_file_paths[bird] = song_metadata
-                                wav_file_paths[bird] = song_audio
+                                processed_files += 1
                             else:
-                                metadata_file_paths[bird].extend(song_metadata)
-                                wav_file_paths[bird].extend(song_audio)
+                                logging.debug(f"    ⚠️ Metadata file not found: {song_metadata_path}")
 
-    # Apply bird subset filter
+                        except Exception as e:
+                            logging.error(f"    💥 Error processing line {line_idx} in {file}: {e}")
+                            failed_files += 1
+
+                        # Periodic progress updates for large batch files
+                        if (line_idx + 1) % 50 == 0:
+                            logging.info(f"    📊 Processed {line_idx + 1}/{len(lines)} lines, "
+                                       f"memory: {get_memory_usage():.1f} MB")
+
+                logging.info(f"  ✅ Completed batch file {file}: {len(song_metadata)} valid entries")
+
+            except Exception as e:
+                logging.error(f"  💥 Error processing batch file {file}: {e}")
+                failed_files += 1
+
+    # Apply bird subset filter to final results
     if bird_subset is not None:
         metadata_file_paths = {bird: paths for bird, paths in metadata_file_paths.items()
                                if bird in bird_subset}
         wav_file_paths = {bird: paths for bird, paths in wav_file_paths.items()
                           if bird in bird_subset}
+
+    # Final summary
+    total_birds = len(metadata_file_paths)
+    total_metadata_files = sum(len(files) for files in metadata_file_paths.values())
+    total_wav_files = sum(len(files) for files in wav_file_paths.values())
+
+    logging.info(f"🎯 Evsonganaly scanning complete:")
+    logging.info(f"  📄 Found {batch_files_found} batch files")
+    logging.info(f"  🐦 Found {total_birds} birds")
+    logging.info(f"  📄 Found {total_metadata_files} metadata files")
+    logging.info(f"  🎵 Found {total_wav_files} wav files")
+    logging.info(f"  ✅ Successfully processed: {processed_files}")
+    logging.info(f"  ❌ Failed: {failed_files}")
+    logging.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
+
+    for bird in metadata_file_paths:
+        logging.info(f"  {bird}: {len(metadata_file_paths[bird])} files")
 
     return metadata_file_paths, wav_file_paths
 
@@ -489,6 +577,8 @@ def load_and_validate_metadata(metadata_file_path: str, wseg_offset: float = 0.0
         raw_onsets = metadata_matfile.get('onsets')
         raw_offsets = metadata_matfile.get('offsets')
         labels = np.array(list(metadata_matfile.get('labels')))
+        del metadata_matfile
+        gc.collect()
 
         # Check for missing required fields
         if raw_onsets is None or raw_offsets is None or labels is None:
@@ -803,31 +893,34 @@ def create_output_path(save_path: str, filename_info: Dict[str, str]) -> str:
 def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dict[str, Any],
                            params: SpectrogramParams, verbose: bool) -> bool:
     """
-    Process audio file and save segmented data.
-
-    Returns:
-        True if successful, False otherwise
+    Process audio file and save segmented data with progress tracking.
     """
     try:
+        logging.debug(f"    🎵 Processing audio: {os.path.basename(audio_file_path)}")
+
         # Split long syllables if needed
         if hasattr(params, 'max_dur') and params.max_dur:
             max_dur_ms = params.max_dur * 1000
             syl_onsets, syl_offsets, labels = split_long_syllables(
                 metadata['onsets'], metadata['offsets'], metadata['labels'], max_dur_ms
             )
+            logging.debug(f"      ✂️ Split syllables: {len(metadata['onsets'])} → {len(syl_onsets)}")
         else:
             syl_onsets = metadata['onsets']
             syl_offsets = metadata['offsets']
             labels = metadata['labels']
 
         # Generate spectrograms
+        logging.debug(f"      📊 Generating spectrograms for {len(syl_onsets)} syllables")
         specs, wavs, ts, valid_inds, tempos = get_song_specs(
             audio_file_path, syl_onsets, syl_offsets, params=params
         )
 
         if not valid_inds:
-            logging.warning(f"No valid spectrograms generated for {audio_file_path}")
+            logging.warning(f"      ⚠️ No valid spectrograms generated for {audio_file_path}")
             return False
+
+        logging.debug(f"      ✅ Generated {len(valid_inds)} valid spectrograms")
         (mean_top_3, low_f_mean, mean_all) = tempos
 
         # Create organized data structure
@@ -846,17 +939,20 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
         )
 
         # Save to HDF5 file
+        logging.debug(f"      💾 Saving to {os.path.basename(output_path)}")
         save_segmented_audio_data(output_path, audio_file_path, segmented_audio_data)
-        del segmented_audio_data  # Clear the large data structure
-        gc.collect()  # Force garbage collection
+
+        # Clean up large data structures
+        del segmented_audio_data, specs, wavs, ts
+        gc.collect()
 
         if verbose:
-            logging.info(f"Saved {len(valid_inds)} syllables to {output_path}")
+            logging.info(f"      ✅ Saved {len(valid_inds)} syllables to {output_path}")
 
         return True
 
     except Exception as e:
-        logging.error(f"Error processing audio {audio_file_path}: {e}")
+        logging.error(f"      💥 Error processing audio {audio_file_path}: {e}")
         return False
 
 
@@ -887,6 +983,8 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
         metadata_file_path, metadata_matfile, read_songpath_from_metadata,
         bird_folder, prefer_local
     )
+    del metadata_matfile
+    gc.collect()
 
     if audio_file_path is None:
         return {'status': 'failed', 'reason': 'Audio file not found'}
@@ -942,10 +1040,7 @@ def save_data_specs(metadata_file_paths: List[str], save_path: str, params: Spec
                     verbose: bool = False, read_songpath_from_metadata: bool = True,
                     prefer_local: bool = True) -> Dict[str, List[str]]:
     """
-    Process metadata files and save spectrograms to HDF5 files.
-
-    Args:
-        prefer_local: If True, prefer local audio files over server files
+    Process metadata files and save spectrograms to HDF5 files with detailed progress tracking.
     """
     results = {
         'processed': [],
@@ -953,23 +1048,48 @@ def save_data_specs(metadata_file_paths: List[str], save_path: str, params: Spec
         'failed': []
     }
 
-    for metadata_file_path in tqdm(metadata_file_paths, desc="Processing audio files"):
+    logging.info(f"🎵 Starting spectrogram processing for {len(metadata_file_paths)} files")
+    logging.info(f"📊 Memory usage at start: {get_memory_usage():.1f} MB")
+
+    for idx, metadata_file_path in enumerate(tqdm(metadata_file_paths, desc="Processing audio files"), 1):
         try:
+            logging.debug(
+                f"  🔄 Processing file {idx}/{len(metadata_file_paths)}: {os.path.basename(metadata_file_path)}")
+
             result = process_single_metadata_file(
                 metadata_file_path, save_path, params,
                 read_songpath_from_metadata, verbose, prefer_local
             )
+
             results[result['status']].append(metadata_file_path)
 
+            # Log individual results
+            if result['status'] == 'processed':
+                logging.debug(f"    ✅ Success: {result['reason']}")
+            elif result['status'] == 'skipped':
+                logging.debug(f"    ⏭️ Skipped: {result['reason']}")
+            else:
+                logging.warning(f"    ❌ Failed: {result['reason']}")
+
+            # Periodic memory reporting
+            if idx % 10 == 0:
+                logging.info(f"  📊 Progress {idx}/{len(metadata_file_paths)}, "
+                             f"memory: {get_memory_usage():.1f} MB")
+                gc.collect()  # Periodic cleanup
+
         except Exception as e:
-            logging.error(f"Unexpected error processing {metadata_file_path}: {e}")
+            logging.error(f"  💥 Unexpected error processing {metadata_file_path}: {e}")
             results['failed'].append(metadata_file_path)
 
-    # Log summary
-    logging.info(f"Processing complete: {len(results['processed'])} processed, "
-                 f"{len(results['skipped'])} skipped, {len(results['failed'])} failed")
+    # Final summary
+    logging.info(f"🎯 Spectrogram processing complete:")
+    logging.info(f"  ✅ Processed: {len(results['processed'])}")
+    logging.info(f"  ⏭️ Skipped: {len(results['skipped'])}")
+    logging.info(f"  ❌ Failed: {len(results['failed'])}")
+    logging.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
 
     return results
+
 
 def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, save_path: str = None,
                                      songs_per_bird: int = 5, params: 'SpectrogramParams' = None,
@@ -981,39 +1101,78 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, save_path: str =
         raise ValueError("save_path cannot be None")
 
     birds = list(metadata_file_paths.keys())
+    logging.info(f"🐦 Starting processing for {len(birds)} birds: {birds}")
+    logging.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
-    for bird in tqdm(birds, desc="Processing birds"):
-        syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
+    successful_birds = []
+    failed_birds = []
 
-        if os.path.isdir(syllables_dir):
-            already_saved_files = os.listdir(syllables_dir)
-        else:
-            already_saved_files = []
+    for bird_idx, bird in enumerate(birds, 1):
+        logging.info(f"🔄 Processing bird {bird_idx}/{len(birds)}: {bird}")
+        logging.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
-        needed_count = songs_per_bird - len(already_saved_files)
+        try:
+            syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
 
-        if needed_count <= 0:
-            print(f'{bird} already processed, skipping...')
-            continue
+            if os.path.isdir(syllables_dir):
+                already_saved_files = os.listdir(syllables_dir)
+            else:
+                already_saved_files = []
 
-        candidate_file_paths = select_new_files(
-            metadata_file_paths[bird],
-            already_saved_files,
-            needed_count
-        )
+            needed_count = songs_per_bird - len(already_saved_files)
+            logging.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
-        if candidate_file_paths:
-            save_data_specs(
-                metadata_file_paths=candidate_file_paths,
-                save_path=save_path,
-                params=params,
-                verbose=verbose,
-                read_songpath_from_metadata=False,
-                prefer_local=prefer_local
+            if needed_count <= 0:
+                logging.info(f'  ⏭️ {bird} already processed, skipping...')
+                successful_birds.append(bird)
+                continue
+
+            logging.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
+            candidate_file_paths = select_new_files(
+                metadata_file_paths[bird],
+                already_saved_files,
+                needed_count
             )
 
-        else:
-            logging.warning(f"No new files found for {bird}")
+            if candidate_file_paths:
+                logging.info(f"  🎵 Processing {len(candidate_file_paths)} audio files for {bird}")
+
+                results = save_data_specs(
+                    metadata_file_paths=candidate_file_paths,
+                    save_path=save_path,
+                    params=params,
+                    verbose=verbose,
+                    read_songpath_from_metadata=False,
+                    prefer_local=prefer_local
+                )
+
+                # Report detailed results
+                logging.info(f"  ✅ {bird} complete: {len(results['processed'])} processed, "
+                             f"{len(results['skipped'])} skipped, {len(results['failed'])} failed")
+
+                if results['processed']:
+                    successful_birds.append(bird)
+                else:
+                    failed_birds.append(bird)
+                    logging.warning(f"  ⚠️ No files successfully processed for {bird}")
+            else:
+                logging.warning(f"  ❌ No new files found for {bird}")
+                failed_birds.append(bird)
+
+        except Exception as e:
+            logging.error(f"  💥 Error processing bird {bird}: {e}")
+            failed_birds.append(bird)
+
+        logging.info(f"📊 Memory usage after {bird}: {get_memory_usage():.1f} MB")
+
+        # Force cleanup between birds
+        gc.collect()
+
+    # Final summary
+    logging.info(f"🎯 Processing complete! Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+    if failed_birds:
+        logging.warning(f"❌ Failed birds: {failed_birds}")
+    logging.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
 
 
 def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
@@ -1028,83 +1187,160 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         params = SpectrogramParams()
 
     birds = list(metadata_file_paths.keys())
+    logging.info(f"🐦 Starting wseg processing for {len(birds)} birds: {birds}")
+    logging.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
-    for bird in tqdm(birds, desc="Processing birds"):
-        syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
+    successful_birds = []
+    failed_birds = []
 
-        if os.path.isdir(syllables_dir):
-            already_saved_files = os.listdir(syllables_dir)
-        else:
-            already_saved_files = []
+    for bird_idx, bird in enumerate(birds, 1):
+        logging.info(f"🔄 Processing wseg bird {bird_idx}/{len(birds)}: {bird}")
+        logging.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
-        needed_count = songs_per_bird - len(already_saved_files)
+        try:
+            syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
 
-        if needed_count <= 0:
-            print(f'{bird} already processed, skipping...')
-            continue
+            if os.path.isdir(syllables_dir):
+                already_saved_files = os.listdir(syllables_dir)
+            else:
+                already_saved_files = []
 
-        candidate_file_paths = select_new_files(
-            metadata_file_paths[bird],
-            already_saved_files,
-            needed_count
-        )
+            needed_count = songs_per_bird - len(already_saved_files)
+            logging.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
-        if candidate_file_paths:
-            save_data_specs(
-                metadata_file_paths=candidate_file_paths,
-                save_path=save_path,
-                params=params,
-                verbose=verbose,
-                read_songpath_from_metadata=True,
-                prefer_local=prefer_local
+            if needed_count <= 0:
+                logging.info(f'  ⏭️ {bird} already processed, skipping...')
+                successful_birds.append(bird)
+                continue
+
+            logging.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
+            candidate_file_paths = select_new_files(
+                metadata_file_paths[bird],
+                already_saved_files,
+                needed_count
             )
-        else:
-            logging.warning(f"No new files found for {bird}")
+
+            if candidate_file_paths:
+                logging.info(f"  🎵 Processing {len(candidate_file_paths)} wseg files for {bird}")
+
+                results = save_data_specs(
+                    metadata_file_paths=candidate_file_paths,
+                    save_path=save_path,
+                    params=params,
+                    verbose=verbose,
+                    read_songpath_from_metadata=True,
+                    prefer_local=prefer_local
+                )
+
+                # Report detailed results
+                logging.info(f"  ✅ {bird} complete: {len(results['processed'])} processed, "
+                             f"{len(results['skipped'])} skipped, {len(results['failed'])} failed")
+
+                if results['processed']:
+                    successful_birds.append(bird)
+                else:
+                    failed_birds.append(bird)
+                    logging.warning(f"  ⚠️ No files successfully processed for {bird}")
+            else:
+                logging.warning(f"  ❌ No new files found for {bird}")
+                failed_birds.append(bird)
+
+        except Exception as e:
+            logging.error(f"  💥 Error processing wseg bird {bird}: {e}")
+            failed_birds.append(bird)
+
+        logging.info(f"📊 Memory usage after {bird}: {get_memory_usage():.1f} MB")
+
+        # Force cleanup between birds
+        gc.collect()
+
+    # Final summary
+    logging.info(f"🎯 Wseg processing complete! Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+    if failed_birds:
+        logging.warning(f"❌ Failed birds: {failed_birds}")
+    logging.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
 
 
 def main():
+    # Setup logging with more detail
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('spectrogram_processing.log'),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("🚀 Starting spectrogram processing pipeline")
+
     path_to_macaw = check_sys_for_macaw_root()
     optimize_pytables_for_network()
 
-    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    evsong_directory = os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or')
+    try:
+        # Process evsonganaly data
+        logging.info("=" * 60)
+        logging.info("🎼 EVSONGANALY PROCESSING")
+        logging.info("=" * 60)
 
-    # Get file paths and copy locally in one step
-    metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(
-        wav_directory=evsong_directory,
-        save_path=evsong_test_directory,
-        batch_file_naming='batch.txt.labeled',
-        copy_locally=True,  # Copy files as we discover them
-        bird_subset=['or16or22', 'or18or24']
-    )
+        evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+        evsong_directory = os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or')
 
-    # Process spectrograms using local files
-    save_specs_for_evsonganaly_birds(
-        metadata_file_paths=metadata_file_paths,
-        save_path=evsong_test_directory,
-        songs_per_bird=15,
-        prefer_local=True  # Use local copies
-    )
+        # Get file paths and copy locally in one step
+        metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(
+            wav_directory=evsong_directory,
+            save_path=evsong_test_directory,
+            batch_file_naming='batch.txt.labeled',
+            copy_locally=True,
+            bird_subset=['or16or22', 'or18or24']
+        )
 
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
+        # Process spectrograms using local files
+        save_specs_for_evsonganaly_birds(
+            metadata_file_paths=metadata_file_paths,
+            save_path=evsong_test_directory,
+            songs_per_bird=15,
+            prefer_local=True
+        )
 
-    # Get wseg paths and copy locally
-    wseg_metadata_paths = filepaths_from_wseg(
-        seg_directory=wseg_directory,
-        save_path=wseg_test_directory,
-        song_or_call='song',
-        bird_subset=['bu68bu81', 'bu85bu97'],
-        copy_locally=True
-    )
+        logging.info("✅ Evsonganaly processing complete!")
 
-    # Process spectrograms using local files
-    save_specs_for_wseg_birds(
-        metadata_file_paths=wseg_metadata_paths,
-        save_path=wseg_test_directory,
-        songs_per_bird=15,
-        prefer_local=True
-    )
+    except Exception as e:
+        logging.error(f"💥 Error in evsonganaly processing: {e}")
+
+    try:
+        # Process wseg data
+        logging.info("=" * 60)
+        logging.info("🎤 WSEG PROCESSING")
+        logging.info("=" * 60)
+
+        wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+        wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
+
+        # Get wseg paths and copy locally
+        wseg_metadata_paths = filepaths_from_wseg(
+            seg_directory=wseg_directory,
+            save_path=wseg_test_directory,
+            song_or_call='song',
+            bird_subset=['bu68bu81', 'bu85bu97'],
+            copy_locally=True
+        )
+
+        # Process spectrograms using local files
+        save_specs_for_wseg_birds(
+            metadata_file_paths=wseg_metadata_paths,
+            save_path=wseg_test_directory,
+            songs_per_bird=15,
+            prefer_local=True
+        )
+
+        logging.info("✅ Wseg processing complete!")
+
+    except Exception as e:
+        logging.error(f"💥 Error in wseg processing: {e}")
+
+    logging.info("🎯 All processing complete!")
+
 
 if __name__ == '__main__':
     main()
