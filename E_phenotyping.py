@@ -2,6 +2,7 @@
 import os
 import logging
 import traceback
+from tqdm import tqdm
 from typing import Union, List, Dict, Any, Tuple, Optional
 
 # External library imports
@@ -14,10 +15,8 @@ from scipy.stats import skew, kurtosis
 from dataclasses import dataclass, field
 from enum import Enum
 
-# Custom imports (assumed to be part of your package)
+# Custom imports
 from tools.system_utils import check_sys_for_macaw_root  # Resolves system paths
-from tools.plotting import syl_comparison_mat  # Function to create confusion matrix plots
-from tools.syllable_database import SequenceConfig  # Handles sequence data object creation/loading
 
 # ============================================================================
 # CONFIGURATION AND CONSTANTS
@@ -73,10 +72,41 @@ class AnalysisPaths:
     conf_matrices: Optional[str] = field(default=None, init=False)
     graph_img: Optional[str] = field(default=None, init=False)
 
-def __post_init__(self):
-    """Initialize computed paths."""
-    self.master_summary = os.path.join(self.bird_folder, 'master_summary.csv')
-    self.phenotype_summary = os.path.join(self.bird_folder, 'phenotype_summary.csv')
+    def __post_init__(self):
+        """Initialize computed paths."""
+        self.master_summary = os.path.join(self.bird_folder, 'master_summary.csv')
+        self.phenotype_summary = os.path.join(self.bird_folder, 'phenotype_summary.csv')
+
+
+@dataclass
+class SequenceData:
+    """Simple data container for sequence analysis results."""
+    bird_name: str
+    syl_type: str
+    repertoire_size: int
+    vocab: List[Union[str, int]]
+    syl_counts: Dict[Union[str, int], int]
+    syl_proportions: np.ndarray
+    n_songs: int
+    n_syllables: int
+    all_auto_syllables: List[Union[str, int]]
+    entropy: float
+    entropy_scaled: float
+    paths_to_songs: List[str]
+    repeat_counts: Optional[pd.DataFrame] = None
+
+    def save_to_pickle(self, path: str) -> None:
+        """Save sequence data to pickle file."""
+        import pickle
+        with open(path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load_from_pickle(cls, path: str) -> 'SequenceData':
+        """Load sequence data from pickle file."""
+        import pickle
+        with open(path, 'rb') as f:
+            return pickle.load(f)
 
 # ============================================================================
 # TYPE HANDLING AND VALIDATION
@@ -184,30 +214,40 @@ def detect_label_type(labels: List[Any]) -> LabelType:
     -----
     Manual labels are typically single characters ('a', 'b', etc.)
     Automatic labels are typically integers (0, 1, 2, etc.)
+    The -1 label (HDBSCAN uncertain/noise) is treated as a legitimate automatic label.
     """
     if not labels:
         raise ValueError("Cannot detect type of empty label list")
 
-    # Check first non-token label
-    sample_labels = [l for l in labels[:10] if l not in ['s', 'z', -5, -3, -1]]
+    # Convert to list if it's a numpy array
+    if hasattr(labels, 'tolist'):
+        labels = labels.tolist()
+
+    # Check first few non-token labels
+    sample_labels = []
+    for l in labels[:10]:
+        # Convert various types to standard Python types
+        if isinstance(l, (bytes, np.bytes_)):
+            l_val = l.decode('utf-8')
+        elif isinstance(l, (np.str_, np.string_)):
+            l_val = str(l)
+        elif isinstance(l, (np.integer, np.int32, np.int64)):
+            l_val = int(l)
+        else:
+            l_val = l
+
+        # Check if it's a token
+        if l_val not in ['s', 'z', -5, -3]:
+            sample_labels.append(l_val)
 
     if not sample_labels:
         raise ValueError("No valid labels found for type detection")
 
     sample = sample_labels[0]
 
-    # Convert to base type if numpy type
-    if isinstance(sample, (bytes, np.bytes_)):
-        sample = sample.decode('utf-8') if isinstance(sample, bytes) else str(sample)
-    elif isinstance(sample, (np.str_, np.string_)):
-        sample = str(sample)
-    elif isinstance(sample, (np.integer, np.int32, np.int64)):
-        sample = int(sample)
-
-    # Determine type based on converted sample
+    # Determine type based on sample
     if isinstance(sample, str) and len(sample) == 1 and sample.isalpha():
         return LabelType.MANUAL
-
     elif isinstance(sample, (int, np.integer)) or (isinstance(sample, str) and sample.isdigit()):
         return LabelType.AUTO
     else:
@@ -492,7 +532,8 @@ def get_best_label_path(bird_path: str, n_paths: int = 1) -> Tuple[List[str], Li
         return [], []
 
 
-def load_labels(label_save_path: str) -> Tuple[Optional[List[Union[str, int]]], Optional[List[str]], Optional[Dict[str, Any]]]:
+def load_labels(label_save_path: str) -> Tuple[
+    Optional[List[Union[str, int]]], Optional[List[str]], Optional[Dict[str, Any]]]:
     """
     Load cluster labels, hashes, and evaluation scores from HDF5 file.
     Enhanced version with automatic type detection and normalization.
@@ -510,12 +551,19 @@ def load_labels(label_save_path: str) -> Tuple[Optional[List[Union[str, int]]], 
     try:
         resolved_path = _resolve_file_path(label_save_path)
         with tables.open_file(resolved_path, mode='r') as f:
-            # Load and normalize labels
+            # Load labels as raw array first
             labels_raw = f.root.labels.read()
+
+            # Convert labels based on their actual type
             if len(labels_raw) > 0:
-                label_type = detect_label_type(labels_raw)
-                handler = LabelHandler(label_type)
-                labels = handler.normalize_labels(labels_raw)
+                # Check if labels are integers or need conversion
+                if labels_raw.dtype.kind in ['i', 'u']:  # integer types
+                    labels = labels_raw.tolist()
+                elif labels_raw.dtype.kind in ['U', 'S']:  # string types
+                    labels = [str(item) for item in labels_raw]
+                else:
+                    # Handle other types by converting to list first
+                    labels = [item for item in labels_raw]
             else:
                 labels = []
 
@@ -530,6 +578,7 @@ def load_labels(label_save_path: str) -> Tuple[Optional[List[Union[str, int]]], 
                     score_value = node.read()
                     # Handle scalar vs array values
                     scores[node._v_name] = float(score_value) if score_value.ndim == 0 else score_value
+
         return labels, hashes, scores
     except Exception as e:
         logging.error(f"Error loading labels from {label_save_path}: {e}")
@@ -576,7 +625,8 @@ def _resolve_file_path(file_path: str) -> str:
 # ============================================================================
 
 
-def generate_vocabulary(all_syls: List[Union[str, int]], label_handler: LabelHandler, config: AnalysisConfig) -> Tuple[List[Union[str, int]], int, Dict[Union[str, int], int], int, np.ndarray]:
+def generate_vocabulary(all_syls: List[Union[str, int]], label_handler: LabelHandler, config: AnalysisConfig) -> Tuple[
+    List[Union[str, int]], int, Dict[Union[str, int], int], int, np.ndarray]:
     """
     Generate vocabulary and statistics from syllable sequences.
 
@@ -611,6 +661,7 @@ def generate_vocabulary(all_syls: List[Union[str, int]], label_handler: LabelHan
     -----
     Syllables representing less than min_syllable_proportion of the total vocabulary
     are excluded from vocab_size to prevent rare syllables from affecting phenotype analysis.
+    The -1 label (HDBSCAN uncertain/noise) is treated as a legitimate syllable category.
     """
     vocabulary = []
     syl_counts = {}
@@ -641,9 +692,7 @@ def generate_vocabulary(all_syls: List[Union[str, int]], label_handler: LabelHan
     # Calculate vocabulary size excluding rare syllables
     vocab_size = sum(1 for prop in syl_proportions if prop > config.min_syllable_proportion)
 
-    # Handle special case of -1 (uncertain) labels
-    if -1 in unique_syls:
-        vocab_size = max(0, vocab_size - 1)
+    # Remove the special case handling for -1 labels - treat them like any other syllable
 
     return vocabulary, vocab_size, syl_counts, n_syls_total, syl_proportions
 
@@ -694,7 +743,7 @@ def calculate_transition_counts(all_syls: List[Union[str, int]], label_handler: 
         remap_start = max_positive + 1
 
         for syl in unique_syls:
-            if isinstance(syl, int) and syl < 0 and syl != -1:  # Don't remap uncertain label
+            if isinstance(syl, int) and syl < 0:  # Remove the "and syl != -1" condition
                 syl_to_int_map[syl] = remap_start
                 remap_start += 1
 
@@ -815,9 +864,9 @@ def average_syllable_features(
 # ============================================================================
 
 def calculate_entropy(
-    t_mat_df: pd.DataFrame,
-    syl_proportions: np.ndarray,
-    label_handler: LabelHandler
+        t_mat_df: pd.DataFrame,
+        syl_proportions: np.ndarray,
+        label_handler: LabelHandler
 ) -> Tuple[float, float]:
     """
     Calculate the entropy of the transition matrix.
@@ -857,12 +906,28 @@ def calculate_entropy(
     entropy = -np.sum(nonzero_probs * np.log(nonzero_probs))
 
     # Calculate scaled entropy using syllable proportions
-    n_syl = len(syl_proportions)
-    if n_syl > 0:
-        syl_prop_mat = np.tile(syl_proportions.reshape(-1, 1), (1, n_syl))
+    # Make sure syl_proportions matches the core_matrix dimensions
+    n_core_syls = core_matrix.shape[0]
+
+    if len(syl_proportions) >= n_core_syls:
+        # Use the first n_core_syls proportions (excluding start/stop tokens)
+        core_syl_proportions = syl_proportions[:n_core_syls]
+    else:
+        # If we have fewer proportions, pad with zeros or handle appropriately
+        logging.warning(f"Syllable proportions ({len(syl_proportions)}) don't match core matrix size ({n_core_syls})")
+        core_syl_proportions = syl_proportions
+        # Fall back to regular entropy
+        entropy_scaled = entropy
+        return entropy, entropy_scaled
+
+    if n_core_syls > 0 and len(core_syl_proportions) == n_core_syls:
+        syl_prop_mat = np.tile(core_syl_proportions.reshape(-1, 1), (1, n_core_syls))
         weighted_probs = core_matrix * syl_prop_mat
         nonzero_weighted = weighted_probs[weighted_probs > 0]
-        entropy_scaled = -np.sum(nonzero_weighted * np.log(core_matrix[weighted_probs > 0]))
+        if len(nonzero_weighted) > 0:
+            entropy_scaled = -np.sum(nonzero_weighted * np.log(core_matrix[weighted_probs > 0]))
+        else:
+            entropy_scaled = entropy
     else:
         entropy_scaled = entropy
 
@@ -1588,6 +1653,91 @@ def plot_repeat_distributions(
     plt.close()
 
 
+def syl_comparison_mat(
+        conf_mat: np.ndarray,
+        mapping1: Union[Dict, List],
+        mapping2: Union[Dict, List],
+        save_path: str,
+        config: Optional[AnalysisConfig] = None
+) -> None:
+    """
+    Plot and save a comparison matrix (confusion matrix) comparing label identity
+    from two different labelling strategies as a heatmap.
+
+    Parameters
+    ----------
+    conf_mat : np.ndarray
+        The confusion matrix to visualize
+    mapping1 : Union[Dict, List]
+        Dictionary or list mapping labels for columns (x-axis)
+    mapping2 : Union[Dict, List]
+        Dictionary or list mapping labels for rows (y-axis)
+    save_path : str
+        Full path where the figure will be saved
+    config : Optional[AnalysisConfig], default=None
+        Configuration object with visualization parameters
+
+    Notes
+    -----
+    Creates a heatmap visualization of the confusion matrix with appropriate
+    tick labels for comparing manual vs automatic labeling strategies.
+    """
+    if config is None:
+        config = AnalysisConfig()
+
+    try:
+        # Create output directory if it doesn't exist
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+        plt.figure(figsize=(10, 8))
+
+        # Process mappings to create sorted tick labels
+        if isinstance(mapping1, dict):
+            sorted_xticklabels = [mapping1[i] for i in sorted(mapping1.keys())]
+        else:
+            sorted_xticklabels = list(mapping1)
+
+        if isinstance(mapping2, dict):
+            sorted_yticklabels = [mapping2[i] for i in sorted(mapping2.keys())]
+        else:
+            sorted_yticklabels = list(mapping2)
+
+        # Create heatmap
+        ax = sns.heatmap(
+            conf_mat,
+            annot=True,
+            fmt="d",
+            yticklabels=sorted_yticklabels,
+            xticklabels=sorted_xticklabels,
+            cmap='Blues',
+            square=True,
+            linewidths=0.5,
+            cbar_kws={"shrink": 0.8}
+        )
+
+        # Set labels and title
+        ax.set_xlabel('Manual Labels', fontsize=12)
+        ax.set_ylabel('Automatic Labels', fontsize=12)
+        ax.set_title('Label Comparison Matrix', fontsize=14, pad=20)
+
+        # Rotate x-axis labels for better readability
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+
+        # Adjust layout and save
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=config.figure_dpi, format='jpeg', bbox_inches='tight')
+        plt.close()
+
+        logging.info(f"Confusion matrix saved to: {save_path}")
+
+    except Exception as e:
+        logging.error(f"Error creating confusion matrix plot: {e}")
+        logging.error(traceback.format_exc())
+        # Ensure figure is closed even on error
+        plt.close()
+
+
 def format_annotation(array: Union[pd.DataFrame, np.ndarray]) -> np.ndarray:
     """
     Format numerical values for heatmap annotations with appropriate precision.
@@ -1845,7 +1995,7 @@ def _load_or_create_sequence_data(
 
     # Load sequence data if already processed
     if os.path.isfile(paths.sequence_data):
-        sequence_data = SequenceConfig.load_from_pickle(paths.sequence_data)
+        sequence_data = SequenceData.load_from_pickle(paths.sequence_data)
     else:
         # Create new sequence data object
         labels, hashes, _ = load_labels(label_path)
@@ -1880,9 +2030,12 @@ def _load_or_create_sequence_data(
         transition_counts_df, t_mat_df, t2_mat_df, t3_mat_df = calculate_transition_counts(all_auto_syls, label_handler)
         entropy, entropy_scaled = calculate_entropy(t_mat_df, syl_proportions, label_handler)
 
+        # Extract bird name from the bird folder path (not from master_summary)
+        bird_name = os.path.basename(paths.bird_folder)
+
         # Package sequence data
-        sequence_data = SequenceConfig(
-            bird_name=setup_data.master_summary['bird_name'][rank],  # Example of how bird_name might be fetched
+        sequence_data = SequenceData(
+            bird_name=bird_name,  # Extract from folder path
             syl_type='auto',
             repertoire_size=vocab_size,
             vocab=vocabulary,
@@ -1901,10 +2054,10 @@ def _load_or_create_sequence_data(
 
 
 def _calculate_phenotype_metrics(
-    sequence_data: 'SequenceData',
-    master_summary: pd.DataFrame,
-    rank: int,
-    config: AnalysisConfig
+        sequence_data: 'SequenceData',
+        master_summary: pd.DataFrame,
+        rank: int,
+        config: AnalysisConfig
 ) -> Dict[str, Any]:
     """
     Calculate phenotype metrics for a given sequence data object.
@@ -1926,13 +2079,19 @@ def _calculate_phenotype_metrics(
         Dictionary of calculated phenotype metrics
     """
     repeat_counts_df = count_repeats_optimized(sequence_data.all_auto_syllables, LabelHandler(LabelType.AUTO), config)
-    repeat_counts_df = remove_insignificant_repeats(repeat_counts_df, sequence_data.syl_counts, config, LabelHandler(LabelType.AUTO))
+    repeat_counts_df = remove_insignificant_repeats(repeat_counts_df, sequence_data.syl_counts, config,
+                                                    LabelHandler(LabelType.AUTO))
+
+    # Store the repeat counts in the sequence data object for later use in visualizations
+    sequence_data.repeat_counts = repeat_counts_df
+
     repeat_stats, _ = repeat_phenotypes(repeat_counts_df, config)
 
     phenotype_results = {
         'label_str': f'rank{rank}',
         'nmi': master_summary.iloc[rank]['nmi'] if 'nmi' in master_summary.columns else np.nan,
-        'composite_score': master_summary.iloc[rank]['composite_score'] if 'composite_score' in master_summary.columns else np.nan,
+        'composite_score': master_summary.iloc[rank][
+            'composite_score'] if 'composite_score' in master_summary.columns else np.nan,
         'repertoire_sz': sequence_data.repertoire_size,
         'sequence_entropy': sequence_data.entropy,
         'entropy_scaled': sequence_data.entropy_scaled,
@@ -2016,3 +2175,753 @@ def _save_phenotype_results(
     phenotype_df = pd.DataFrame(phenotypes)
     phenotype_df.to_csv(paths.phenotype_summary, index=False)
     return True
+
+
+# ============================================================================
+# MAIN PIPELINE FUNCTIONS
+# ============================================================================
+
+
+def main(save_path: str) -> None:
+    """Main function to run the phenotyping pipeline."""
+    try:
+        # Get available birds
+        birds = _get_available_birds(save_path)
+        if not birds:
+            logging.error("No birds found for processing")
+            return
+
+        logging.info(f"Found {len(birds)} birds for processing: {birds}")
+
+        # Process each bird
+        successful_birds = []
+        failed_birds = []
+
+        for bird in tqdm(birds, desc='Processing birds'):
+            success = phenotype_bird_wrapper(
+                save_path=save_path,
+                bird=bird,
+                n_phenotypes=5,
+                reset_phenotypes=False
+            )
+
+            if success:
+                successful_birds.append(bird)
+            else:
+                failed_birds.append(bird)
+
+        # Report results
+        logging.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+        if failed_birds:
+            logging.warning(f"Failed birds: {failed_birds}")
+
+        # Perform cross-bird analysis if we have successful results
+        if len(successful_birds) >= 2:
+            logging.info("Starting cross-bird phenotype analysis...")
+
+            try:
+                # Aggregate phenotype data across birds
+                aggregated_phenotypes = aggregate_phenotypes_across_birds(
+                    save_path=save_path,
+                    birds=successful_birds
+                )
+
+                if not aggregated_phenotypes.empty:
+                    # Analyze phenotype patterns
+                    phenotype_analysis = analyze_phenotype_patterns(aggregated_phenotypes)
+
+                    # Save cross-bird phenotype analysis
+                    saved_files = save_cross_bird_phenotype_analysis(
+                        aggregated_phenotypes=aggregated_phenotypes,
+                        phenotype_analysis=phenotype_analysis,
+                        save_path=save_path,
+                        filename_prefix='cross_bird_phenotypes'
+                    )
+
+                    logging.info(f"Cross-bird phenotype analysis complete. Files saved: {list(saved_files.keys())}")
+                else:
+                    logging.warning("No phenotype data available for cross-bird analysis")
+
+            except Exception as e:
+                logging.error(f"Error in cross-bird phenotype analysis: {e}")
+                logging.error(traceback.format_exc())
+
+        else:
+            logging.info("Insufficient successful birds for cross-bird analysis (need at least 2)")
+
+        logging.info("Phenotyping pipeline execution complete!")
+
+    except Exception as e:
+        logging.error(f"Error in main phenotyping pipeline: {e}")
+        logging.error(traceback.format_exc())
+        raise
+
+
+def phenotype_bird_wrapper(save_path: str, bird: str, n_phenotypes: int = 5, reset_phenotypes: bool = False) -> bool:
+    """
+    Wrapper function to phenotype a single bird with proper path setup.
+
+    Parameters
+    ----------
+    save_path : str
+        Root directory containing bird data
+    bird : str
+        Bird identifier
+    n_phenotypes : int, default=5
+        Number of top phenotypes to process
+    reset_phenotypes : bool, default=False
+        Whether to reset existing phenotype data
+
+    Returns
+    -------
+    bool
+        True if phenotyping completed successfully
+    """
+    try:
+        # Setup paths
+        bird_folder = os.path.join(save_path, bird)
+        data_folder = os.path.join(bird_folder, 'data')
+        figure_folder = os.path.join(bird_folder, 'figures')
+
+        # Check if required directories exist
+        if not os.path.exists(data_folder):
+            logging.error(f"Data folder not found for bird {bird}: {data_folder}")
+            return False
+
+        # Check if master_summary.csv exists
+        master_summary_path = os.path.join(bird_folder, 'master_summary.csv')
+        if not os.path.exists(master_summary_path):
+            logging.error(f"Master summary not found for bird {bird}: {master_summary_path}")
+            return False
+
+        # Create paths object
+        paths = AnalysisPaths(
+            bird_folder=bird_folder,
+            data_folder=data_folder,
+            figure_folder=figure_folder
+        )
+
+        # Create figure directory if it doesn't exist
+        os.makedirs(figure_folder, exist_ok=True)
+
+        # Create analysis config
+        config = AnalysisConfig()
+
+        # Run phenotyping
+        logging.info(f"Starting phenotyping for bird: {bird}")
+        success = phenotype_bird(
+            paths=paths,
+            bird=bird,
+            n_phenotypes=n_phenotypes,
+            reset_phenotypes=reset_phenotypes,
+            config=config
+        )
+
+        if success:
+            logging.info(f"✅ Successfully phenotyped bird: {bird}")
+        else:
+            logging.error(f"❌ Failed to phenotype bird: {bird}")
+
+        return success
+
+    except Exception as e:
+        logging.error(f"Error in phenotype_bird_wrapper for {bird}: {e}")
+        logging.error(traceback.format_exc())
+        return False
+
+
+def _get_available_birds(save_path: str) -> List[str]:
+    """
+    Get list of available birds for processing.
+
+    Parameters
+    ----------
+    save_path : str
+        Root directory containing bird data
+
+    Returns
+    -------
+    List[str]
+        List of bird identifiers
+    """
+    try:
+        birds = []
+        if not os.path.exists(save_path):
+            logging.error(f"Save path does not exist: {save_path}")
+            return birds
+
+        for item in os.listdir(save_path):
+            item_path = os.path.join(save_path, item)
+            if os.path.isdir(item_path):
+                # Check if it's a valid bird directory (has data folder and master_summary.csv)
+                data_folder = os.path.join(item_path, 'data')
+                master_summary = os.path.join(item_path, 'master_summary.csv')
+
+                if os.path.exists(data_folder) and os.path.exists(master_summary):
+                    birds.append(item)
+                else:
+                    logging.debug(f"Skipping {item}: missing data folder or master_summary.csv")
+
+        return sorted(birds)
+
+    except Exception as e:
+        logging.error(f"Error getting available birds from {save_path}: {e}")
+        return []
+
+def aggregate_phenotypes_across_birds(save_path: str, birds: List[str]) -> pd.DataFrame:
+    """
+    Aggregate phenotype data across multiple birds.
+
+    Parameters
+    ----------
+    save_path : str
+        Root directory containing bird data
+    birds : List[str]
+        List of bird identifiers to aggregate
+
+    Returns
+    -------
+    pd.DataFrame
+        Aggregated phenotype data with bird identifiers
+    """
+    all_phenotypes = []
+
+    for bird in birds:
+        try:
+            phenotype_path = os.path.join(save_path, bird, 'phenotype_summary.csv')
+            if os.path.exists(phenotype_path):
+                phenotype_df = pd.read_csv(phenotype_path)
+                phenotype_df['bird'] = bird
+                all_phenotypes.append(phenotype_df)
+            else:
+                logging.warning(f"Phenotype summary not found for bird {bird}")
+
+        except Exception as e:
+            logging.error(f"Error loading phenotypes for bird {bird}: {e}")
+
+    if all_phenotypes:
+        return pd.concat(all_phenotypes, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+
+def analyze_phenotype_patterns(aggregated_phenotypes: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Analyze patterns in aggregated phenotype data.
+
+    Parameters
+    ----------
+    aggregated_phenotypes : pd.DataFrame
+        Aggregated phenotype data across birds
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary containing analysis results
+    """
+    analysis = {}
+
+    try:
+        # Basic statistics
+        numeric_columns = aggregated_phenotypes.select_dtypes(include=[np.number]).columns
+        analysis['summary_stats'] = aggregated_phenotypes[numeric_columns].describe()
+
+        # Phenotype correlations
+        correlation_matrix = aggregated_phenotypes[numeric_columns].corr()
+        analysis['correlations'] = correlation_matrix
+
+        # Bird-level summaries
+        bird_summaries = aggregated_phenotypes.groupby('bird')[numeric_columns].agg(['mean', 'std', 'count'])
+        analysis['bird_summaries'] = bird_summaries
+
+        # Identify birds with extreme phenotypes
+        extreme_birds = {}
+        for col in numeric_columns:
+            if col in aggregated_phenotypes.columns:
+                q95 = aggregated_phenotypes[col].quantile(0.95)
+                q05 = aggregated_phenotypes[col].quantile(0.05)
+
+                high_birds = aggregated_phenotypes[aggregated_phenotypes[col] >= q95]['bird'].unique()
+                low_birds = aggregated_phenotypes[aggregated_phenotypes[col] <= q05]['bird'].unique()
+
+                extreme_birds[col] = {
+                    'high_performers': high_birds.tolist(),
+                    'low_performers': low_birds.tolist()
+                }
+
+        analysis['extreme_phenotypes'] = extreme_birds
+
+        # Repeat behavior analysis
+        if 'repeat_bool' in aggregated_phenotypes.columns:
+            repeat_stats = aggregated_phenotypes.groupby('bird')['repeat_bool'].agg(['sum', 'count', 'mean'])
+            analysis['repeat_behavior'] = repeat_stats
+
+        # Entropy analysis
+        entropy_cols = [col for col in aggregated_phenotypes.columns if 'entropy' in col.lower()]
+        if entropy_cols:
+            entropy_analysis = {}
+            for col in entropy_cols:
+                entropy_analysis[col] = {
+                    'mean': aggregated_phenotypes[col].mean(),
+                    'std': aggregated_phenotypes[col].std(),
+                    'range': aggregated_phenotypes[col].max() - aggregated_phenotypes[col].min()
+                }
+            analysis['entropy_patterns'] = entropy_analysis
+
+        logging.info("Phenotype pattern analysis completed successfully")
+
+    except Exception as e:
+        logging.error(f"Error in phenotype pattern analysis: {e}")
+        logging.error(traceback.format_exc())
+
+    return analysis
+
+
+def save_cross_bird_phenotype_analysis(
+        aggregated_phenotypes: pd.DataFrame,
+        phenotype_analysis: Dict[str, Any],
+        save_path: str,
+        filename_prefix: str = 'cross_bird_phenotypes'
+) -> Dict[str, str]:
+    """
+    Save cross-bird phenotype analysis results to files.
+
+    Parameters
+    ----------
+    aggregated_phenotypes : pd.DataFrame
+        Aggregated phenotype data
+    phenotype_analysis : Dict[str, Any]
+        Analysis results from analyze_phenotype_patterns
+    save_path : str
+        Root directory for saving files
+    filename_prefix : str, default='cross_bird_phenotypes'
+        Prefix for output filenames
+
+    Returns
+    -------
+    Dict[str, str]
+        Dictionary mapping file types to saved file paths
+    """
+    saved_files = {}
+
+    try:
+        # Create output directory
+        output_dir = os.path.join(save_path, 'cross_bird_analysis')
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save aggregated phenotype data
+        aggregated_path = os.path.join(output_dir, f'{filename_prefix}_aggregated.csv')
+        aggregated_phenotypes.to_csv(aggregated_path, index=False)
+        saved_files['aggregated_data'] = aggregated_path
+
+        # Save summary statistics
+        if 'summary_stats' in phenotype_analysis:
+            summary_path = os.path.join(output_dir, f'{filename_prefix}_summary_stats.csv')
+            phenotype_analysis['summary_stats'].to_csv(summary_path)
+            saved_files['summary_stats'] = summary_path
+
+        # Save correlation matrix
+        if 'correlations' in phenotype_analysis:
+            corr_path = os.path.join(output_dir, f'{filename_prefix}_correlations.csv')
+            phenotype_analysis['correlations'].to_csv(corr_path)
+            saved_files['correlations'] = corr_path
+
+        # Save bird summaries
+        if 'bird_summaries' in phenotype_analysis:
+            bird_summary_path = os.path.join(output_dir, f'{filename_prefix}_bird_summaries.csv')
+            phenotype_analysis['bird_summaries'].to_csv(bird_summary_path)
+            saved_files['bird_summaries'] = bird_summary_path
+
+        # Generate and save visualizations
+        viz_paths = generate_phenotype_visualizations(
+            aggregated_phenotypes,
+            phenotype_analysis,
+            output_dir,
+            filename_prefix
+        )
+        saved_files.update(viz_paths)
+
+        # Save analysis report as JSON
+        analysis_path = os.path.join(output_dir, f'{filename_prefix}_analysis.json')
+        # Convert numpy arrays to lists for JSON serialization
+        serializable_analysis = _make_json_serializable(phenotype_analysis)
+
+        import json
+        with open(analysis_path, 'w') as f:
+            json.dump(serializable_analysis, f, indent=2, default=str)
+        saved_files['analysis_report'] = analysis_path
+
+        logging.info(f"Cross-bird phenotype analysis saved to: {output_dir}")
+
+    except Exception as e:
+        logging.error(f"Error saving cross-bird phenotype analysis: {e}")
+        logging.error(traceback.format_exc())
+
+    return saved_files
+
+
+def generate_phenotype_visualizations(
+    aggregated_phenotypes: pd.DataFrame,
+    phenotype_analysis: Dict[str, Any],
+    output_dir: str,
+    filename_prefix: str
+) -> Dict[str, str]:
+    """
+    Generate visualizations for phenotype analysis.
+
+    Parameters
+    ----------
+    aggregated_phenotypes : pd.DataFrame
+        Aggregated phenotype data
+    phenotype_analysis : Dict[str, Any]
+        Analysis results
+    output_dir : str
+        Directory for saving plots
+    filename_prefix : str
+        Prefix for output filenames
+
+    Returns
+    -------
+    Dict[str, str]
+        Dictionary mapping plot types to file paths
+    """
+    viz_paths = {}
+
+    try:
+        # Correlation heatmap
+        if 'correlations' in phenotype_analysis:
+            plt.figure(figsize=(12, 10))
+            mask = np.triu(np.ones_like(phenotype_analysis['correlations'], dtype=bool))
+            sns.heatmap(
+                phenotype_analysis['correlations'],
+                mask=mask,
+                annot=True,
+                cmap='RdBu_r',
+                center=0,
+                square=True,
+                fmt='.2f'
+            )
+            plt.title('Phenotype Correlations Across Birds')
+            plt.tight_layout()
+
+            corr_viz_path = os.path.join(output_dir, f'{filename_prefix}_correlation_heatmap.png')
+            plt.savefig(corr_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            viz_paths['correlation_heatmap'] = corr_viz_path
+
+        # Distribution plots for key phenotypes
+        numeric_columns = aggregated_phenotypes.select_dtypes(include=[np.number]).columns
+        key_phenotypes = ['repertoire_sz', 'sequence_entropy', 'mean_repeat_syls', 'composite_score']
+        available_phenotypes = [col for col in key_phenotypes if col in numeric_columns]
+
+        if available_phenotypes:
+            fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+            axes = axes.flatten()
+
+            for i, phenotype in enumerate(available_phenotypes[:4]):
+                if i < len(axes):
+                    ax = axes[i]
+
+                    # Box plot by bird
+                    sns.boxplot(data=aggregated_phenotypes, y=phenotype, x='bird', ax=ax)
+                    ax.set_title(f'{phenotype.replace("_", " ").title()} by Bird')
+                    ax.tick_params(axis='x', rotation=45)
+
+            # Hide unused subplots
+            for j in range(len(available_phenotypes), len(axes)):
+                axes[j].set_visible(False)
+
+            plt.tight_layout()
+
+            dist_viz_path = os.path.join(output_dir, f'{filename_prefix}_phenotype_distributions.png')
+            plt.savefig(dist_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            viz_paths['phenotype_distributions'] = dist_viz_path
+
+        # Scatter plot matrix for key relationships
+        if len(available_phenotypes) >= 2:
+            plt.figure(figsize=(12, 10))
+
+            # Create pairplot
+            plot_data = aggregated_phenotypes[available_phenotypes + ['bird']].copy()
+            g = sns.pairplot(plot_data, hue='bird', diag_kind='hist', plot_kws={'alpha': 0.7})
+            g.fig.suptitle('Phenotype Relationships Across Birds', y=1.02)
+
+            scatter_viz_path = os.path.join(output_dir, f'{filename_prefix}_pairplot.png')
+            plt.savefig(scatter_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            viz_paths['pairplot'] = scatter_viz_path
+
+        # Repeat behavior visualization
+        if 'repeat_bool' in aggregated_phenotypes.columns:
+            plt.figure(figsize=(10, 6))
+
+            repeat_summary = aggregated_phenotypes.groupby('bird')['repeat_bool'].mean().reset_index()
+            repeat_summary = repeat_summary.sort_values('repeat_bool', ascending=False)
+
+            sns.barplot(data=repeat_summary, x='bird', y='repeat_bool')
+            plt.title('Proportion of Label Schemes with Repeats by Bird')
+            plt.ylabel('Proportion with Repeats')
+            plt.xlabel('Bird')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+
+            repeat_viz_path = os.path.join(output_dir, f'{filename_prefix}_repeat_behavior.png')
+            plt.savefig(repeat_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            viz_paths['repeat_behavior'] = repeat_viz_path
+
+        # Performance ranking visualization
+        if 'composite_score' in aggregated_phenotypes.columns:
+            plt.figure(figsize=(12, 8))
+
+            # Get top performing label schemes for each bird
+            top_schemes = aggregated_phenotypes.loc[aggregated_phenotypes.groupby('bird')['composite_score'].idxmax()]
+
+            sns.scatterplot(data=aggregated_phenotypes, x='repertoire_sz', y='composite_score',
+                          hue='bird', alpha=0.6, s=50)
+
+            # Highlight top performers
+            sns.scatterplot(data=top_schemes, x='repertoire_sz', y='composite_score',
+                          hue='bird', s=200, marker='*', legend=False)
+
+            plt.title('Composite Score vs Repertoire Size\n(Stars indicate best performing scheme per bird)')
+            plt.xlabel('Repertoire Size')
+            plt.ylabel('Composite Score')
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+
+            perf_viz_path = os.path.join(output_dir, f'{filename_prefix}_performance_ranking.png')
+            plt.savefig(perf_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            viz_paths['performance_ranking'] = perf_viz_path
+
+        logging.info(f"Generated {len(viz_paths)} phenotype visualizations")
+
+    except Exception as e:
+        logging.error(f"Error generating phenotype visualizations: {e}")
+        logging.error(traceback.format_exc())
+
+    return viz_paths
+
+
+def _make_json_serializable(obj, path="root"):
+    """
+    Convert numpy arrays and other non-serializable objects to JSON-compatible formats.
+
+    Parameters
+    ----------
+    obj : Any
+        Object to make JSON serializable
+    path : str
+        Current path in the object tree (for debugging)
+
+    Returns
+    -------
+    Any
+        JSON-serializable version of the object
+    """
+    try:
+        if isinstance(obj, dict):
+            # Handle dictionaries with potentially non-string keys (like tuples)
+            serializable_dict = {}
+            for key, value in obj.items():
+                # Convert any key to a string
+                if isinstance(key, tuple):
+                    str_key = f"tuple_{str(key)}"
+                elif isinstance(key, (np.integer, np.floating)):
+                    str_key = str(key.item())
+                elif key is None:
+                    str_key = "None"
+                else:
+                    str_key = str(key)
+
+                # Ensure the key is valid for JSON
+                if not isinstance(str_key, str):
+                    str_key = str(str_key)
+
+                serializable_dict[str_key] = _make_json_serializable(value, f"{path}.{str_key}")
+            return serializable_dict
+        elif isinstance(obj, (list, tuple)):
+            return [_make_json_serializable(item, f"{path}[{i}]") for i, item in enumerate(obj)]
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.integer, np.floating)):
+            return obj.item()
+        elif isinstance(obj, pd.DataFrame):
+            # Convert DataFrame to dict with string keys
+            return {str(k): v for k, v in obj.to_dict('records')}
+        elif isinstance(obj, pd.Series):
+            # Convert Series to dict with string keys
+            return {str(k): v for k, v in obj.to_dict().items()}
+        elif isinstance(obj, (pd.Index, pd.MultiIndex)):
+            return [str(x) for x in obj.tolist()]
+        elif hasattr(obj, 'tolist'):  # Catch any other numpy-like objects
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Catch numpy scalars
+            return obj.item()
+        else:
+            return obj
+    except Exception as e:
+        logging.warning(f"Error serializing object at {path}: {e}, converting to string")
+        return str(obj)
+
+
+def clear_phenotyping_outputs(save_path: str, bird: str = None, confirm: bool = True) -> bool:
+    """
+    Clear phenotyping output files to avoid clutter.
+
+    Parameters
+    ----------
+    save_path : str
+        Root directory containing bird data
+    bird : str, optional
+        Specific bird to clear (all birds if None)
+    confirm : bool, default=True
+        Whether to ask for confirmation before deleting
+
+    Returns
+    -------
+    bool
+        True if successful, False otherwise
+    """
+    try:
+        # Get birds to process
+        if bird is not None:
+            birds_to_clear = [bird]
+        else:
+            birds_to_clear = _get_available_birds(save_path)
+
+        if not birds_to_clear:
+            logging.info("No birds found to clear")
+            return True
+
+        # Calculate what will be removed
+        total_items = 0
+        paths_to_remove = []
+
+        for bird_name in birds_to_clear:
+            bird_path = os.path.join(save_path, bird_name)
+
+            # Phenotype summary CSV
+            phenotype_summary_path = os.path.join(bird_path, 'phenotype_summary.csv')
+            if os.path.exists(phenotype_summary_path):
+                paths_to_remove.append(('phenotype_summary', phenotype_summary_path))
+                total_items += 1
+
+            # Sequence data directory
+            sequence_data_path = os.path.join(bird_path, 'data', 'sequences')
+            if os.path.exists(sequence_data_path):
+                paths_to_remove.append(('sequence_data', sequence_data_path))
+                # Count files for reporting
+                for root, dirs, files in os.walk(sequence_data_path):
+                    total_items += len(files)
+
+            # Phenotype figures directory
+            phenotype_figures_path = os.path.join(bird_path, 'figures')
+            if os.path.exists(phenotype_figures_path):
+                # Look for rank-specific folders and phenotype-related images
+                rank_folders = [d for d in os.listdir(phenotype_figures_path)
+                               if os.path.isdir(os.path.join(phenotype_figures_path, d)) and d.startswith('rank')]
+
+                for rank_folder in rank_folders:
+                    rank_path = os.path.join(phenotype_figures_path, rank_folder)
+                    paths_to_remove.append(('phenotype_figures', rank_path))
+                    # Count files for reporting
+                    for root, dirs, files in os.walk(rank_path):
+                        total_items += len(files)
+
+        # Also check for cross-bird analysis directory
+        cross_bird_path = os.path.join(save_path, 'cross_bird_analysis')
+        if os.path.exists(cross_bird_path):
+            paths_to_remove.append(('cross_bird_analysis', cross_bird_path))
+            for root, dirs, files in os.walk(cross_bird_path):
+                total_items += len(files)
+
+        if not paths_to_remove:
+            logging.info("No phenotyping outputs found to clear")
+            return True
+
+        # Show what will be removed
+        logging.info(f"Found {total_items} items to remove across {len(birds_to_clear)} bird(s):")
+        for bird_name in birds_to_clear:
+            bird_items = [path for path_type, path in paths_to_remove if bird_name in path]
+            if bird_items:
+                logging.info(f"  {bird_name}: {len(bird_items)} directories/files")
+
+        # Show cross-bird analysis if present
+        cross_bird_items = [path for path_type, path in paths_to_remove if 'cross_bird_analysis' in path]
+        if cross_bird_items:
+            logging.info(f"  Cross-bird analysis: {len(cross_bird_items)} directories")
+
+        # Confirmation
+        if confirm:
+            response = input(f"\nAre you sure you want to delete {total_items} phenotyping output items? (y/N): ")
+            if response.lower() not in ['y', 'yes']:
+                logging.info("Deletion cancelled")
+                return False
+
+        # Remove items
+        removed_count = 0
+        failed_count = 0
+
+        for path_type, path in paths_to_remove:
+            try:
+                if os.path.isdir(path):
+                    import shutil
+                    shutil.rmtree(path)
+                    logging.debug(f"Removed directory: {path}")
+                else:
+                    os.remove(path)
+                    logging.debug(f"Removed file: {path}")
+                removed_count += 1
+            except Exception as e:
+                logging.error(f"Failed to remove {path}: {e}")
+                failed_count += 1
+
+        # Report results
+        if failed_count == 0:
+            logging.info(f"✅ Successfully removed all {removed_count} items")
+        else:
+            logging.warning(f"⚠️ Removed {removed_count} items, failed to remove {failed_count} items")
+
+        return failed_count == 0
+
+    except Exception as e:
+        logging.error(f"Error clearing phenotyping outputs: {e}")
+        return False
+
+
+if __name__ == '__main__':
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('phenotyping_pipeline.log'),
+            logging.StreamHandler()
+        ]
+    )
+
+    # Setup paths and parameters
+    # Uncomment and modify these paths as needed:
+    # path_to_macaw = check_sys_for_macaw_root()
+
+    # Test with your data paths
+    save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    if os.path.exists(save_path):
+        logging.info(f"Processing wseg test dataset...")
+        # Uncomment to clear previous results:
+        # clear_phenotyping_outputs(save_path=save_path, confirm=False)
+        main(save_path=save_path)
+    else:
+        logging.warning(f"Path does not exist: {save_path}")
+
+    save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    if os.path.exists(save_path):
+        logging.info(f"Processing evsong test dataset...")
+        # Uncomment to clear previous results:
+        # clear_phenotyping_outputs(save_path=save_path, confirm=False)
+        main(save_path=save_path)
+    else:
+        logging.warning(f"Path does not exist: {save_path}")
