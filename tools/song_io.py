@@ -337,41 +337,66 @@ def tempo_estimates(audio_norm: np.ndarray, fs: int) -> Tuple[float, float, floa
 
 
 def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray, params: SpectrogramParams,
-                   tempo: bool = False) -> (
+                   split_syllables: bool = False, tempo: bool = False) -> (
         tuple[list[Any], list[Any], list[Any], list[Any]] | tuple[list[Any], list[Any], list[Any], list[Any],
-        tuple[floating[Any], floating[Any], floating[Any]]]):
-    specs = []  # store extracted spectrograms
-    valid_inds = []  # store indices of valid syllables or slices
-    audio_segs = [] # store oscillogram for each syllable or slice
-    spec_t = []  # store reference times for extracted spectrograms0
-    # read the audio file once instead of repeatedly in the loop
+tuple[floating[Any], floating[Any], floating[Any]]]):
+    specs = []
+    valid_inds = []
+    audio_segs = []
+    spec_t = []
+
+    # Read audio file once
     try:
-        audio, fs = read_audio_file(audio_filename)  # read the full audio data and sampling rate
+        audio, fs = read_audio_file(audio_filename)
     except Exception as e:
         print(f"Failed to read audio file {audio_filename}: {e}")
         return specs, audio_segs, spec_t, valid_inds
-    # rms normalization of audio to start
+
+    # Process audio
     audio = rms_norm(audio)
     audio = butter_bandpass_filter_sos(audio, lowcut=params.min_freq, highcut=params.max_freq, fs=fs, order=5)
+
     if tempo:
-        tempos = tempo_estimates(audio, fs)  # tempos = (mean_top_3, low_f_mean, mean_all)
+        tempos = tempo_estimates(audio, fs)
     else:
         tempos = (np.nan, np.nan, np.nan)
-    # iterate through each onset and offset pair
-    for i, (onset, offset) in enumerate(zip(onsets, offsets)):
-        slice_onset, slice_offset = onset, offset
-        # extract the spectrogram for the given slice/syllable
+
+    # Handle long syllables before processing
+    if split_syllables and hasattr(params, 'max_dur') and params.max_dur:
+        # Split long syllables
+        max_dur_ms = params.max_dur * 1000
+        processed_onsets, processed_offsets, syllable_to_original_mapping = split_long_syllables_with_mapping(
+            onsets, offsets, max_dur_ms
+        )
+    else:
+        # Filter out long syllables
+        if hasattr(params, 'max_dur') and params.max_dur:
+            max_dur_ms = params.max_dur * 1000
+            durations = offsets - onsets
+            valid_mask = durations <= max_dur_ms
+            processed_onsets = onsets[valid_mask]
+            processed_offsets = offsets[valid_mask]
+            # Create mapping from processed index to original index
+            syllable_to_original_mapping = np.where(valid_mask)[0]
+        else:
+            # No duration limit
+            processed_onsets = onsets
+            processed_offsets = offsets
+            syllable_to_original_mapping = np.arange(len(onsets))
+
+    # Process each syllable
+    for i, (onset, offset) in enumerate(zip(processed_onsets, processed_offsets)):
         try:
-            spec, audio_seg, t = get_song_spec(t1=slice_onset / 1000, t2=slice_offset / 1000, audio=audio, params=params, fs=fs)
-            # if there is an indexing error, zeros will be returned, don't save this syllable (happens often at end)
+            spec, audio_seg, t = get_song_spec(t1=onset / 1000, t2=offset / 1000, audio=audio, params=params, fs=fs)
+
             if not (np.max(spec) == np.max(audio_seg) == np.max(t) == 0.0):
-                specs.append(spec)  # add the spectrogram to the list
-                valid_inds.append(i)  # store the valid index
+                specs.append(spec)
+                valid_inds.append(syllable_to_original_mapping[i])  # Map back to original indices
                 audio_segs.append(audio_seg)
                 spec_t.append(t)
         except Exception as e:
-            # syls that are too long will throw errors,
-            print(f"Failed to process slice/syllable {i}: {e}")
+            print(f"Failed to process syllable {i} (original {syllable_to_original_mapping[i]}): {e}")
+
     return specs, audio_segs, spec_t, valid_inds, tempos
 
 

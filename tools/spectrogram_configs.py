@@ -7,14 +7,12 @@ import pandas as pd
 class SpectrogramParams:
     """
     """
-    nfft: int = 512
+    nfft: int = 1024
     hop: int = 1
     target_shape: tuple[int, int] = (257, 320)
-    min_freq: float = 200.0
-    max_freq: float = 15000.0
-    spec_min_val: float = 0.0
-    spec_max_val: float = 8.0
-    max_dur: Optional[float] = 0.20
+    min_freq: float = 400.0
+    max_freq: float = 10000.0
+    max_dur: Optional[float] = 0.150
     fs: float = 32000.0
     n_time_bins: int = 0
     padding: float = 0.0

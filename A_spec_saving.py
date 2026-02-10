@@ -626,6 +626,40 @@ def load_and_validate_metadata(metadata_file_path: str, wseg_offset: float = 0.0
         }
 
 
+def split_long_syllables_with_mapping(onsets: np.ndarray, offsets: np.ndarray,
+                                      max_duration_ms: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Split syllables longer than max_duration and create mapping to original indices.
+
+    Returns:
+        tuple: (new_onsets, new_offsets, mapping_to_original_indices)
+    """
+    if len(onsets) == 0:
+        return onsets.copy(), offsets.copy(), np.array([], dtype=int)
+
+    new_onsets = []
+    new_offsets = []
+    mapping = []
+
+    for i, (onset, offset) in enumerate(zip(onsets, offsets)):
+        duration = offset - onset
+
+        if duration <= max_duration_ms:
+            # Short syllable - keep as is
+            new_onsets.append(onset)
+            new_offsets.append(offset)
+            mapping.append(i)
+        else:
+            # Long syllable - split into segments
+            segments = split_single_syllable(onset, offset, "", max_duration_ms)
+            for seg_onset, seg_offset, _ in segments:
+                new_onsets.append(seg_onset)
+                new_offsets.append(seg_offset)
+                mapping.append(i)  # All segments map to the same original syllable
+
+    return np.array(new_onsets), np.array(new_offsets), np.array(mapping)
+
+
 def split_long_syllables(onsets: np.ndarray, offsets: np.ndarray, labels: np.ndarray,
                          max_duration_ms: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -891,50 +925,39 @@ def create_output_path(save_path: str, filename_info: Dict[str, str]) -> str:
 
 
 def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dict[str, Any],
-                           params: SpectrogramParams, verbose: bool) -> bool:
+                           params: SpectrogramParams, split_syllables: bool = False, verbose: bool = False) -> bool:
     """
     Process audio file and save segmented data with progress tracking.
     """
     try:
-        logging.debug(f"    🎵 Processing audio: {os.path.basename(audio_file_path)}")
+        logging.debug(f" 🎵 Processing audio: {os.path.basename(audio_file_path)}")
 
-        # Split long syllables if needed
-        if hasattr(params, 'max_dur') and params.max_dur:
-            max_dur_ms = params.max_dur * 1000
-            syl_onsets, syl_offsets, labels = split_long_syllables(
-                metadata['onsets'], metadata['offsets'], metadata['labels'], max_dur_ms
-            )
-            logging.debug(f"      ✂️ Split syllables: {len(metadata['onsets'])} → {len(syl_onsets)}")
-        else:
-            syl_onsets = metadata['onsets']
-            syl_offsets = metadata['offsets']
-            labels = metadata['labels']
-
-        # Generate spectrograms
-        logging.debug(f"      📊 Generating spectrograms for {len(syl_onsets)} syllables")
+        # Generate spectrograms with syllable handling
+        logging.debug(f" 📊 Generating spectrograms for {len(metadata['onsets'])} syllables")
         specs, wavs, ts, valid_inds, tempos = get_song_specs(
-            audio_file_path, syl_onsets, syl_offsets, params=params
+            audio_file_path, metadata['onsets'], metadata['offsets'],
+            params=params, split_syllables=split_syllables
         )
 
         if not valid_inds:
-            logging.warning(f"      ⚠️ No valid spectrograms generated for {audio_file_path}")
+            logging.warning(f" ⚠️ No valid spectrograms generated for {audio_file_path}")
             return False
 
-        logging.debug(f"      ✅ Generated {len(valid_inds)} valid spectrograms")
+        logging.debug(f" ✅ Generated {len(valid_inds)} valid spectrograms")
         (mean_top_3, low_f_mean, mean_all) = tempos
 
-        # Create organized data structure
+        # Create organized data structure using original onset/offset/label arrays
         segmented_audio_data = create_segmented_audio_data(
             specs=specs,
             wavs=wavs,
             ts=ts,
-            onsets=syl_onsets,
-            offsets=syl_offsets,
-            labels=labels,
+            onsets=metadata['onsets'],  # Original arrays
+            offsets=metadata['offsets'],
+            labels=metadata['labels'],
             mean_top_3=mean_top_3,
             low_f_mean=low_f_mean,
             mean_all=mean_all,
-            valid_indices=valid_inds,
+            valid_indices=valid_inds,  # These now properly map to original indices
             file_identifier=output_path
         )
 

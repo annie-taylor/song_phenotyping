@@ -1978,9 +1978,9 @@ if __name__ == '__main__':
     #path_to_macaw = check_sys_for_macaw_root()
 
     save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    clear_clustering_outputs(save_path=save_path)
+    #clear_clustering_outputs(save_path=save_path)
     main(save_path=save_path)
     save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    clear_clustering_outputs(save_path=save_path)
+    #clear_clustering_outputs(save_path=save_path)
     main(save_path=save_path)
 
