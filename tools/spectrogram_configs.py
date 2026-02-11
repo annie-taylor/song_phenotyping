@@ -7,7 +7,7 @@ import pandas as pd
 class SpectrogramParams:
     """
     """
-    nfft: int = 1024
+    nfft: int = 512
     hop: int = 1
     target_shape: tuple[int, int] = (257, 320)
     min_freq: float = 400.0
@@ -33,8 +33,9 @@ class SpectrogramParams:
             raise ValueError("min_freq must be non-negative.")
         if self.max_freq <= self.min_freq:
             raise ValueError("max_freq must be greater than min_freq.")
-        if self.spec_min_val >= self.spec_max_val:
-            raise ValueError("spec_min_val must be less than spec_max_val.")
+        # REMOVE THIS LINE:
+        # if self.spec_min_val >= self.spec_max_val:
+        #     raise ValueError("spec_min_val must be less than spec_max_val.")
         if self.max_dur is not None and self.max_dur <= 0:
             raise ValueError("max_dur must be greater than 0.")
         if self.fs <= 0:
@@ -45,11 +46,6 @@ class SpectrogramParams:
     def to_dict(self) -> dict:
         """
         Convert the parameters to a dictionary format.
-
-        Returns
-        -------
-        dict
-            Dictionary representation of the spectrogram parameters.
         """
         return {
             "nfft": self.nfft,
@@ -57,8 +53,6 @@ class SpectrogramParams:
             "target_shape": self.target_shape,
             "min_freq": self.min_freq,
             "max_freq": self.max_freq,
-            "spec_min_val": self.spec_min_val,
-            "spec_max_val": self.spec_max_val,
             "max_dur": self.max_dur,
             "fs": self.fs,
             "n_time_bins": self.n_time_bins,

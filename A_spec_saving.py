@@ -2,7 +2,7 @@ import os
 import logging
 import re
 from sys import platform
-from time import time
+import time
 import re
 from sys import platform
 from scipy.io import loadmat
@@ -1311,14 +1311,14 @@ def main():
             save_path=evsong_test_directory,
             batch_file_naming='batch.txt.labeled',
             copy_locally=True,
-            bird_subset=['or16or22', 'or18or24']
+            bird_subset=['or18or24']
         )
 
         # Process spectrograms using local files
         save_specs_for_evsonganaly_birds(
             metadata_file_paths=metadata_file_paths,
             save_path=evsong_test_directory,
-            songs_per_bird=15,
+            songs_per_bird=30,
             prefer_local=True
         )
 
@@ -1341,7 +1341,7 @@ def main():
             seg_directory=wseg_directory,
             save_path=wseg_test_directory,
             song_or_call='song',
-            bird_subset=['bu68bu81', 'bu85bu97'],
+            bird_subset=['bu85bu97'],
             copy_locally=True
         )
 
@@ -1349,7 +1349,7 @@ def main():
         save_specs_for_wseg_birds(
             metadata_file_paths=wseg_metadata_paths,
             save_path=wseg_test_directory,
-            songs_per_bird=15,
+            songs_per_bird=30,
             prefer_local=True
         )
 
