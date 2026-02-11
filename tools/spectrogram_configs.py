@@ -7,14 +7,13 @@ import pandas as pd
 class SpectrogramParams:
     """
     """
-    nfft: int = 512
+    nfft: int = 1024
     hop: int = 1
-    target_shape: tuple[int, int] = (257, 320)
+    target_shape: tuple[int, int] = (int((nfft/2) + 1), 320)
     min_freq: float = 400.0
     max_freq: float = 10000.0
     max_dur: Optional[float] = 0.150
     fs: float = 32000.0
-    n_time_bins: int = 0
     padding: float = 0.0
 
     def __post_init__(self):
@@ -33,9 +32,6 @@ class SpectrogramParams:
             raise ValueError("min_freq must be non-negative.")
         if self.max_freq <= self.min_freq:
             raise ValueError("max_freq must be greater than min_freq.")
-        # REMOVE THIS LINE:
-        # if self.spec_min_val >= self.spec_max_val:
-        #     raise ValueError("spec_min_val must be less than spec_max_val.")
         if self.max_dur is not None and self.max_dur <= 0:
             raise ValueError("max_dur must be greater than 0.")
         if self.fs <= 0:
@@ -55,7 +51,6 @@ class SpectrogramParams:
             "max_freq": self.max_freq,
             "max_dur": self.max_dur,
             "fs": self.fs,
-            "n_time_bins": self.n_time_bins,
             "padding": self.padding
         }
 

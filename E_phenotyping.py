@@ -82,12 +82,12 @@ class LabelHandler:
             return [self._to_int(label) for label in raw_labels]
 
     def _to_string(self, item: Any) -> str:
-        if isinstance(item, bytes):
+        if isinstance(item, (bytes, np.bytes_)):
             return item.decode('utf-8')
         return str(item)
 
     def _to_int(self, item: Any) -> int:
-        if isinstance(item, bytes):
+        if isinstance(item, (bytes, np.bytes_)):
             return int(item.decode('utf-8'))
         elif isinstance(item, str):
             return int(item)
@@ -98,47 +98,29 @@ class LabelHandler:
         return [self.start_token] + labels + [self.end_token]
 
 
-def detect_label_type(labels: List[Any]) -> LabelType:
-    """Detect whether labels are manual or automatic."""
-    if not labels:
-        raise ValueError("Cannot detect type of empty label list")
+def has_manual_labels(syllable_data: Dict[str, Any]) -> bool:
+    """
+    Check if manual labels are available.
 
-    # Check first non-empty label
-    sample = None
-    for label in labels[:10]:
-        if isinstance(label, (bytes, np.bytes_)):
-            sample = label.decode('utf-8')
-        elif isinstance(label, (np.str_, np.string_)):
-            sample = str(label)
-        else:
-            sample = label
+    Returns:
+        True if manual labels exist and are non-empty
+    """
+    return len(syllable_data.get('manual_syllables', [])) > 0
 
-        if sample not in ['s', 'z', -5, -3]:  # Skip tokens
-            break
-
-    if sample is None:
-        raise ValueError("No valid labels found for type detection")
-
-    # Determine type
-    if isinstance(sample, str) and len(sample) == 1 and sample.isalpha():
-        return LabelType.MANUAL
-    elif isinstance(sample, (int, np.integer)) or (isinstance(sample, str) and sample.lstrip('-').isdigit()):
-        return LabelType.AUTO
-    else:
-        logging.warning(f"Ambiguous label type for sample '{sample}', defaulting to MANUAL")
-        return LabelType.MANUAL
 
 
 # ============================================================================
 # DATA LOADING FUNCTIONS
 # ============================================================================
 
+
 def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
     """
-    Load all syllable data from bird directory.
+    Load syllable data from bird directory.
+    Only manual labels are stored in syllable files.
 
     Returns:
-        Dict containing syllable sequences by label type and metadata
+        Dict containing syllable sequences and metadata
     """
     syllables_dir = os.path.join(bird_path, 'data', 'syllables')
 
@@ -150,7 +132,7 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"No syllable files found in {syllables_dir}")
 
     # Initialize data containers
-    all_syllables = {'manual': [], 'hdbscan': []}  # CHANGED: Removed kmeans
+    all_manual_syllables = []
     song_paths = []
 
     # Load data from each file
@@ -162,31 +144,29 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
             with tables.open_file(file_path, 'r') as f:
                 available_nodes = [node._v_name for node in f.list_nodes(f.root)]
 
-                # Process each available label type
-                for label_key in ['manual', 'hdbscan']:  # CHANGED: Removed kmeans
-                    if label_key in available_nodes:
-                        raw_labels = f.root._f_get_child(label_key).read()
+                if 'manual' in available_nodes:
+                    raw_labels = f.root._f_get_child('manual').read()
 
-                        if len(raw_labels) > 0:
-                            # Determine label type and create handler
-                            label_type = LabelType.MANUAL if label_key == 'manual' else LabelType.AUTO
-                            handler = LabelHandler(label_type)
+                    if len(raw_labels) > 0:
+                        # Create handler for manual labels
+                        handler = LabelHandler(LabelType.MANUAL)
 
-                            # Normalize and add tokens
-                            normalized_labels = handler.normalize_labels(raw_labels)
-                            song_with_tokens = handler.add_sequence_tokens(normalized_labels)
+                        # Normalize and add tokens
+                        normalized_labels = handler.normalize_labels(raw_labels)
+                        song_with_tokens = handler.add_sequence_tokens(normalized_labels)
 
-                            # Add to collection
-                            all_syllables[label_key].extend(song_with_tokens)
+                        # Add to collection
+                        all_manual_syllables.extend(song_with_tokens)
 
         except Exception as e:
             logging.error(f'Error processing {file_path}: {e}')
             continue
 
     return {
-        'syllables': all_syllables,
+        'manual_syllables': all_manual_syllables,
         'song_paths': song_paths,
-        'bird_name': os.path.basename(bird_path)
+        'bird_name': os.path.basename(bird_path),
+        'syllables_dir': syllables_dir  # Keep this for clustering label mapping
     }
 
 
@@ -240,25 +220,7 @@ def load_clustering_results(bird_path: str, top_n: int = 5) -> List[Dict[str, An
         return []
 
 
-def detect_available_label_types(syllable_data: Dict[str, Any]) -> List[str]:
-    """
-    Detect which label types are available in the loaded syllable data.
-
-    Returns:
-        List of available label types ('manual', 'hdbscan')
-    """
-    available_types = []
-
-    for label_type in ['manual', 'hdbscan']:  # CHANGED: Removed kmeans
-        if label_type in syllable_data['syllables']:
-            if len(syllable_data['syllables'][label_type]) > 0:
-                available_types.append(label_type)
-
-    return available_types
-
-
-def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syllable_data: Dict[str, Any]) -> List[
-    Union[str, int]]:
+def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syllable_data: Dict[str, Any]) -> List[Union[str, int]]:
     """
     Load clustering labels and map them to syllable sequences.
 
@@ -272,16 +234,17 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
     try:
         # Load clustering labels from HDF5 file
         label_path = clustering_result['label_path']
-
-        # Resolve path if needed (handle network paths)
         resolved_path = _resolve_file_path(label_path)
 
         with tables.open_file(resolved_path, mode='r') as f:
             cluster_labels = f.root.labels.read()
             cluster_hashes = f.root.hashes.read()
 
-        # Convert hashes to strings
-        cluster_hashes = [h.decode('utf-8') if isinstance(h, bytes) else str(h) for h in cluster_hashes]
+        # Convert hashes to strings (fix for numpy bytes)
+        cluster_hashes = [
+            h.decode('utf-8') if isinstance(h, (bytes, np.bytes_)) else str(h)
+            for h in cluster_hashes
+        ]
 
         # Create hash to label mapping
         hash_to_label = dict(zip(cluster_hashes, cluster_labels))
@@ -289,8 +252,7 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
         # Map labels to syllable sequences
         mapped_labels = []
         song_paths = syllable_data['song_paths']
-        syllables_dir = os.path.join(os.path.dirname(os.path.dirname(syllable_data.get('syllables_dir', ''))), 'data',
-                                     'syllables')
+        syllables_dir = syllable_data['syllables_dir']
 
         # Load syllable hashes and map to clustering labels
         for song_path in song_paths:
@@ -298,7 +260,10 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
             try:
                 with tables.open_file(full_song_path, mode='r') as f:
                     song_hashes = f.root.hashes.read()
-                    song_hashes = [h.decode('utf-8') if isinstance(h, bytes) else str(h) for h in song_hashes]
+                    song_hashes = [
+                        h.decode('utf-8') if isinstance(h, (bytes, np.bytes_)) else str(h)
+                        for h in song_hashes
+                    ]
 
                     # Map each syllable hash to its cluster label
                     for hash_id in song_hashes:
@@ -1059,7 +1024,8 @@ def create_unified_phenotype_row(
         config: PhenotypingConfig
 ) -> pd.DataFrame:
     """
-    Create unified phenotype DataFrame with one row per clustering rank.
+    Create unified phenotype DataFrame with manual labels as first row (if available),
+    followed by ranked automated results.
 
     Args:
         bird_name: Bird identifier
@@ -1069,47 +1035,68 @@ def create_unified_phenotype_row(
         config: Configuration object
 
     Returns:
-        DataFrame with phenotype data (one row per rank)
+        DataFrame with phenotype data (manual first, then ranked automated)
     """
     rows = []
 
-    # Create a row for each clustering result
-    for i, (auto_result, cluster_result) in enumerate(zip(auto_results, clustering_results)):
-        row = {
+    # Add manual row first if manual labels exist
+    if manual_results.get('repertoire_size') is not None and not np.isnan(manual_results.get('repertoire_size', np.nan)):
+        manual_row = {
             'bird_name': bird_name,
-            'rank': i,
+            'rank': 'manual',
 
-            # Manual phenotypes (same for all ranks)
-            'manual_repertoire_size': manual_results.get('repertoire_size', np.nan),
-            'manual_entropy': manual_results.get('entropy', np.nan),
-            'manual_entropy_scaled': manual_results.get('entropy_scaled', np.nan),
-            'manual_repeat_bool': manual_results.get('repeat_bool', False),
-            'manual_dyad_bool': manual_results.get('dyad_bool', False),
-            'manual_num_dyad': manual_results.get('num_dyad', 0),
-            'manual_num_longer_reps': manual_results.get('num_longer_reps', 0),
-            'manual_mean_repeat_syls': manual_results.get('mean_repeat_syls', np.nan),
-            'manual_median_repeat_syls': manual_results.get('median_repeat_syls', np.nan),
-            'manual_var_repeat_syls': manual_results.get('var_repeat_syls', np.nan),
-            'manual_skew_repeat_syls': manual_results.get('skew_repeat_syls', np.nan),
-            'manual_kurt_repeat_syls': manual_results.get('kurt_repeat_syls', np.nan),
-            'manual_n_songs': manual_results.get('n_songs', 0),
-            'manual_n_syllables_total': manual_results.get('n_syllables_total', 0),
+            # Phenotype metrics (no prefixes)
+            'repertoire_size': manual_results.get('repertoire_size', np.nan),
+            'entropy': manual_results.get('entropy', np.nan),
+            'entropy_scaled': manual_results.get('entropy_scaled', np.nan),
+            'repeat_bool': manual_results.get('repeat_bool', False),
+            'dyad_bool': manual_results.get('dyad_bool', False),
+            'num_dyad': manual_results.get('num_dyad', 0),
+            'num_longer_reps': manual_results.get('num_longer_reps', 0),
+            'mean_repeat_syls': manual_results.get('mean_repeat_syls', np.nan),
+            'median_repeat_syls': manual_results.get('median_repeat_syls', np.nan),
+            'var_repeat_syls': manual_results.get('var_repeat_syls', np.nan),
+            'skew_repeat_syls': manual_results.get('skew_repeat_syls', np.nan),
+            'kurt_repeat_syls': manual_results.get('kurt_repeat_syls', np.nan),
+            'n_songs': manual_results.get('n_songs', 0),
+            'n_syllables_total': manual_results.get('n_syllables_total', 0),
 
-            # Automated phenotypes (specific to this rank)
-            'auto_repertoire_size': auto_result.get('repertoire_size', np.nan),
-            'auto_entropy': auto_result.get('entropy', np.nan),
-            'auto_entropy_scaled': auto_result.get('entropy_scaled', np.nan),
-            'auto_repeat_bool': auto_result.get('repeat_bool', False),
-            'auto_dyad_bool': auto_result.get('dyad_bool', False),
-            'auto_num_dyad': auto_result.get('num_dyad', 0),
-            'auto_num_longer_reps': auto_result.get('num_longer_reps', 0),
-            'auto_mean_repeat_syls': auto_result.get('mean_repeat_syls', np.nan),
-            'auto_median_repeat_syls': auto_result.get('median_repeat_syls', np.nan),
-            'auto_var_repeat_syls': auto_result.get('var_repeat_syls', np.nan),
-            'auto_skew_repeat_syls': auto_result.get('skew_repeat_syls', np.nan),
-            'auto_kurt_repeat_syls': auto_result.get('kurt_repeat_syls', np.nan),
-            'auto_n_songs': auto_result.get('n_songs', 0),
-            'auto_n_syllables_total': auto_result.get('n_syllables_total', 0),
+            # Clustering metadata (empty for manual)
+            'clustering_method': np.nan,
+            'composite_score': np.nan,
+            'nmi': np.nan,
+            'silhouette': np.nan,
+            'dbi': np.nan,
+            'n_clusters': np.nan,
+            'n_neighbors': np.nan,
+            'min_dist': np.nan,
+            'metric': np.nan,
+            'min_cluster_size': np.nan,
+            'min_samples': np.nan
+        }
+        rows.append(manual_row)
+
+    # Add automated rows for each clustering result
+    for i, (auto_result, cluster_result) in enumerate(zip(auto_results, clustering_results)):
+        auto_row = {
+            'bird_name': bird_name,
+            'rank': i,  # 0, 1, 2, etc. for automated rankings
+
+            # Phenotype metrics (no prefixes)
+            'repertoire_size': auto_result.get('repertoire_size', np.nan),
+            'entropy': auto_result.get('entropy', np.nan),
+            'entropy_scaled': auto_result.get('entropy_scaled', np.nan),
+            'repeat_bool': auto_result.get('repeat_bool', False),
+            'dyad_bool': auto_result.get('dyad_bool', False),
+            'num_dyad': auto_result.get('num_dyad', 0),
+            'num_longer_reps': auto_result.get('num_longer_reps', 0),
+            'mean_repeat_syls': auto_result.get('mean_repeat_syls', np.nan),
+            'median_repeat_syls': auto_result.get('median_repeat_syls', np.nan),
+            'var_repeat_syls': auto_result.get('var_repeat_syls', np.nan),
+            'skew_repeat_syls': auto_result.get('skew_repeat_syls', np.nan),
+            'kurt_repeat_syls': auto_result.get('kurt_repeat_syls', np.nan),
+            'n_songs': auto_result.get('n_songs', 0),
+            'n_syllables_total': auto_result.get('n_syllables_total', 0),
 
             # Clustering metadata
             'clustering_method': cluster_result.get('clustering_method', 'hdbscan'),
@@ -1118,18 +1105,46 @@ def create_unified_phenotype_row(
             'silhouette': cluster_result.get('silhouette', np.nan),
             'dbi': cluster_result.get('dbi', np.nan),
             'n_clusters': cluster_result.get('n_clusters', np.nan),
-
-            # UMAP parameters
             'n_neighbors': cluster_result.get('n_neighbors', np.nan),
             'min_dist': cluster_result.get('min_dist', np.nan),
             'metric': cluster_result.get('metric', 'euclidean'),
-
-            # HDBSCAN parameters
             'min_cluster_size': cluster_result.get('min_cluster_size', np.nan),
             'min_samples': cluster_result.get('min_samples', np.nan)
         }
+        rows.append(auto_row)
 
-        rows.append(row)
+    # Handle edge case: no manual labels and no clustering results
+    if not rows:
+        empty_row = {
+            'bird_name': bird_name,
+            'rank': 0,
+            'repertoire_size': np.nan,
+            'entropy': np.nan,
+            'entropy_scaled': np.nan,
+            'repeat_bool': False,
+            'dyad_bool': False,
+            'num_dyad': 0,
+            'num_longer_reps': 0,
+            'mean_repeat_syls': np.nan,
+            'median_repeat_syls': np.nan,
+            'var_repeat_syls': np.nan,
+            'skew_repeat_syls': np.nan,
+            'kurt_repeat_syls': np.nan,
+            'n_songs': 0,
+            'n_syllables_total': 0,
+            'clustering_method': np.nan,
+            'composite_score': np.nan,
+            'nmi': np.nan,
+            'silhouette': np.nan,
+            'dbi': np.nan,
+            'n_clusters': np.nan,
+            'n_neighbors': np.nan,
+            'min_dist': np.nan,
+            'metric': np.nan,
+            'min_cluster_size': np.nan,
+            'min_samples': np.nan
+        }
+        rows.append(empty_row)
 
     return pd.DataFrame(rows)
 
@@ -1137,7 +1152,7 @@ def create_unified_phenotype_row(
 def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
     """
     Complete phenotyping pipeline for one bird.
-    Automatically detects available label types and processes both.
+    Processes manual labels (if available) and automated labels from clustering results.
 
     Args:
         bird_path: Path to bird directory
@@ -1156,125 +1171,20 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
         # Load syllable data
         syllable_data = load_bird_syllable_data(bird_path)
 
-        # Detect available label types
-        available_types = detect_available_label_types(syllable_data)
-        logging.info(f"Available label types for {bird_name}: {available_types}")
+        # Check if manual labels are available
+        has_manual = has_manual_labels(syllable_data)
+        logging.info(f"Manual labels available for {bird_name}: {has_manual}")
 
         # Load clustering results
         clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings)
-        if not clustering_results:
-            logging.warning(f"No clustering results found for {bird_name}")
+        has_clustering = len(clustering_results) > 0
+        logging.info(f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
 
         # Process manual labels if available
         manual_results = {}
-        if 'manual' in available_types:
+        if has_manual:
             logging.info(f"Processing manual labels for {bird_name}")
-            manual_syllables = syllable_data['syllables']['manual']
-            manual_results = calculate_phenotypes_for_label_type(
-                manual_syllables, 'manual', bird_name, config
-            )
-        else:
-            logging.info(f"No manual labels found for {bird_name}")
-            manual_results = _create_empty_phenotype_results()
-
-        # Process automated labels for each clustering result
-        auto_results = []
-        for i, cluster_result in enumerate(clustering_results):
-            logging.info(f"Processing automated labels for {bird_name}, rank {i}")
-
-            # Load clustering labels mapped to syllables
-            try:
-                auto_syllables = load_clustering_labels_for_syllables(cluster_result, syllable_data)
-                if auto_syllables:
-                    auto_result = calculate_phenotypes_for_label_type(
-                        auto_syllables, 'hdbscan', bird_name, config
-                    )
-                else:
-                    auto_result = _create_empty_phenotype_results()
-            except Exception as e:
-                logging.error(f"Error processing clustering rank {i} for {bird_name}: {e}")
-                auto_result = _create_empty_phenotype_results()
-
-            auto_results.append(auto_result)
-
-        # If no clustering results, create empty auto results
-        if not auto_results:
-            auto_results = [_create_empty_phenotype_results()]
-            clustering_results = [{
-                'rank': 0,
-                'clustering_method': 'hdbscan',
-                'composite_score': np.nan,
-                'nmi': np.nan,
-                'silhouette': np.nan,
-                'dbi': np.nan,
-                'n_clusters': np.nan,
-                'n_neighbors': np.nan,
-                'min_dist': np.nan,
-                'metric': 'euclidean',
-                'min_cluster_size': np.nan,
-                'min_samples': np.nan
-            }]
-
-        # Create unified results DataFrame
-        results_df = create_unified_phenotype_row(
-            bird_name, manual_results, auto_results, clustering_results, config
-        )
-
-        # Save results
-        output_path = os.path.join(bird_path, 'phenotype_results.csv')
-        results_df.to_csv(output_path, index=False)
-        logging.info(f"Saved phenotype results to: {output_path}")
-
-        # Generate plots if requested
-        if config.generate_plots:
-            _generate_phenotype_plots(bird_path, syllable_data, manual_results, auto_results, clustering_results,
-                                      config)
-
-        logging.info(f"Successfully completed phenotyping for bird: {bird_name}")
-        return True
-
-    except Exception as e:
-        logging.error(f"Error in phenotyping pipeline for {bird_name}: {e}")
-        logging.error(traceback.format_exc())
-        return False
-
-
-def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
-    """
-    Complete phenotyping pipeline for one bird.
-    Automatically detects available label types and processes both.
-
-    Args:
-        bird_path: Path to bird directory
-        config: Configuration object (uses defaults if None)
-
-    Returns:
-        bool: Success status
-    """
-    if config is None:
-        config = PhenotypingConfig()
-
-    bird_name = os.path.basename(bird_path)
-    logging.info(f"Starting phenotyping for bird: {bird_name}")
-
-    try:
-        # Load syllable data
-        syllable_data = load_bird_syllable_data(bird_path)
-
-        # Detect available label types
-        available_types = detect_available_label_types(syllable_data)
-        logging.info(f"Available label types for {bird_name}: {available_types}")
-
-        # Load clustering results
-        clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings)
-        if not clustering_results:
-            logging.warning(f"No clustering results found for {bird_name}")
-
-        # Process manual labels if available
-        manual_results = {}
-        if 'manual' in available_types:
-            logging.info(f"Processing manual labels for {bird_name}")
-            manual_syllables = syllable_data['syllables']['manual']
+            manual_syllables = syllable_data['manual_syllables']
             manual_results = calculate_phenotypes_for_label_type(
                 manual_syllables, 'manual', bird_name, config
             )
@@ -1354,14 +1264,6 @@ def _generate_phenotype_plots(
 ) -> None:
     """
     Generate all phenotype visualization plots for a bird.
-
-    Args:
-        bird_path: Path to bird directory
-        syllable_data: Dictionary with syllable data
-        manual_results: Manual phenotype results
-        auto_results: List of automated phenotype results
-        clustering_results: List of clustering metadata
-        config: Configuration object
     """
     try:
         # Create plots directory
