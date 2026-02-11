@@ -1,3 +1,8 @@
+import os
+import logging
+import re
+from sys import platform
+from time import time
 import re
 from sys import platform
 from scipy.io import loadmat
@@ -1285,16 +1290,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
 
 
 def main():
-    # Setup logging with more detail
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('spectrogram_processing.log'),
-            logging.StreamHandler()
-        ]
-    )
-
+    start_time = time.time()
     logging.info("🚀 Starting spectrogram processing pipeline")
 
     path_to_macaw = check_sys_for_macaw_root()
@@ -1362,8 +1358,24 @@ def main():
     except Exception as e:
         logging.error(f"💥 Error in wseg processing: {e}")
 
-    logging.info("🎯 All processing complete!")
+    total_time = time.time() - start_time
+    logging.info(f"🎯 All processing complete! Total time: {total_time:.1f} seconds")
 
 
 if __name__ == '__main__':
+    # Create logs directory
+    logs_dir = 'logs'
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(logs_dir, 'spectrogram_processing.log')),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("🚀 Starting spectrogram processing pipeline")
     main()

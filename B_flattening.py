@@ -86,6 +86,10 @@ def save_flattened_data(output_path: str, flattened_specs: np.ndarray,
 def process_single_syllable_file(filepath: str, data_folder: str) -> bool:
     """Process a single syllable file and create flattened version."""
     try:
+        # Log file size for debugging
+        file_size = os.path.getsize(filepath) / (1024 * 1024)  # MB
+        logging.debug(f"Processing {filepath} ({file_size:.1f} MB)")
+
         # Extract song ID
         song_id = extract_song_id(filepath)
 
@@ -140,8 +144,10 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
         # Find syllable files
         syllable_files = find_syllable_files(syllables_path)
         if not syllable_files:
-            logging.warning(f"No syllable files found for bird {bird}")
+            logging.warning(f"No syllable files found for bird {bird} in {syllables_path}")
             return True  # Not an error, just nothing to process
+
+        logging.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
 
         # Process each file
         success_count = 0
@@ -158,21 +164,64 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
 
 
 def main():
+    logging.info("Optimizing PyTables for network access")
     optimize_pytables_for_network()
 
+    # EVSong processing
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    birds = os.listdir(evsong_test_directory)
-    birds.remove('copied_data')
-    for bird in birds:
-        flatten_bird_spectrograms(evsong_test_directory, bird)
+    logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
+    if not os.path.exists(evsong_test_directory):
+        logging.error(f"EVSong directory does not exist: {evsong_test_directory}")
+    else:
+        birds = [b for b in os.listdir(evsong_test_directory)
+                 if b != 'copied_data' and os.path.isdir(os.path.join(evsong_test_directory, b))]
+        logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
+
+        for bird in birds:
+            logging.info(f"Processing EVSong bird: {bird}")
+            success = flatten_bird_spectrograms(evsong_test_directory, bird)
+            if success:
+                logging.info(f"✅ Successfully processed EVSong bird: {bird}")
+            else:
+                logging.error(f"❌ Failed to process EVSong bird: {bird}")
+
+    # WSeg processing
     wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    birds = os.listdir(wseg_test_directory)
-    birds.remove('copied_data')
-    for bird in birds:
-        flatten_bird_spectrograms(wseg_test_directory, bird)
+    logging.info(f"Processing WSeg directory: {wseg_test_directory}")
 
+    if not os.path.exists(wseg_test_directory):
+        logging.error(f"WSeg directory does not exist: {wseg_test_directory}")
+    else:
+        birds = [b for b in os.listdir(wseg_test_directory)
+                 if b != 'copied_data' and os.path.isdir(os.path.join(wseg_test_directory, b))]
+        logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+
+        for bird in birds:
+            logging.info(f"Processing WSeg bird: {bird}")
+            success = flatten_bird_spectrograms(wseg_test_directory, bird)
+            if success:
+                logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+            else:
+                logging.error(f"❌ Failed to process WSeg bird: {bird}")
+
+    logging.info("Spectrogram flattening pipeline completed")
 
 
 if __name__ == '__main__':
+    # Create logs directory
+    logs_dir = 'logs'
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(logs_dir, 'flatten_spectrograms.log')),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("Starting spectrogram flattening pipeline")
     main()

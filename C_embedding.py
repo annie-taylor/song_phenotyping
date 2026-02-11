@@ -9,6 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 from dataclasses import dataclass
 import pickle as pkl
+import matplotlib.pyplot as plt
 
 
 from tools.system_utils import optimize_pytables_for_network
@@ -460,7 +461,6 @@ def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min
     """
     Create comparison plot by loading embeddings on-demand
     """
-    import matplotlib.pyplot as plt
 
     fig, axs = plt.subplots(len(n_neighbors), len(min_dists), figsize=(20, 20))
 
@@ -515,21 +515,72 @@ def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min
 
 
 def main():
+    logging.info("Optimizing PyTables for network access")
     optimize_pytables_for_network()
 
+    # EVSong processing
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    logging.info(f"Processing EVSong directory: {evsong_test_directory}")
+
     birds = os.listdir(evsong_test_directory)
     birds.remove('copied_data')
-    for bird in birds:
-        explore_embedding_parameters(save_path=evsong_test_directory, bird=bird, min_dists=[0.01, 0.1, 0.5],
-                                     n_neighbors_list=[10, 20, 50], use_parallel=True, overwrite=True)
+    logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
 
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    birds = os.listdir(wseg_test_directory)
-    birds.remove('copied_data')
     for bird in birds:
-        explore_embedding_parameters(save_path=wseg_test_directory, bird=bird, min_dists=[0.01, 0.1, 0.5],
-                                     n_neighbors_list=[10, 20, 50], use_parallel=True, overwrite=True)
+        logging.info(f"Processing EVSong bird: {bird}")
+        success = explore_embedding_parameters(
+            save_path=evsong_test_directory,
+            bird=bird,
+            min_dists=[0.01, 0.1, 0.5],
+            n_neighbors_list=[10, 20, 50],
+            use_parallel=True,
+            overwrite=True
+        )
+        if success:
+            logging.info(f"✅ Successfully processed EVSong bird: {bird}")
+        else:
+            logging.error(f"❌ Failed to process EVSong bird: {bird}")
+
+    # WSeg processing
+    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    logging.info(f"Processing WSeg directory: {wseg_test_directory}")
+
+    birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
+             os.path.isdir(os.path.join(evsong_test_directory, b))]
+    logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+
+    for bird in birds:
+        logging.info(f"Processing WSeg bird: {bird}")
+        success = explore_embedding_parameters(
+            save_path=wseg_test_directory,
+            bird=bird,
+            min_dists=[0.01, 0.1, 0.5],
+            n_neighbors_list=[5, 100],
+            use_parallel=True,
+            overwrite=True
+        )
+        if success:
+            logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+        else:
+            logging.error(f"❌ Failed to process WSeg bird: {bird}")
+
+    logging.info("UMAP embeddings pipeline completed")
+
 
 if __name__ == "__main__":
+    # Create logs directory
+    logs_dir = 'logs'
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(logs_dir, 'umap_embeddings.log')),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("Starting UMAP embeddings pipeline")
     main()

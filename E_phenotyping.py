@@ -2894,11 +2894,13 @@ def clear_phenotyping_outputs(save_path: str, bird: str = None, confirm: bool = 
 
 if __name__ == '__main__':
     # Setup logging
+    logs_dir = 'logs'
+    os.makedirs(logs_dir, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('phenotyping_pipeline.log'),
+            logging.FileHandler(logs_dir, 'phenotyping_pipeline.log'),
             logging.StreamHandler()
         ]
     )

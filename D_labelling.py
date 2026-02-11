@@ -1653,8 +1653,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         if hdbscan_params is None:
             hdbscan_params = [
                 {'min_cluster_size': n, 'min_samples': m}
-                for n in [5, 10, 20, 40, 60]
-                for m in [1, 5]
+                for n in [5, 20, 60]
+                for m in [5, 15]
             ]
 
         # Process each embedding file
@@ -1966,11 +1966,13 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
 
 if __name__ == '__main__':
     # Setup logging
+    logs_dir = 'logs'
+    os.makedirs(logs_dir, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('clustering_pipeline.log'),
+            logging.FileHandler(logs_dir, 'clustering_pipeline.log'),
             logging.StreamHandler()
         ]
     )
