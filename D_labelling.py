@@ -1972,7 +1972,7 @@ if __name__ == '__main__':
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(logs_dir, 'clustering_pipeline.log'),
+            logging.FileHandler(os.path.join(logs_dir, 'clustering_pipeline.log')),
             logging.StreamHandler()
         ]
     )

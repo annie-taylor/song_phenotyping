@@ -522,8 +522,8 @@ def main():
     evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
-    birds = os.listdir(evsong_test_directory)
-    birds.remove('copied_data')
+    birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
+             os.path.isdir(os.path.join(evsong_test_directory, b))]
     logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
 
     for bird in birds:
@@ -532,9 +532,9 @@ def main():
             save_path=evsong_test_directory,
             bird=bird,
             min_dists=[0.01, 0.1, 0.5],
-            n_neighbors_list=[10, 20, 50],
+            n_neighbors_list=[5, 10, 50, 100],
             use_parallel=True,
-            overwrite=True
+            overwrite=False
         )
         if success:
             logging.info(f"✅ Successfully processed EVSong bird: {bird}")
@@ -545,8 +545,8 @@ def main():
     wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
     logging.info(f"Processing WSeg directory: {wseg_test_directory}")
 
-    birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
-             os.path.isdir(os.path.join(evsong_test_directory, b))]
+    birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
+             os.path.isdir(os.path.join(wseg_test_directory, b))]
     logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
 
     for bird in birds:
@@ -555,9 +555,9 @@ def main():
             save_path=wseg_test_directory,
             bird=bird,
             min_dists=[0.01, 0.1, 0.5],
-            n_neighbors_list=[5, 100],
+            n_neighbors_list=[5, 10, 50, 100],
             use_parallel=True,
-            overwrite=True
+            overwrite=False
         )
         if success:
             logging.info(f"✅ Successfully processed WSeg bird: {bird}")
