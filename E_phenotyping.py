@@ -347,10 +347,10 @@ def calculate_phenotypes_for_label_type(
         # Calculate vocabulary and basic stats
         vocab_results = analyze_vocabulary_and_entropy(syllables, handler, config)
 
-        # Calculate transition patterns
+        # Calculate transition patterns - NOW FOR BOTH MANUAL AND AUTO
         transition_results = analyze_transitions(syllables, handler)
 
-        # Calculate repeat patterns
+        # Calculate repeat patterns - NOW FOR BOTH MANUAL AND AUTO
         repeat_results = analyze_repeats(syllables, handler, config)
 
         # Combine all results
@@ -1321,6 +1321,7 @@ def _generate_phenotype_plots(
 ) -> None:
     """
     Generate all phenotype visualization plots for a bird.
+    ENHANCED: Now generates plots for both manual and automated results.
     """
     try:
         # Create plots directory
@@ -1329,14 +1330,25 @@ def _generate_phenotype_plots(
 
         bird_name = os.path.basename(bird_path)
 
-        # Plot transition matrices for each rank
+        # Plot manual results if available
+        if manual_results.get('transition_matrix') is not None and not manual_results['transition_matrix'].empty:
+            plot_transition_matrices(
+                plots_dir, manual_results, "manual", bird_name, config
+            )
+
+        if manual_results.get('repeat_counts') is not None and not manual_results['repeat_counts'].empty:
+            plot_repeat_patterns(
+                plots_dir, manual_results['repeat_counts'], "manual", bird_name, config
+            )
+
+        # Plot transition matrices for each automated rank
         for i, auto_result in enumerate(auto_results):
             if 'transition_matrix' in auto_result and not auto_result['transition_matrix'].empty:
                 plot_transition_matrices(
                     plots_dir, auto_result, f"rank{i}", bird_name, config
                 )
 
-        # Plot repeat patterns for each rank
+        # Plot repeat patterns for each automated rank
         for i, auto_result in enumerate(auto_results):
             if 'repeat_counts' in auto_result and not auto_result['repeat_counts'].empty:
                 plot_repeat_patterns(
@@ -1349,10 +1361,110 @@ def _generate_phenotype_plots(
                 plots_dir, manual_results, auto_results, bird_name, config
             )
 
+        # Generate manual UMAP plot if manual labels exist and clustering data available
+        if (manual_results.get('vocabulary') and
+            clustering_results and
+            syllable_data.get('manual_syllables')):
+            generate_manual_umap_plot(bird_path, syllable_data, manual_results, clustering_results[0], config)
+
         logging.info(f"Generated phenotype plots for {bird_name} in {plots_dir}")
 
     except Exception as e:
         logging.error(f"Error generating plots for {bird_name}: {e}")
+
+
+def generate_manual_umap_plot(
+        bird_path: str,
+        syllable_data: Dict[str, Any],
+        manual_results: Dict[str, Any],
+        clustering_result: Dict[str, Any],
+        config: PhenotypingConfig
+) -> str:
+    """
+    Generate UMAP plot colored by manual labels to match automated clustering plots.
+    """
+    try:
+        import umap
+        from sklearn.preprocessing import StandardScaler
+
+        # Load syllable features for UMAP
+        syllable_db_path = os.path.join(bird_path, 'data', 'syllable_database', 'syllable_features.csv')
+        if not os.path.exists(syllable_db_path):
+            logging.warning(f"No syllable database found for manual UMAP plot: {syllable_db_path}")
+            return ""
+
+        df = pd.read_csv(syllable_db_path)
+
+        # Get feature columns (exclude metadata columns)
+        feature_cols = [col for col in df.columns if
+                        not col.startswith(('manual_label', 'cluster_', 'song_file', 'hash'))]
+
+        if not feature_cols:
+            logging.warning("No feature columns found for UMAP")
+            return ""
+
+        # Prepare features and labels
+        features = df[feature_cols].values
+        manual_labels = df.get('manual_label', pd.Series(['unknown'] * len(df)))
+
+        # Filter out samples without manual labels
+        valid_mask = manual_labels.notna() & (manual_labels != '') & (manual_labels != 'unknown')
+        if not valid_mask.any():
+            logging.warning("No valid manual labels found for UMAP")
+            return ""
+
+        features_clean = features[valid_mask]
+        labels_clean = manual_labels[valid_mask]
+
+        # Standardize features
+        scaler = StandardScaler()
+        features_scaled = scaler.fit_transform(features_clean)
+
+        # Use same UMAP parameters as automated clustering
+        umap_params = {
+            'n_neighbors': clustering_result.get('n_neighbors', 15),
+            'min_dist': clustering_result.get('min_dist', 0.1),
+            'metric': clustering_result.get('metric', 'euclidean'),
+            'random_state': 42
+        }
+
+        # Fit UMAP
+        reducer = umap.UMAP(**umap_params)
+        embedding = reducer.fit_transform(features_scaled)
+
+        # Create plot
+        plt.figure(figsize=(10, 8))
+
+        # Get unique labels and assign colors
+        unique_labels = sorted(labels_clean.unique())
+        colors = plt.cm.Set1(np.linspace(0, 1, len(unique_labels)))
+
+        for i, label in enumerate(unique_labels):
+            mask = labels_clean == label
+            plt.scatter(embedding[mask, 0], embedding[mask, 1],
+                        c=[colors[i]], label=str(label), alpha=0.7, s=20)
+
+        plt.title(f'Manual Labels UMAP - {os.path.basename(bird_path)}')
+        plt.xlabel('UMAP 1')
+        plt.ylabel('UMAP 2')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.tight_layout()
+
+        # Save plot
+        clusters_dir = os.path.join(bird_path, 'figures', 'clusters')
+        os.makedirs(clusters_dir, exist_ok=True)
+
+        plot_path = os.path.join(clusters_dir, 'manual_labels_umap.jpg')
+        plt.savefig(plot_path, dpi=config.figure_dpi, bbox_inches='tight')
+        plt.close()
+
+        logging.info(f"Generated manual UMAP plot: {plot_path}")
+        return plot_path
+
+    except Exception as e:
+        logging.error(f"Error generating manual UMAP plot: {e}")
+        plt.close()
+        return ""
 
 
 def plot_transition_matrices(

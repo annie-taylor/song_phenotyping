@@ -659,8 +659,6 @@ if __name__ == '__main__':
                 else:
                     print("✗ No catalog PDF generated")
 
-                break  # Only test first available dataset
-
             except Exception as e:  # Now properly paired with try
                 print(f"Error during testing: {e}")
                 import traceback

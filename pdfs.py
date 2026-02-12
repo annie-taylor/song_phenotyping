@@ -32,13 +32,14 @@ class PhenotypePDFPaths:
     repeat_patterns_img: str
     vocabulary_comparison_img: Optional[str] = None
 
+
 def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int = 0,
                                     spectrograms_dir: Path = None,
                                     overwrite: bool = False,
                                     duration: float = 6.0) -> Optional[str]:
     """
     Create spectrogram with both manual and automated labels (shared function).
-    Fixed label alignment and improved caching.
+    FIXED: Better spacing, no frame, improved label positioning.
     """
     try:
         # Set up directories
@@ -107,7 +108,7 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                         if cluster_cols:
                             labels = song_data[cluster_cols[0]].values
                             automated_labels = np.array([
-                                int(label) if not pd.isna(label) else -1
+                                int(label) if not pd.isna(label) and label != -1 else -1
                                 for label in labels
                             ])
             except Exception as e:
@@ -168,9 +169,16 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                 logging.debug(f"Insufficient syllables in time window for {syl_file}")
                 return None
 
-            # Create spectrogram plot
-            fig, ax = plt.subplots(figsize=(12, 4))
+            # Create spectrogram plot with better spacing
+            fig, ax = plt.subplots(figsize=(12, 5))  # Increased height from 4 to 5
             ax.imshow(spec, aspect='auto', origin='lower', extent=[0, duration, 0, spec.shape[0]])
+
+            # Remove frame/spines but keep time axis
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_visible(True)  # Keep bottom for time axis
+
             ax.set_yticks([])
             ax.set_xlabel('Time (s)')
 
@@ -178,46 +186,44 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
             colors = plt.cm.Set1(np.linspace(0, 1, 10))
             font_size = 9
 
-            # FIXED: Add syllable labels with proper centering
+            # Add syllable labels with proper centering and spacing
             for i, (onset, offset) in enumerate(zip(syl_onsets, syl_offsets)):
                 # Calculate center position of syllable in time
                 syllable_center_time = ((onset + offset) / 2 / 1000) - first_time
 
-                # Convert to x-coordinate on spectrogram (already in seconds)
-                label_x_position = syllable_center_time
-
                 # Ensure label is within spectrogram bounds
-                if 0 <= label_x_position <= duration:
-                    # Add manual label (above spectrogram)
+                if 0 <= syllable_center_time <= duration:
+                    # Add manual label (above spectrogram with more spacing)
                     if manual_syl_labels is not None and i < len(manual_syl_labels):
                         manual_label = manual_syl_labels[i]
                         if manual_label not in ['s', 'z']:
                             color_idx = hash(str(manual_label)) % len(colors)
-                            ax.text(label_x_position, spec.shape[0] + 5, str(manual_label),
-                                   color='black', fontsize=font_size, ha='center', va='bottom',
-                                   bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                            alpha=0.8, boxstyle='round,pad=0.2'))
-                    # Add automated label (below spectrogram)
+                            ax.text(syllable_center_time, spec.shape[0] + 15, str(manual_label),  # Increased spacing
+                                    color='black', fontsize=font_size, ha='center', va='bottom',
+                                    bbox=dict(facecolor=colors[color_idx], edgecolor='black',
+                                              alpha=0.8, boxstyle='round,pad=0.2'))
+
+                    # Add automated label (below spectrogram with more spacing)
                     if automated_syl_labels is not None and i < len(automated_syl_labels):
                         auto_label = automated_syl_labels[i]
                         color_idx = hash(str(auto_label)) % len(colors)
-                        ax.text(label_x_position, -8, str(auto_label),
-                               color='black', fontsize=font_size, ha='center', va='top',
-                               bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                        alpha=0.8, boxstyle='round,pad=0.2'))
+                        ax.text(syllable_center_time, -15, str(auto_label),  # Increased spacing
+                                color='black', fontsize=font_size, ha='center', va='top',
+                                bbox=dict(facecolor=colors[color_idx], edgecolor='black',
+                                          alpha=0.8, boxstyle='round,pad=0.2'))
 
-            # Create title indicating which labels are present
+            # Create title with more spacing
             title_parts = []
             if manual_labels is not None:
                 title_parts.append("Manual")
             if automated_labels is not None:
                 title_parts.append(f"Auto(R{rank})")
             title = f"{' + '.join(title_parts)} Labels - {bird_path.name}"
-            ax.set_title(title)
+            ax.set_title(title, pad=20)  # Added padding above title
 
-            # Set proper axis limits to prevent labels from extending beyond spectrogram
+            # Set proper axis limits with more space for labels
             ax.set_xlim(0, duration)
-            ax.set_ylim(-15, spec.shape[0] + 15)
+            ax.set_ylim(-25, spec.shape[0] + 25)  # Increased spacing for labels
 
             # Save spectrogram with timestamp for uniqueness
             timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
@@ -271,139 +277,6 @@ class PhenotypePDFGenerator:
             fontSize=12,
             spaceAfter=12
         )
-
-    def generate_manual_phenotype_pdf(self, phenotype_results: Dict[str, Any],
-                                      syllable_database_path: str,
-                                      overwrite: bool = True,
-                                      overwrite_spectrograms: bool = False) -> str:
-        """
-        Generate PDF for manual phenotype analysis using ReportLab.
-
-        Args:
-            phenotype_results: Results from calculate_phenotypes_for_label_type()
-            syllable_database_path: Path to syllable database CSV
-            overwrite: Whether to overwrite existing PDF
-            overwrite_spectrograms: Whether to regenerate existing spectrograms
-
-        Returns:
-            str: Path to generated PDF
-        """
-        try:
-            output_path = self.pdf_output_dir / f'{self.bird_name}_manual_phenotypes.pdf'
-
-            if output_path.exists() and not overwrite:
-                logging.info(f"Manual PDF already exists: {output_path}")
-                return str(output_path)
-
-            # Load syllable database for duration/gap statistics
-            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
-
-            # Find existing phenotype plots
-            plot_paths = self._find_phenotype_plots('manual')
-
-            # Generate example spectrograms using shared function (8 spectrograms)
-            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='manual',
-                                                            overwrite_spectrograms=overwrite_spectrograms)
-
-            # Create PDF using ReportLab canvas for more control
-            c = canvas.Canvas(str(output_path), pagesize=landscape(letter))
-            width, height = landscape(letter)
-
-            # Add content sections
-            self._add_phenotype_header(c, width, height, phenotype_results, 'Manual Labels')
-            c.showPage()
-
-            # Add statistics tables
-            self._add_basic_phenotype_stats(c, width, height, phenotype_results)
-            self._add_syllable_statistics_table(c, width, height, phenotype_results, syllable_stats)
-            self._add_repeat_statistics_table(c, width, height, phenotype_results)
-            c.showPage()
-
-            # Add phenotype images on new page
-            self._add_phenotype_images(c, width, height, plot_paths)
-            c.showPage()
-
-            # Add spectrogram examples on new page
-            self._add_spectrogram_examples(c, width, height, spec_images, 'manual', phenotype_results)
-
-            # Save PDF
-            c.save()
-
-            logging.info(f"Generated manual phenotype PDF: {output_path}")
-            return str(output_path)
-
-        except Exception as e:
-            logging.error(f"Error generating manual phenotype PDF: {e}")
-            return ""
-
-    def generate_automated_phenotype_pdf(self, phenotype_results: Dict[str, Any],
-                                         clustering_metadata: Dict[str, Any],
-                                         syllable_database_path: str,
-                                         rank: int = 0,
-                                         overwrite: bool = True,
-                                         overwrite_spectrograms: bool = False) -> str:
-        """
-        Generate PDF for automated phenotype analysis using ReportLab.
-
-        Args:
-            phenotype_results: Results from calculate_phenotypes_for_label_type()
-            clustering_metadata: Clustering parameters and scores
-            syllable_database_path: Path to syllable database CSV
-            rank: Clustering rank (0 for best)
-            overwrite: Whether to overwrite existing PDF
-            overwrite_spectrograms: Whether to regenerate existing spectrograms
-
-        Returns:
-            str: Path to generated PDF
-        """
-        try:
-            output_path = self.pdf_output_dir / f'{self.bird_name}_automated_phenotypes_rank{rank}.pdf'
-
-            if output_path.exists() and not overwrite:
-                logging.info(f"Automated PDF already exists: {output_path}")
-                return str(output_path)
-
-            # Load syllable database for duration/gap statistics
-            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
-
-            # Find existing phenotype plots
-            plot_paths = self._find_phenotype_plots(f'rank{rank}')
-
-            # Generate example spectrograms using shared function (8 spectrograms)
-            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='automated',
-                                                              rank=rank, overwrite_spectrograms=overwrite_spectrograms)
-
-            # Create PDF using ReportLab canvas
-            c = canvas.Canvas(str(output_path), pagesize=landscape(letter))
-            width, height = landscape(letter)
-
-            # Add content sections
-            self._add_phenotype_header(c, width, height, phenotype_results, f'Automated Labels (Rank {rank})')
-            c.showPage()
-
-            # Add clustering parameters and statistics
-            self._add_clustering_parameters(c, width, height, clustering_metadata)
-            self._add_basic_phenotype_stats(c, width, height, phenotype_results)
-            self._add_syllable_statistics_table(c, width, height, phenotype_results, syllable_stats)
-            self._add_repeat_statistics_table(c, width, height, phenotype_results)
-            c.showPage()
-
-            # Add phenotype images on new page
-            self._add_phenotype_images(c, width, height, plot_paths)
-            c.showPage()
-
-            # Add spectrogram examples on new page
-            self._add_spectrogram_examples(c, width, height, spec_images, 'automated', phenotype_results, rank)
-
-            # Save PDF
-            c.save()
-
-            logging.info(f"Generated automated phenotype PDF: {output_path}")
-            return str(output_path)
-
-        except Exception as e:
-            logging.error(f"Error generating automated phenotype PDF: {e}")
-            return ""
 
     def _load_syllable_database_stats(self, database_path: str) -> Dict[str, Dict[str, float]]:
         """Load syllable duration and gap statistics from database."""
@@ -459,7 +332,10 @@ class PhenotypePDFGenerator:
 
     def _add_syllable_statistics_table(self, c: canvas.Canvas, width: float, height: float,
                                        phenotype_results: Dict[str, Any], syllable_stats: Dict[str, Dict[str, float]]):
-        """Add syllable statistics table with duration and gap information."""
+        """
+        Add syllable statistics table with syllables as columns, wrapping to new rows if needed.
+        FIXED: Better column organization, table wrapping, and safer DataFrame checks.
+        """
         y_position = height - 320  # Position below basic stats
 
         # Section title
@@ -470,53 +346,95 @@ class PhenotypePDFGenerator:
         # Get syllable counts from phenotype results
         syllable_counts = phenotype_results.get('syllable_counts', {})
 
-        if not syllable_counts:
+        if not syllable_counts or len(syllable_counts) == 0:
             c.setFont("Helvetica", 10)
             c.drawString(50, y_position, "No syllable statistics available")
             return
 
-        # Create syllable stats table
-        table_data = [['Syllable', 'Count', 'Frequency', 'Duration (ms)', 'Pre-gap (ms)', 'Post-gap (ms)']]
-
+        # Filter and sort syllables
+        valid_syllables = [syl for syl in sorted(syllable_counts.keys()) if syl not in ['s', 'z', '-', '']]
         total_syllables = sum(syllable_counts.values())
 
-        for syllable, count in sorted(syllable_counts.items()):
-            if syllable in ['s', 'z', '-', '']:  # Skip non-syllable tokens
-                continue
+        if not valid_syllables or len(valid_syllables) == 0:
+            c.setFont("Helvetica", 10)
+            c.drawString(50, y_position, "No valid syllables found")
+            return
 
-            frequency = count / total_syllables if total_syllables > 0 else 0
+        # Calculate table dimensions
+        max_cols_per_table = 8  # Maximum syllables per table before wrapping
+        col_width = 60
+        row_height = 18
 
-            # Get duration/gap stats if available
-            duration = syllable_stats.get(str(syllable), {}).get('duration_ms', np.nan)
-            pre_gap = syllable_stats.get(str(syllable), {}).get('prev_gap_ms', np.nan)
-            post_gap = syllable_stats.get(str(syllable), {}).get('next_gap_ms', np.nan)
+        # Split syllables into chunks for multiple tables if needed
+        syllable_chunks = [valid_syllables[i:i + max_cols_per_table]
+                           for i in range(0, len(valid_syllables), max_cols_per_table)]
 
-            table_data.append([
-                str(syllable),
-                str(count),
-                f"{frequency:.3f}",
-                f"{duration:.1f}" if not np.isnan(duration) else "N/A",
-                f"{pre_gap:.1f}" if not np.isnan(pre_gap) else "N/A",
-                f"{post_gap:.1f}" if not np.isnan(post_gap) else "N/A"
-            ])
+        current_y = y_position
 
-        # Draw syllable stats table
-        self._draw_table(c, table_data, x=50, y=y_position, col_widths=[60, 60, 80, 80, 80, 80])
+        for chunk_idx, syllable_chunk in enumerate(syllable_chunks):
+            # Create table data with syllables as columns
+            table_data = [
+                ['Metric'] + [str(syl) for syl in syllable_chunk],  # Header row
+                ['Count'] + [str(syllable_counts.get(syl, 0)) for syl in syllable_chunk],
+                ['Frequency'] + [
+                    f"{syllable_counts.get(syl, 0) / total_syllables:.3f}" if total_syllables > 0 else "0.000" for syl
+                    in syllable_chunk]
+            ]
+
+            # Add duration and gap statistics if available
+            duration_row = ['Duration (ms)']
+            pre_gap_row = ['Pre-gap (ms)']
+            post_gap_row = ['Post-gap (ms)']
+
+            for syl in syllable_chunk:
+                syl_stat = syllable_stats.get(str(syl), {})
+
+                duration = syl_stat.get('duration_ms', np.nan)
+                duration_row.append(f"{duration:.1f}" if not np.isnan(duration) else "N/A")
+
+                pre_gap = syl_stat.get('prev_gap_ms', np.nan)
+                pre_gap_row.append(f"{pre_gap:.1f}" if not np.isnan(pre_gap) else "N/A")
+
+                post_gap = syl_stat.get('next_gap_ms', np.nan)
+                post_gap_row.append(f"{post_gap:.1f}" if not np.isnan(post_gap) else "N/A")
+
+            table_data.extend([duration_row, pre_gap_row, post_gap_row])
+
+            # Draw the table
+            col_widths = [80] + [col_width] * len(syllable_chunk)  # Wider first column for metric names
+            self._draw_table(c, table_data, x=50, y=current_y, col_widths=col_widths)
+
+            # Move y position down for next table (if any)
+            current_y -= (len(table_data) * row_height + 40)  # Extra space between tables
+
+            # Add continuation label if this isn't the last chunk
+            if chunk_idx < len(syllable_chunks) - 1:
+                c.setFont("Helvetica", 9)
+                c.drawString(50, current_y + 10, "(continued below)")
+                current_y -= 10
 
     def _add_repeat_statistics_table(self, c: canvas.Canvas, width: float, height: float,
                                      phenotype_results: Dict[str, Any]):
-        """Add repeat pattern statistics table."""
-        y_position = height - 480  # Position below syllable stats
+        """
+        Add repeat pattern statistics table with improved layout.
+        FIXED: Better positioning and formatting, proper DataFrame checks.
+        """
+        y_position = height - 500  # Adjusted position to account for larger syllable table
 
         # Section title
         c.setFont("Helvetica-Bold", 12)
         c.drawString(50, y_position, "Repeat Pattern Statistics:")
         y_position -= 25
 
-        # Get repeat stats from phenotype results
-        repeat_stats = phenotype_results.get('repeat_stats', {})
+        # Get repeat counts DataFrame
+        repeat_counts = phenotype_results.get('repeat_counts')
+        has_repeat_data = (repeat_counts is not None and
+                           not (hasattr(repeat_counts, 'empty') and repeat_counts.empty))
 
-        if not repeat_stats:
+        # Check for basic repeat boolean
+        has_repeat_bool = phenotype_results.get('repeat_bool', False)
+
+        if not has_repeat_data and not has_repeat_bool:
             c.setFont("Helvetica", 10)
             c.drawString(50, y_position, "No repeat pattern statistics available")
             return
@@ -525,16 +443,16 @@ class PhenotypePDFGenerator:
         basic_repeat_data = [
             ['Repeat Bool', 'Dyad Bool', 'Num Dyads', 'Num Longer Reps', 'Mean Length', 'Median Length', 'Std Dev'],
             [
-                str(repeat_stats.get('has_repeats', 'N/A')),
-                str(repeat_stats.get('has_dyads', 'N/A')),
-                str(repeat_stats.get('num_dyads', 'N/A')),
-                str(repeat_stats.get('num_longer_repeats', 'N/A')),
-                f"{repeat_stats.get('mean_repeat_length', np.nan):.2f}" if not np.isnan(
-                    repeat_stats.get('mean_repeat_length', np.nan)) else "N/A",
-                f"{repeat_stats.get('median_repeat_length', np.nan):.1f}" if not np.isnan(
-                    repeat_stats.get('median_repeat_length', np.nan)) else "N/A",
-                f"{repeat_stats.get('std_repeat_length', np.nan):.2f}" if not np.isnan(
-                    repeat_stats.get('std_repeat_length', np.nan)) else "N/A"
+                str(phenotype_results.get('repeat_bool', False)),
+                str(phenotype_results.get('dyad_bool', False)),
+                str(phenotype_results.get('num_dyad', 0)),
+                str(phenotype_results.get('num_longer_reps', 0)),
+                f"{phenotype_results.get('mean_repeat_syls', np.nan):.2f}" if not np.isnan(
+                    phenotype_results.get('mean_repeat_syls', np.nan)) else "N/A",
+                f"{phenotype_results.get('median_repeat_syls', np.nan):.1f}" if not np.isnan(
+                    phenotype_results.get('median_repeat_syls', np.nan)) else "N/A",
+                f"{phenotype_results.get('var_repeat_syls', np.nan):.2f}" if not np.isnan(
+                    phenotype_results.get('var_repeat_syls', np.nan)) else "N/A"
             ]
         ]
 
@@ -542,32 +460,30 @@ class PhenotypePDFGenerator:
         self._draw_table(c, basic_repeat_data, x=50, y=y_position, col_widths=[60, 60, 60, 80, 70, 70, 60])
         y_position -= (len(basic_repeat_data) * 20 + 30)
 
-        # Detailed repeat counts if available
-        repeat_counts = repeat_stats.get('repeat_length_counts', {})
-        if repeat_counts:
+        # Detailed repeat counts if available (FIXED: proper DataFrame check)
+        if has_repeat_data:
             c.setFont("Helvetica-Bold", 10)
             c.drawString(50, y_position, "Detailed Repeat Counts:")
             y_position -= 20
 
+            # Convert DataFrame to table format with syllables as columns
+            syllables = list(repeat_counts.columns)[:6]  # Limit to 6 syllables for space
+            repeat_lengths = list(repeat_counts.index)[:8]  # Limit to 8 lengths for space
+
             # Create detailed counts table
-            detailed_data = [['Length'] + list(repeat_counts.keys())[:6]]  # Limit to 6 syllable types for space
+            detailed_data = [['Length'] + [str(syl) for syl in syllables]]
 
-            # Get all lengths that have counts
-            all_lengths = set()
-            for syllable_counts in repeat_counts.values():
-                all_lengths.update(syllable_counts.keys())
-
-            # Add rows for each length
-            for length in sorted(all_lengths)[:8]:  # Limit to 8 lengths for space
+            for length in repeat_lengths:
                 row = [str(length)]
-                for syllable in list(repeat_counts.keys())[:6]:
-                    count = repeat_counts[syllable].get(length, 0)
+                for syl in syllables:
+                    count = repeat_counts.loc[length, syl] if syl in repeat_counts.columns else 0
                     row.append(str(count))
                 detailed_data.append(row)
 
             # Draw detailed counts table
-            col_widths = [50] + [50] * min(6, len(repeat_counts))
+            col_widths = [50] + [50] * len(syllables)
             self._draw_table(c, detailed_data, x=50, y=y_position, col_widths=col_widths)
+
 
     def _find_phenotype_plots(self, rank_str: str) -> PhenotypePDFPaths:
         """Find existing phenotype plot images."""
@@ -639,9 +555,13 @@ class PhenotypePDFGenerator:
             logging.error(f"Error generating example spectrograms: {e}")
             return []
 
-    def _add_phenotype_header(self, c: canvas.Canvas, width: float, height: float,
-                              phenotype_results: Dict[str, Any], title: str):
-        """Add header section with bird info and analysis type."""
+    def _phenotype_header(self, c: canvas.Canvas, width: float, height: float,
+                              phenotype_results: Dict[str, Any], title: str,
+                              clustering_metadata: Dict[str, Any] = None):
+        """
+        Add header section with bird info, analysis type, and clustering info if automated.
+        ENHANCED: Clustering parameters moved to title page.
+        """
         # Main title
         c.setFont("Helvetica-Bold", 16)
         title_width = c.stringWidth(title, "Helvetica-Bold", 16)
@@ -659,47 +579,56 @@ class PhenotypePDFGenerator:
         timestamp_width = c.stringWidth(timestamp, "Helvetica", 10)
         c.drawString((width - timestamp_width) / 2, height - 95, timestamp)
 
-    def _add_clustering_parameters(self, c: canvas.Canvas, width: float, height: float,
-                                   clustering_metadata: Dict[str, Any]):
-        """Add clustering parameters table for automated results."""
-        y_position = height - 150
+        # Add clustering parameters if this is an automated analysis
+        if clustering_metadata is not None:
+            y_pos = height - 130
 
-        # Section title
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y_position, "Clustering Parameters:")
-        y_position -= 25
+            # Clustering parameters section
+            c.setFont("Helvetica-Bold", 12)
+            cluster_title = "Clustering Parameters:"
+            cluster_width = c.stringWidth(cluster_title, "Helvetica-Bold", 12)
+            c.drawString((width - cluster_width) / 2, y_pos, cluster_title)
+            y_pos -= 25
 
-        # Create parameters table data
-        params_data = [
-            ['Parameter', 'Value', 'Parameter', 'Value'],
-            ['Method', str(clustering_metadata.get('clustering_method', 'hdbscan')),
-             'N Neighbors', str(clustering_metadata.get('n_neighbors', 'N/A'))],
-            ['Min Distance', str(clustering_metadata.get('min_dist', 'N/A')),
-             'Metric', str(clustering_metadata.get('metric', 'euclidean'))],
-            ['Min Cluster Size', str(clustering_metadata.get('min_cluster_size', 'N/A')),
-             'Min Samples', str(clustering_metadata.get('min_samples', 'N/A'))]
-        ]
+            # Parameters in a compact format
+            c.setFont("Helvetica", 10)
+            params_text = [
+                f"Method: {clustering_metadata.get('clustering_method', 'hdbscan')} | "
+                f"N Neighbors: {clustering_metadata.get('n_neighbors', 'N/A')} | "
+                f"Min Distance: {clustering_metadata.get('min_dist', 'N/A')}",
 
-        # Draw parameters table
-        self._draw_table(c, params_data, x=50, y=y_position, col_widths=[80, 80, 80, 80])
-        y_position -= (len(params_data) * 20 + 30)
+                f"Min Cluster Size: {clustering_metadata.get('min_cluster_size', 'N/A')} | "
+                f"Min Samples: {clustering_metadata.get('min_samples', 'N/A')} | "
+                f"Metric: {clustering_metadata.get('metric', 'euclidean')}"
+            ]
 
-        # Quality metrics section
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(50, y_position, "Clustering Quality Metrics:")
-        y_position -= 25
+            for param_line in params_text:
+                param_width = c.stringWidth(param_line, "Helvetica", 10)
+                c.drawString((width - param_width) / 2, y_pos, param_line)
+                y_pos -= 15
 
-        quality_data = [
-            ['Metric', 'Value', 'Metric', 'Value'],
-            ['Composite Score', f"{clustering_metadata.get('composite_score', np.nan):.3f}",
-             'NMI', f"{clustering_metadata.get('nmi', np.nan):.3f}"],
-            ['Silhouette', f"{clustering_metadata.get('silhouette', np.nan):.3f}",
-             'DBI', f"{clustering_metadata.get('dbi', np.nan):.3f}"],
-            ['N Clusters', str(clustering_metadata.get('n_clusters', 'N/A')), '', '']
-        ]
+            # Quality metrics
+            y_pos -= 10
+            c.setFont("Helvetica-Bold", 11)
+            quality_title = "Quality Metrics:"
+            quality_width = c.stringWidth(quality_title, "Helvetica-Bold", 11)
+            c.drawString((width - quality_width) / 2, y_pos, quality_title)
+            y_pos -= 20
 
-        # Draw quality metrics table
-        self._draw_table(c, quality_data, x=50, y=y_position, col_widths=[80, 80, 80, 80])
+            c.setFont("Helvetica", 10)
+            metrics_text = [
+                f"Composite Score: {clustering_metadata.get('composite_score', np.nan):.3f} | "
+                f"NMI: {clustering_metadata.get('nmi', np.nan):.3f} | "
+                f"Silhouette: {clustering_metadata.get('silhouette', np.nan):.3f}",
+
+                f"DBI: {clustering_metadata.get('dbi', np.nan):.3f} | "
+                f"N Clusters: {clustering_metadata.get('n_clusters', 'N/A')}"
+            ]
+
+            for metric_line in metrics_text:
+                metric_width = c.stringWidth(metric_line, "Helvetica", 10)
+                c.drawString((width - metric_width) / 2, y_pos, metric_line)
+                y_pos -= 15
 
     def _add_basic_phenotype_stats(self, c: canvas.Canvas, width: float, height: float,
                                    phenotype_results: Dict[str, Any]):
@@ -723,83 +652,6 @@ class PhenotypePDFGenerator:
 
         # Draw basic stats table
         self._draw_table(c, stats_data, x=50, y=y_position, col_widths=[70, 70, 70, 70, 70])
-
-    def _add_phenotype_images(self, c: canvas.Canvas, width: float, height: float,
-                              plot_paths: PhenotypePDFPaths):
-        """Add phenotype analysis images on a new page."""
-        image_width = 250
-        image_height = 200
-        spacing = 20
-
-        y_position = height - 100
-
-        # Add transition matrices
-        if plot_paths.transition_counts_img and os.path.exists(plot_paths.transition_counts_img):
-            c.drawImage(plot_paths.transition_counts_img, x=50, y=y_position - image_height,
-                        width=image_width, height=image_height)
-
-        if plot_paths.transition_matrix_img and os.path.exists(plot_paths.transition_matrix_img):
-            c.drawImage(plot_paths.transition_matrix_img, x=50 + image_width + spacing, y=y_position - image_height,
-                        width=image_width, height=image_height)
-
-        # Move to next row
-        y_position -= (image_height + spacing + 50)
-
-        # Add repeat patterns
-        if plot_paths.repeat_patterns_img and os.path.exists(plot_paths.repeat_patterns_img):
-            # Center the repeat pattern image
-            x_center = (width - image_width) / 2
-            c.drawImage(plot_paths.repeat_patterns_img, x=x_center, y=y_position - image_height,
-                        width=image_width, height=image_height)
-            y_position -= (image_height + spacing)
-
-        # Add vocabulary comparison if available
-        if plot_paths.vocabulary_comparison_img and os.path.exists(plot_paths.vocabulary_comparison_img):
-            x_center = (width - image_width) / 2
-            c.drawImage(plot_paths.vocabulary_comparison_img, x=x_center, y=y_position - image_height,
-                        width=image_width, height=image_height)
-
-    def _add_spectrogram_examples(self, c: canvas.Canvas, width: float, height: float,
-                                  spec_paths: List[str], label_type: str,
-                                  phenotype_results: Dict[str, Any], rank: int = 0):
-        """Add example spectrograms in a 4x2 grid with legend."""
-        if not spec_paths:
-            return
-
-        # Image dimensions for 4x2 grid
-        image_width = 320
-        image_height = 120
-        spacing_x = 20
-        spacing_y = 15
-
-        # Legend dimensions
-        legend_width = 150
-        legend_x = 50 + (2 * image_width) + (2 * spacing_x) + 20  # Right side of spectrograms
-
-        # Title
-        c.setFont("Helvetica-Bold", 14)
-        title_text = "Example Spectrograms:"
-        c.drawString(50, height - 50, title_text)
-
-        # Get all possible labels for legend
-        all_labels = self._get_all_possible_labels(phenotype_results, label_type, rank)
-
-        # Add spectrograms in 4x2 grid (4 rows, 2 columns)
-        start_y = height - 100
-
-        for row in range(4):  # 4 rows
-            y_position = start_y - (row * (image_height + spacing_y))
-
-            for col in range(2):  # 2 columns
-                spec_idx = row * 2 + col
-                if spec_idx < len(spec_paths) and os.path.exists(spec_paths[spec_idx]):
-                    x_position = 50 + col * (image_width + spacing_x)
-                    c.drawImage(spec_paths[spec_idx], x=x_position, y=y_position - image_height,
-                                width=image_width, height=image_height)
-
-            # Add legend on the first row
-            if row == 0:
-                self._add_spectrogram_legend(c, all_labels, legend_x, y_position - image_height, legend_width)
 
     def _get_all_possible_labels(self, phenotype_results: Dict[str, Any],
                                  label_type: str, rank: int = 0) -> List[str]:
@@ -832,58 +684,6 @@ class PhenotypePDFGenerator:
         except Exception as e:
             logging.error(f"Error getting possible labels: {e}")
             return []
-
-    def _add_spectrogram_legend(self, c: canvas.Canvas, labels: List[str],
-                                legend_x: float, legend_y: float, legend_width: float):
-        """Add vertical legend showing label-to-color mapping for dual-labeled spectrograms."""
-        if not labels:
-            return
-
-        # Legend styling
-        box_size = 12
-        text_height = 15
-        legend_font_size = 10
-
-        c.setFont("Helvetica-Bold", legend_font_size)
-
-        # Legend title
-        current_y = legend_y + 50
-        c.drawString(legend_x, current_y, "Dual Label Legend:")
-        current_y -= 20
-
-        c.setFont("Helvetica", 8)
-        c.drawString(legend_x, current_y, "Manual labels: above spectrograms")
-        current_y -= 12
-        c.drawString(legend_x, current_y, "Automated labels: below spectrograms")
-        current_y -= 20
-
-        c.setFont("Helvetica", legend_font_size)
-
-        # Color palette (same as used in spectrograms)
-        colors = plt.cm.Set1(np.linspace(0, 1, 10))
-
-        # Add each label with its color
-        for i, label in enumerate(labels[:15]):  # Limit to 15 to fit on page
-            # Calculate color (same logic as in spectrogram creation)
-            color_idx = hash(str(label)) % len(colors)
-            color_rgb = colors[color_idx][:3]  # Get RGB values
-
-            # Convert to 0-1 range for ReportLab
-            r, g, b = color_rgb[0], color_rgb[1], color_rgb[2]
-
-            # Draw colored box
-            c.setFillColorRGB(r, g, b)
-            c.rect(legend_x, current_y, box_size, box_size, fill=1, stroke=1)
-
-            # Add label text
-            c.setFillColorRGB(0, 0, 0)  # Reset to black text
-            c.drawString(legend_x + box_size + 5, current_y + 2, str(label))
-
-            current_y -= text_height
-
-            # Check if we need to continue to next column or stop
-            if current_y < legend_y - 200:  # Limit legend height
-                break
 
     def _draw_table(self, c: canvas.Canvas, table_data: List[List[str]],
                     x: float, y: float, col_widths: List[float]):
@@ -935,6 +735,349 @@ class PhenotypePDFGenerator:
         except Exception as e:
             logging.error(f"Error saving PDF to {output_path}: {e}")
             raise
+
+
+    def generate_manual_phenotype_pdf(self, phenotype_results: Dict[str, Any],
+                                      syllable_database_path: str,
+                                      overwrite: bool = True,
+                                      overwrite_spectrograms: bool = False) -> str:
+        """
+        Generate PDF for manual phenotype analysis.
+        ENHANCED: Now includes all same analyses as automated (transitions, repeats).
+        """
+        try:
+            output_path = self.pdf_output_dir / f'{self.bird_name}_manual_phenotypes.pdf'
+
+            if output_path.exists() and not overwrite:
+                logging.info(f"Manual PDF already exists: {output_path}")
+                return str(output_path)
+
+            # Load syllable database for duration/gap statistics
+            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
+
+            # Find existing phenotype plots (now includes manual plots)
+            plot_paths = self._find_phenotype_plots('manual')
+
+            # Generate example spectrograms
+            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='manual',
+                                                            overwrite_spectrograms=overwrite_spectrograms)
+
+            # Create PDF using ReportLab canvas
+            c = canvas.Canvas(str(output_path), pagesize=landscape(letter))
+            width, height = landscape(letter)
+
+            # Page 1: Header (no clustering info for manual)
+            self._add_phenotype_header(c, width, height, phenotype_results, 'Manual Labels')
+            c.showPage()
+
+            # Page 2: Statistics tables (same structure as automated)
+            self._add_basic_phenotype_stats(c, width, height, phenotype_results)
+            self._add_syllable_statistics_table(c, width, height, phenotype_results, syllable_stats)
+            self._add_repeat_statistics_table(c, width, height, phenotype_results)
+            c.showPage()
+
+            # Page 3: Analysis images (transitions, repeats, vocabulary comparison)
+            self._add_analysis_images_page(c, width, height, plot_paths)
+            c.showPage()
+
+            # Page 4: UMAP comparison (manual vs automated)
+            self._add_umap_comparison_page(c, width, height, rank=0)
+            c.showPage()
+
+            # Page 5: Spectrogram examples
+            self._add_spectrogram_examples_page(c, width, height, spec_images, 'manual', phenotype_results)
+
+            # Save PDF
+            c.save()
+
+            logging.info(f"Generated manual phenotype PDF: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logging.error(f"Error generating manual phenotype PDF: {e}")
+            return ""
+
+
+    def generate_automated_phenotype_pdf(self, phenotype_results: Dict[str, Any],
+                                         clustering_metadata: Dict[str, Any],
+                                         syllable_database_path: str,
+                                         rank: int = 0,
+                                         overwrite: bool = True,
+                                         overwrite_spectrograms: bool = False) -> str:
+        """
+        Generate PDF for automated phenotype analysis.
+        ENHANCED: Clustering info moved to title page, same structure as manual.
+        """
+        try:
+            output_path = self.pdf_output_dir / f'{self.bird_name}_automated_phenotypes_rank{rank}.pdf'
+
+            if output_path.exists() and not overwrite:
+                logging.info(f"Automated PDF already exists: {output_path}")
+                return str(output_path)
+
+            # Load syllable database for duration/gap statistics
+            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
+
+            # Find existing phenotype plots
+            plot_paths = self._find_phenotype_plots(f'rank{rank}')
+
+            # Generate example spectrograms
+            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='automated',
+                                                              rank=rank, overwrite_spectrograms=overwrite_spectrograms)
+
+            # Create PDF using ReportLab canvas
+            c = canvas.Canvas(str(output_path), pagesize=landscape(letter))
+            width, height = landscape(letter)
+
+            # Page 1: Header WITH clustering info
+            self._add_phenotype_header(c, width, height, phenotype_results,
+                                       f'Automated Labels (Rank {rank})', clustering_metadata)
+            c.showPage()
+
+            # Page 2: Statistics tables (same structure as manual)
+            self._add_basic_phenotype_stats(c, width, height, phenotype_results)
+            self._add_syllable_statistics_table(c, width, height, phenotype_results, syllable_stats)
+            self._add_repeat_statistics_table(c, width, height, phenotype_results)
+            c.showPage()
+
+            # Page 3: Analysis images (transitions, repeats, vocabulary comparison)
+            self._add_analysis_images_page(c, width, height, plot_paths)
+            c.showPage()
+
+            # Page 4: UMAP comparison (manual vs automated)
+            self._add_umap_comparison_page(c, width, height, rank=rank)
+            c.showPage()
+
+            # Page 5: Spectrogram examples
+            self._add_spectrogram_examples_page(c, width, height, spec_images, 'automated', phenotype_results, rank)
+
+            # Save PDF
+            c.save()
+
+            logging.info(f"Generated automated phenotype PDF: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logging.error(f"Error generating automated phenotype PDF: {e}")
+            return ""
+
+
+    def _add_analysis_images_page(self, c: canvas.Canvas, width: float, height: float,
+                                  plot_paths: PhenotypePDFPaths):
+        """
+        Add analysis images page with improved layout.
+        FIXED: Repeat matrix on left, vocabulary comparison on right.
+        """
+        # Page title
+        c.setFont("Helvetica-Bold", 14)
+        title_text = "Phenotype Analysis"
+        title_width = c.stringWidth(title_text, "Helvetica-Bold", 14)
+        c.drawString((width - title_width) / 2, height - 50, title_text)
+
+        # Image dimensions
+        large_image_width = 350
+        large_image_height = 280
+        small_image_width = 300
+        small_image_height = 200
+
+        y_start = height - 100
+
+        # Top row: Transition matrices (side by side)
+        if plot_paths.transition_counts_img and os.path.exists(plot_paths.transition_counts_img):
+            c.drawImage(plot_paths.transition_counts_img,
+                        x=50, y=y_start - large_image_height,
+                        width=large_image_width, height=large_image_height)
+
+        if plot_paths.transition_matrix_img and os.path.exists(plot_paths.transition_matrix_img):
+            c.drawImage(plot_paths.transition_matrix_img,
+                        x=50 + large_image_width + 20, y=y_start - large_image_height,
+                        width=large_image_width, height=large_image_height)
+
+        # Bottom row: Repeat patterns (left) and vocabulary comparison (right)
+        y_bottom = y_start - large_image_height - 50
+
+        if plot_paths.repeat_patterns_img and os.path.exists(plot_paths.repeat_patterns_img):
+            c.drawImage(plot_paths.repeat_patterns_img,
+                        x=50, y=y_bottom - small_image_height,
+                        width=small_image_width, height=small_image_height)
+
+        if plot_paths.vocabulary_comparison_img and os.path.exists(plot_paths.vocabulary_comparison_img):
+            c.drawImage(plot_paths.vocabulary_comparison_img,
+                        x=50 + small_image_width + 70, y=y_bottom - small_image_height,
+                        width=small_image_width, height=small_image_height)
+
+
+    def _add_umap_comparison_page(self, c: canvas.Canvas, width: float, height: float, rank: int = 0):
+        """
+        Add UMAP comparison page showing manual vs automated clustering.
+        NEW: Shows both manual and automated UMAP plots side by side.
+        """
+        # Page title
+        c.setFont("Helvetica-Bold", 14)
+        title_text = f"UMAP Embedding Comparison - Manual vs Automated (Rank {rank})"
+        title_width = c.stringWidth(title_text, "Helvetica-Bold", 14)
+        c.drawString((width - title_width) / 2, height - 50, title_text)
+
+        # Image dimensions for side-by-side layout
+        image_width = 350
+        image_height = 300
+        y_position = height - 100
+
+        # Manual UMAP (left side)
+        manual_umap_path = self.bird_path / 'figures' / 'clusters' / 'manual_labels_umap.jpg'
+        if manual_umap_path.exists():
+            c.drawImage(str(manual_umap_path),
+                        x=50, y=y_position - image_height,
+                        width=image_width, height=image_height)
+
+            # Label for manual plot
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(50 + image_width // 2 - 30, y_position - image_height - 20, "Manual Labels")
+
+        # Automated UMAP (right side)
+        clusters_dir = self.bird_path / 'figures' / 'clusters'
+
+        # Look for automated clustering plot matching the rank
+        automated_umap_pattern = f"euclidean_*_clusters.jpg"
+        automated_umap_files = list(clusters_dir.glob(automated_umap_pattern))
+
+        if automated_umap_files:
+            # Use the first matching file (should correspond to rank 0 parameters)
+            automated_umap_path = automated_umap_files[0]
+            c.drawImage(str(automated_umap_path),
+                        x=50 + image_width + 50, y=y_position - image_height,
+                        width=image_width, height=image_height)
+            # Label for automated plot
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(50 + image_width + 50 + image_width // 2 - 40, y_position - image_height - 20,
+                         f"Automated Labels (Rank {rank})")
+
+        # Add descriptive text
+        c.setFont("Helvetica", 10)
+        description_y = y_position - image_height - 60
+        description_text = [
+            "Left: UMAP embedding colored by manual syllable labels",
+            "Right: UMAP embedding colored by automated clustering labels",
+            "Both plots use the same UMAP parameters and feature space for direct comparison"
+        ]
+
+        for i, text in enumerate(description_text):
+            text_width = c.stringWidth(text, "Helvetica", 10)
+            c.drawString((width - text_width) / 2, description_y - (i * 15), text)
+
+
+    def _add_spectrogram_examples_page(self, c: canvas.Canvas, width: float, height: float,
+                                       spec_paths: List[str], label_type: str,
+                                       phenotype_results: Dict[str, Any], rank: int = 0):
+        """
+        Add spectrogram examples page with improved layout and compact legend.
+        FIXED: Better spacing, smaller spectrograms, more compact legend.
+        """
+        if not spec_paths:
+            return
+
+        # Page title
+        c.setFont("Helvetica-Bold", 14)
+        title_text = "Example Spectrograms"
+        c.drawString(50, height - 50, title_text)
+
+        # Adjusted dimensions for better fit
+        image_width = 300  # Reduced from 320
+        image_height = 110  # Reduced from 120
+        spacing_x = 15  # Reduced spacing
+        spacing_y = 10  # Reduced spacing
+
+        # Legend dimensions - more compact
+        legend_width = 120  # Reduced from 150
+        legend_x = 50 + (2 * image_width) + (2 * spacing_x) + 15
+
+        # Get all possible labels for legend
+        all_labels = self._get_all_possible_labels(phenotype_results, label_type, rank)
+
+        # Add spectrograms in 4x2 grid
+        start_y = height - 90  # Moved up slightly
+
+        for row in range(4):
+            y_position = start_y - (row * (image_height + spacing_y))
+
+            for col in range(2):
+                spec_idx = row * 2 + col
+                if spec_idx < len(spec_paths) and os.path.exists(spec_paths[spec_idx]):
+                    x_position = 50 + col * (image_width + spacing_x)
+                    c.drawImage(spec_paths[spec_idx], x=x_position, y=y_position - image_height,
+                                width=image_width, height=image_height)
+
+            # Add compact legend on the first row only
+            if row == 0:
+                self._add_compact_spectrogram_legend(c, all_labels, legend_x, y_position - image_height, legend_width)
+
+
+    def _add_compact_spectrogram_legend(self, c: canvas.Canvas, labels: List[str],
+                                        legend_x: float, legend_y: float, legend_width: float):
+        """
+        Add compact vertical legend for dual-labeled spectrograms.
+        FIXED: More compact layout, better fit within page boundaries.
+        """
+        if not labels:
+            return
+
+        # Compact legend styling
+        box_size = 10  # Reduced from 12
+        text_height = 12  # Reduced from 15
+        legend_font_size = 9  # Reduced from 10
+
+        # Check if legend will fit on page
+        max_labels = min(len(labels), 15)  # Limit labels
+        total_legend_height = 80 + (max_labels * text_height)
+
+        if legend_y - total_legend_height < 50:  # If legend would go off page
+            max_labels = min(max_labels, int((legend_y - 100) / text_height))
+
+        c.setFont("Helvetica-Bold", legend_font_size)
+
+        # Legend title
+        current_y = legend_y + 30  # Reduced spacing
+        c.drawString(legend_x, current_y, "Dual Labels:")
+        current_y -= 15
+
+        c.setFont("Helvetica", 7)  # Smaller font for descriptions
+        c.drawString(legend_x, current_y, "Manual: above")
+        current_y -= 10
+        c.drawString(legend_x, current_y, "Auto: below")
+        current_y -= 15
+
+        c.setFont("Helvetica", legend_font_size)
+
+        # Color palette (same as used in spectrograms)
+        colors = plt.cm.Set1(np.linspace(0, 1, 10))
+
+        # Add each label with its color (limited to fit on page)
+        for i, label in enumerate(labels[:max_labels]):
+            # Calculate color (same logic as in spectrogram creation)
+            color_idx = hash(str(label)) % len(colors)
+            color_rgb = colors[color_idx][:3]
+
+            # Convert to 0-1 range for ReportLab
+            r, g, b = color_rgb[0], color_rgb[1], color_rgb[2]
+
+            # Draw colored box
+            c.setFillColorRGB(r, g, b)
+            c.rect(legend_x, current_y, box_size, box_size, fill=1, stroke=1)
+
+            # Add label text
+            c.setFillColorRGB(0, 0, 0)  # Reset to black text
+            c.drawString(legend_x + box_size + 3, current_y + 2, str(label))
+
+            current_y -= text_height
+
+            # Stop if we're approaching page bottom
+            if current_y < legend_y - 250:
+                break
+
+        # Add "..." if we had to truncate labels
+        if len(labels) > max_labels:
+            c.setFont("Helvetica", 8)
+            c.drawString(legend_x, current_y, f"... and {len(labels) - max_labels} more")
 
 
 def generate_phenotype_pdfs_from_saved_data(bird_path: str,
@@ -1141,7 +1284,7 @@ if __name__ == '__main__':
             continue
 
         try:
-            print("Testing ReportLab Phenotype PDF Generation Pipeline...")
+            print("Testing Phenotype PDF Generation Pipeline...")
 
             # Test loading saved detailed data
             print("\n1. Testing loading of saved detailed phenotype data...")
@@ -1158,7 +1301,7 @@ if __name__ == '__main__':
                 print("✗ No automated phenotype data found")
 
             # Test PDF generation from saved data using ReportLab
-            print("\n2. Testing ReportLab PDF generation from saved detailed data...")
+            print("\n2. Testing PDF generation from saved detailed data...")
             generated_pdfs = generate_phenotype_pdfs_from_saved_data(
                 bird_path=example_bird_path,
                 overwrite=True,
@@ -1166,110 +1309,14 @@ if __name__ == '__main__':
             )
 
             if generated_pdfs:
-                print(f"✓ Generated ReportLab PDFs from saved data: {list(generated_pdfs.keys())}")
+                print(f"✓ Generated PDFs from saved data: {list(generated_pdfs.keys())}")
                 for pdf_type, pdf_path in generated_pdfs.items():
                     print(f"  - {pdf_type}: {pdf_path}")
             else:
-                print("✗ No ReportLab PDFs generated from saved data")
-
-            # # Test batch processing
-            # print("\n3. Testing batch processing...")
-            # example_bird_paths = [example_bird_path]  # Would be multiple paths in real usage
-            #
-            # batch_results = batch_generate_phenotype_pdfs_from_saved_data(
-            #     bird_paths=example_bird_paths,
-            #     overwrite=True,
-            #     overwrite_spectrograms=False
-            # )
-            #
-            # if batch_results:
-            #     print(f"✓ Batch processing completed: {len(
-            # if __name__ == '__main__':
-            #     # Setup logging
-            #     logging.basicConfig(
-            #         level=logging.INFO,
-            #         format='%(asctime)s - %(levelname)s - %(message)s'
-            #     )
-            #
-            #     # Test on example datasets
-            #     test_paths = [
-            #         os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu85bu97'),
-            #         os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or18or24')
-            #     ]
-            #
-            #     for example_bird_path in test_paths:
-            #         if not os.path.exists(example_bird_path):
-            #             print(f"Path does not exist: {example_bird_path}")
-            #             continue
-            #
-            #         try:
-            #             print("Testing ReportLab Phenotype PDF Generation Pipeline...")
-            #
-            #             # Test loading saved detailed data
-            #             print("\n1. Testing loading of saved detailed phenotype data...")
-            #             manual_data, auto_data_list, clustering_data_list = load_detailed_phenotype_data(example_bird_path)
-            #
-            #             if manual_data:
-            #                 print(f"✓ Loaded manual phenotype data with {len(manual_data)} fields")
-            #             else:
-            #                 print("✗ No manual phenotype data found")
-            #
-            #             if auto_data_list:
-            #                 print(f"✓ Loaded {len(auto_data_list)} automated phenotype datasets")
-            #             else:
-            #                 print("✗ No automated phenotype data found")
-            #
-            #             # Test PDF generation from saved data using ReportLab
-            #             print("\n2. Testing ReportLab PDF generation from saved detailed data...")
-            #             generated_pdfs = generate_phenotype_pdfs_from_saved_data(
-            #                 bird_path=example_bird_path,
-            #                 overwrite=True,
-            #                 overwrite_spectrograms=False  # Don't regenerate spectrograms by default
-            #             )
-            #
-            #             if generated_pdfs:
-            #                 print(f"✓ Generated ReportLab PDFs from saved data: {list(generated_pdfs.keys())}")
-            #                 for pdf_type, pdf_path in generated_pdfs.items():
-            #                     print(f"  - {pdf_type}: {pdf_path}")
-            #             else:
-            #                 print("✗ No ReportLab PDFs generated from saved data")
-            #
-            #             # # Test batch processing
-            #             # print("\n3. Testing batch processing...")
-            #             # example_bird_paths = [example_bird_path]  # Would be multiple paths in real usage
-            #             #
-            #             # batch_results = batch_generate_phenotype_pdfs_from_saved_data(
-            #             #     bird_paths=example_bird_paths,
-            #             #     overwrite=True,
-            #             #     overwrite_spectrograms=False
-            #             # )
-            #             #
-            #             # if batch_results:
-            #             #     print(f"✓ Batch processing completed: {len(batch_results)} birds")
-            #             #     for bird_name, pdfs in batch_results.items():
-            #             #         print(f"  - {bird_name}: {len(pdfs)} PDFs generated")
-            #             # else:
-            #             #     print("✗ Batch processing failed")
-            #             #
-            #             #
-            #             # break  # Only test first available dataset
-            #
-            #         except Exception as e:
-            #             print(f"Error during testing: {e}")
-            #             import traceback
-            #
-            #             traceback.print_exc()batch_results)} birds")
-            #     for bird_name, pdfs in batch_results.items():
-            #         print(f"  - {bird_name}: {len(pdfs)} PDFs generated")
-            # else:
-            #     print("✗ Batch processing failed")
-            #
-            #
-            # break  # Only test first available dataset
+                print("✗ No PDFs generated from saved data")
 
         except Exception as e:
             print(f"Error during testing: {e}")
             import traceback
-
             traceback.print_exc()
 
