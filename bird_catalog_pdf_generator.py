@@ -19,12 +19,13 @@ from tools.song_io import get_song_spec, rms_norm, butter_bandpass_filter_sos
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_utils import read_audio_file
 from tools.system_utils import replace_macaw_root
+from pdfs import create_dual_labeled_spectrogram
 
 
 @dataclass
 class CatalogConfig:
     """Configuration for bird catalog PDF generation."""
-    n_spectrograms: int = 100
+    n_spectrograms: int = 30  # Reduced from 100
     spectrograms_per_page: int = 4
     include_manual_labels: bool = True
     include_automated_labels: bool = True
@@ -32,219 +33,6 @@ class CatalogConfig:
     duration: float = 6.0
     page_margin: int = 50
     image_height: int = 150
-
-
-def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int = 0,
-                                    spectrograms_dir: Path = None,
-                                    overwrite: bool = False,
-                                    duration: float = 6.0) -> Optional[str]:
-    """
-    Create spectrogram with both manual and automated labels (shared function).
-
-    This function can be used by both phenotype and catalog PDF generators.
-
-    Args:
-        syl_file: Path to syllable HDF5 file
-        bird_path: Path to bird directory
-        rank: Clustering rank for automated labels
-        spectrograms_dir: Directory to save spectrograms (if None, uses default)
-        overwrite: Whether to overwrite existing spectrograms
-        duration: Spectrogram duration in seconds
-
-    Returns:
-        Path to created spectrogram or None if failed
-    """
-    try:
-        # Set up directories
-        if spectrograms_dir is None:
-            spectrograms_dir = bird_path / 'spectrograms' / 'labelled'
-        spectrograms_dir.mkdir(parents=True, exist_ok=True)
-
-        # Set up spectrogram parameters
-        spec_params = SpectrogramParams()
-        spec_params.max_dur = duration
-
-        with tables.open_file(str(syl_file), 'r') as f:
-            # Read syllable data
-            onsets = f.root.onsets.read()
-            offsets = f.root.offsets.read()
-
-            # Read audio filename
-            audio_filename_raw = f.root.audio_filename.read()
-            if isinstance(audio_filename_raw[0], bytes):
-                audio_filename = audio_filename_raw[0].decode('utf-8')
-            else:
-                audio_filename = str(audio_filename_raw[0])
-
-            # Extract base name for output filename
-            audio_base = Path(audio_filename).stem
-
-            # Check if dual-labeled spectrogram already exists
-            timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'{audio_base}_dual_rank{rank}_{timestamp}.png'
-
-            # Look for existing dual-labeled spectrograms
-            existing_pattern = f"{audio_base}_dual_rank{rank}_*.png"
-            existing_files = list(spectrograms_dir.glob(existing_pattern))
-
-            if existing_files and not overwrite:
-                # Return most recent existing file
-                most_recent = max(existing_files, key=lambda p: p.stat().st_mtime)
-                logging.debug(f"Reusing existing dual spectrogram: {most_recent}")
-                return str(most_recent)
-
-            # Resolve audio file path
-            if not os.path.isfile(audio_filename):
-                audio_filename = replace_macaw_root(audio_filename)
-
-            if not os.path.isfile(audio_filename):
-                logging.warning(f"Audio file not found: {audio_filename}")
-                return None
-
-            # Load manual labels
-            manual_labels = None
-            if hasattr(f.root, 'manual'):
-                manual_raw = f.root.manual.read()
-                manual_labels = np.array([
-                    item.decode('utf-8') if isinstance(item, bytes) else str(item)
-                    for item in manual_raw
-                ])
-
-            # Load automated labels from syllable database
-            automated_labels = None
-            try:
-                syllable_db_path = bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
-                if syllable_db_path.exists():
-                    df = pd.read_csv(syllable_db_path)
-                    song_name = syl_file.name
-                    song_data = df[df['song_file'] == song_name]
-
-                    if not song_data.empty:
-                        cluster_col = f'cluster_rank{rank}_'
-                        cluster_cols = [col for col in song_data.columns if col.startswith(cluster_col)]
-                        if cluster_cols:
-                            labels = song_data[cluster_cols[0]].values
-                            labels = labels[~pd.isna(labels)]
-                            automated_labels = np.array([int(label) if not pd.isna(label) and label != -1 else -1
-                                                         for label in labels])
-            except Exception as e:
-                logging.debug(f"Could not load automated labels: {e}")
-
-            # Skip if no labels available
-            if manual_labels is None and automated_labels is None:
-                logging.debug(f"No labels available for {syl_file}")
-                return None
-
-            # Read and process audio
-            audio, fs = read_audio_file(audio_filename)
-            audio = rms_norm(audio)
-            audio = butter_bandpass_filter_sos(
-                audio,
-                lowcut=spec_params.min_freq,
-                highcut=spec_params.max_freq,
-                fs=fs,
-                order=5
-            )
-
-            # Set time window
-            first_time = max((onsets[0] / 1000 - 0.25), 0.0)
-            last_time = first_time + duration
-
-            # Ensure we don't exceed audio length
-            if len(audio) * (1 / fs) <= last_time:
-                last_time = (len(audio) - 1) * (1 / fs)
-
-            # Generate spectrogram
-            spec, _, t = get_song_spec(
-                t1=first_time,
-                t2=last_time,
-                audio=audio,
-                params=spec_params,
-                fs=fs,
-                downsample=False
-            )
-
-            # Filter syllables within time window
-            time_mask = (onsets >= first_time * 1000) & (onsets <= last_time * 1000)
-            syl_onsets = onsets[time_mask]
-            syl_offsets = offsets[time_mask]
-
-            # Filter labels to match syllables in time window
-            manual_syl_labels = None
-            automated_syl_labels = None
-
-            if manual_labels is not None:
-                manual_syl_labels = manual_labels[time_mask] if len(manual_labels) == len(onsets) else manual_labels[
-                    :len(syl_onsets)]
-
-            if automated_labels is not None:
-                automated_syl_labels = automated_labels[time_mask] if len(automated_labels) == len(
-                    onsets) else automated_labels[:len(syl_onsets)]
-
-            if len(syl_onsets) <= 1:
-                return None
-
-            # Create spectrogram plot
-            fig, ax = plt.subplots(figsize=(9, 3))
-            ax.imshow(spec, aspect='auto', origin='lower')
-            ax.set_yticks([])
-
-            # Color palette for labels
-            colors = plt.cm.Set1(np.linspace(0, 1, 10))
-            font_size = 8
-
-            # Add syllable labels - manual on top, automated below
-            for i, (onset, offset) in enumerate(zip(syl_onsets, syl_offsets)):
-                label_x = (onset / (duration * 1000)) * spec.shape[1]
-
-                # Add manual label (on top, higher position)
-                if manual_syl_labels is not None and i < len(manual_syl_labels):
-                    manual_label = manual_syl_labels[i]
-                    if manual_label not in ['-', '', 's', 'z']:
-                        color_idx = hash(str(manual_label)) % len(colors)
-                        ax.text(label_x, -10, str(manual_label),
-                                color='black', fontsize=font_size, ha='center', va='top',
-                                bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                          alpha=0.7, boxstyle='round'))
-
-                # Add automated label (below manual, lower position)
-                if automated_syl_labels is not None and i < len(automated_syl_labels):
-                    auto_label = automated_syl_labels[i]
-                    if auto_label != -1:  # Skip noise labels
-                        color_idx = hash(str(auto_label)) % len(colors)
-                        ax.text(label_x, -25, str(auto_label),
-                                color='black', fontsize=font_size, ha='center', va='top',
-                                bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                          alpha=0.7, boxstyle='round'))
-
-            # Set time axis
-            time_ticks = np.arange(0, duration + 1)
-            x_ticks = np.linspace(0, spec.shape[1], len(time_ticks))
-            ax.set_xticks(x_ticks)
-            ax.set_xticklabels(time_ticks.astype(int))
-            ax.set_xlabel('Time (s)')
-
-            # Create title indicating which labels are present
-            title_parts = []
-            if manual_labels is not None:
-                title_parts.append("Manual")
-            if automated_labels is not None:
-                title_parts.append(f"Auto(R{rank})")
-            title = f"{' + '.join(title_parts)} Labels - {bird_path.name}"
-            ax.set_title(title)
-
-            # Save spectrogram
-            file_path = spectrograms_dir / filename
-            plt.tight_layout()
-            plt.savefig(file_path, dpi=150, bbox_inches='tight')
-            plt.close(fig)
-
-            return str(file_path)
-
-    except Exception as e:
-        logging.error(f"Error creating dual spectrogram from {syl_file}: {e}")
-        return None
-
 
 class BirdCatalogPDFGenerator:
     """
@@ -269,14 +57,7 @@ class BirdCatalogPDFGenerator:
 
     def generate_catalog_pdf(self, rank: int = 0, overwrite: bool = True) -> str:
         """
-        Generate catalog PDF for specified clustering rank.
-
-        Args:
-            rank: Clustering rank to generate catalog for
-            overwrite: Whether to overwrite existing PDF
-
-        Returns:
-            Path to generated PDF
+        Generate catalog PDF for specified clustering rank (defaults to rank 0).
         """
         try:
             output_path = self.pdf_output_dir / f'{self.bird_name}_catalog_rank{rank}.pdf'
@@ -295,7 +76,7 @@ class BirdCatalogPDFGenerator:
             # Limit to requested number of spectrograms
             syllable_files_with_times = syllable_files_with_times[:self.config.n_spectrograms]
 
-            # Generate or reuse spectrograms
+            # Generate or reuse spectrograms using shared function
             spectrogram_paths = []
             for syl_file, timestamp_info in syllable_files_with_times:
                 spec_path = create_dual_labeled_spectrogram(
@@ -316,34 +97,37 @@ class BirdCatalogPDFGenerator:
             # Create PDF
             self._create_pdf(spectrogram_paths, output_path, rank)
 
-            logging.info(f"Generated catalog PDF: {output_path}")
+            logging.info(f"Generated catalog PDF: {output_path} ({len(spectrogram_paths)} spectrograms)")
             return str(output_path)
 
         except Exception as e:
             logging.error(f"Error generating catalog PDF for rank {rank}: {e}")
             return ""
 
-    def generate_all_rank_catalogs(self, max_ranks: int = 5, overwrite: bool = True) -> Dict[int, str]:
+    def generate_all_rank_catalogs(self, max_ranks: int = 1, overwrite: bool = True) -> Dict[int, str]:
         """
-        Generate catalog PDFs for all available clustering ranks.
-
-        Args:
-            max_ranks: Maximum number of ranks to process
-            overwrite: Whether to overwrite existing PDFs
-
-        Returns:
-            Dictionary mapping rank to generated PDF path
+        Generate catalog PDFs for clustering ranks (defaults to rank 0 only).
         """
         generated_pdfs = {}
 
-        # Check what ranks are available in the syllable database
-        available_ranks = self._get_available_ranks()
+        # Default to rank 0 only for efficiency
+        if max_ranks == 1:
+            try:
+                pdf_path = self.generate_catalog_pdf(rank=0, overwrite=overwrite)
+                if pdf_path:
+                    generated_pdfs[0] = pdf_path
+                    logging.info(f"Generated catalog for rank 0: {pdf_path}")
+            except Exception as e:
+                logging.error(f"Error generating catalog for rank 0: {e}")
 
+            return generated_pdfs
+
+        # Multi-rank processing if specifically requested
+        available_ranks = self._get_available_ranks()
         if not available_ranks:
             logging.warning(f"No clustering ranks found for {self.bird_name}")
             return {}
 
-        # Process each available rank up to max_ranks
         for rank in available_ranks[:max_ranks]:
             try:
                 pdf_path = self.generate_catalog_pdf(rank=rank, overwrite=overwrite)
@@ -737,18 +521,9 @@ class BirdCatalogPDFGenerator:
 
 
 def generate_bird_catalogs(bird_path: str, config: CatalogConfig = None,
-                           max_ranks: int = 5, overwrite: bool = True) -> Dict[int, str]:
+                           max_ranks: int = 1, overwrite: bool = True) -> Dict[int, str]:
     """
-    Convenience function to generate catalog PDFs for a bird.
-
-    Args:
-        bird_path: Path to bird directory
-        config: Catalog configuration (uses defaults if None)
-        max_ranks: Maximum number of ranks to process
-        overwrite: Whether to overwrite existing PDFs
-
-    Returns:
-        Dictionary mapping rank to generated PDF path
+    Convenience function to generate catalog PDFs for a bird (defaults to rank 0 only).
     """
     try:
         generator = BirdCatalogPDFGenerator(bird_path, config)
@@ -759,18 +534,9 @@ def generate_bird_catalogs(bird_path: str, config: CatalogConfig = None,
 
 
 def batch_generate_catalogs(bird_paths: List[str], config: CatalogConfig = None,
-                            max_ranks: int = 5, overwrite: bool = True) -> Dict[str, Dict[int, str]]:
+                            max_ranks: int = 1, overwrite: bool = True) -> Dict[str, Dict[int, str]]:
     """
-    Generate catalog PDFs for multiple birds.
-
-    Args:
-        bird_paths: List of paths to bird directories
-        config: Catalog configuration (uses defaults if None)
-        max_ranks: Maximum number of ranks to process per bird
-        overwrite: Whether to overwrite existing PDFs
-
-    Returns:
-        Dictionary mapping bird names to their generated PDF paths by rank
+    Generate catalog PDFs for multiple birds (defaults to rank 0 only).
     """
     all_catalogs = {}
 
@@ -854,104 +620,48 @@ if __name__ == '__main__':
 
     for dataset_path in test_paths:
         if os.path.exists(dataset_path):
-            print(f"\nTesting Bird Catalog PDF Generation on {os.path.basename(dataset_path)}...")
+            try:  # Added missing try block
+                print(f"\nTesting Bird Catalog PDF Generation on {os.path.basename(dataset_path)}...")
 
-            # Get available birds
-            birds = get_bird_list(dataset_path)
-            if not birds:
-                print(f"No birds found in {dataset_path}")
-                continue
+                # Get available birds
+                birds = get_bird_list(dataset_path)
+                if not birds:
+                    print(f"No birds found in {dataset_path}")
+                    continue
 
-            print(f"Found {len(birds)} birds: {birds}")
+                print(f"Found {len(birds)} birds: {birds[:3]}...")  # Show first 3
 
-            # Test on first bird
-            test_bird = birds[0]
-            bird_path = os.path.join(dataset_path, test_bird)
+                # Test on first bird
+                test_bird = birds[0]
+                bird_path = os.path.join(dataset_path, test_bird)
 
-            print(f"\n1. Testing single bird catalog generation for {test_bird}...")
+                print(f"\n1. Testing catalog generation for {test_bird}...")
 
-            # Create custom config for testing
-            config = CatalogConfig(
-                n_spectrograms=20,  # Reduced for testing
-                spectrograms_per_page=4,
-                include_manual_labels=True,
-                include_automated_labels=True,
-                overwrite_spectrograms=False  # Reuse existing spectrograms
-            )
+                # Create config for testing
+                config = CatalogConfig(
+                    n_spectrograms=10,  # Small number for testing
+                    spectrograms_per_page=4,
+                    overwrite_spectrograms=False  # Reuse existing spectrograms
+                )
 
-            # Generate catalogs
-            catalogs = generate_bird_catalogs(
-                bird_path=bird_path,
-                config=config,
-                max_ranks=3,  # Test first 3 ranks
-                overwrite=True
-            )
+                # Generate catalog (rank 0 only by default)
+                catalogs = generate_bird_catalogs(
+                    bird_path=bird_path,
+                    config=config,
+                    max_ranks=1,  # Only rank 0
+                    overwrite=True
+                )
 
-            if catalogs:
-                print(f"✓ Generated {len(catalogs)} catalog PDFs:")
-                for rank, pdf_path in catalogs.items():
-                    print(f"  - Rank {rank}: {pdf_path}")
-            else:
-                print("✗ No catalog PDFs generated")
+                if catalogs:
+                    print(f"✓ Generated catalog PDF:")
+                    for rank, pdf_path in catalogs.items():
+                        print(f"  - Rank {rank}: {pdf_path}")
+                else:
+                    print("✗ No catalog PDF generated")
 
-            print(f"\n2. Testing batch processing...")
+                break  # Only test first available dataset
 
-            # Test batch processing on first 2 birds
-            test_birds = [os.path.join(dataset_path, bird) for bird in birds[:2]]
-
-            batch_results = batch_generate_catalogs(
-                bird_paths=test_birds,
-                config=config,
-                max_ranks=2,
-                overwrite=True
-            )
-
-            if batch_results:
-                print(f"✓ Batch processing completed for {len(batch_results)} birds:")
-                for bird_name, bird_catalogs in batch_results.items():
-                    print(f"  - {bird_name}: {len(bird_catalogs)} catalogs")
-            else:
-                print("✗ Batch processing failed")
-
-            print("\n" + "=" * 70)
-            print("Bird Catalog PDF Generation Test Complete")
-            print("=" * 70)
-
-            print("\nKey Features Implemented:")
-            print("1. Chronological sorting by audio file timestamps")
-            print("2. Dual-labeled spectrograms (manual + automated)")
-            print("3. Persistent spectrogram storage with reuse")
-            print("4. ReportLab PDF generation with landscape layout")
-            print("5. Separate catalogs per clustering rank")
-            print("6. Configurable spectrogram count and layout")
-            print("7. Title pages with metadata and legends")
-            print("8. Batch processing for multiple birds")
-
-            print("\nFile Structure Created:")
-            print("- [bird]/spectrograms/labelled/[audio]_dual_rank0_[timestamp].png")
-            print("- [bird]/data/pdfs/[bird]_catalog_rank0.pdf")
-            print("- [bird]/data/pdfs/[bird]_catalog_rank1.pdf")
-            print("- etc.")
-
-            print("\nShared Functions:")
-            print("- create_dual_labeled_spectrogram() can be imported by phenotype module")
-            print("- Both modules now use the same spectrogram storage system")
-            print("- Maximum reuse of generated spectrograms across all PDFs")
-
-            print("\nUsage Examples:")
-            print("# Generate catalogs for single bird:")
-            print("catalogs = generate_bird_catalogs('/path/to/bird')")
-            print()
-            print("# Custom configuration:")
-            print("config = CatalogConfig(n_spectrograms=50, spectrograms_per_page=6)")
-            print("catalogs = generate_bird_catalogs('/path/to/bird', config)")
-            print()
-            print("# Batch processing:")
-            print("bird_paths = ['/path/bird1', '/path/bird2']")
-            print("all_catalogs = batch_generate_catalogs(bird_paths)")
-
-            break  # Only test first available dataset
-        else:
-            print(f"Dataset path does not exist: {dataset_path}")
-
-    print("\n🎉 Bird Catalog PDF Generator ready for use!")
+            except Exception as e:  # Now properly paired with try
+                print(f"Error during testing: {e}")
+                import traceback
+                traceback.print_exc()

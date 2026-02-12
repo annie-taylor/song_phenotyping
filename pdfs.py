@@ -107,7 +107,7 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                         if cluster_cols:
                             labels = song_data[cluster_cols[0]].values
                             automated_labels = np.array([
-                                int(label) if not pd.isna(label) and label != -1 else -1
+                                int(label) if not pd.isna(label) else -1
                                 for label in labels
                             ])
             except Exception as e:
@@ -200,12 +200,11 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                     # Add automated label (below spectrogram)
                     if automated_syl_labels is not None and i < len(automated_syl_labels):
                         auto_label = automated_syl_labels[i]
-                        if auto_label != -1:  # Skip noise labels
-                            color_idx = hash(str(auto_label)) % len(colors)
-                            ax.text(label_x_position, -8, str(auto_label),
-                                   color='black', fontsize=font_size, ha='center', va='top',
-                                   bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                            alpha=0.8, boxstyle='round,pad=0.2'))
+                        color_idx = hash(str(auto_label)) % len(colors)
+                        ax.text(label_x_position, -8, str(auto_label),
+                               color='black', fontsize=font_size, ha='center', va='top',
+                               bbox=dict(facecolor=colors[color_idx], edgecolor='black',
+                                        alpha=0.8, boxstyle='round,pad=0.2'))
 
             # Create title indicating which labels are present
             title_parts = []
@@ -437,7 +436,7 @@ class PhenotypePDFGenerator:
             cluster_cols = [col for col in df.columns if col.startswith('cluster_')]
 
             for cluster_col in cluster_cols:
-                cluster_df = df[df[cluster_col].notna() & (df[cluster_col] != -1)]
+                cluster_df = df[df[cluster_col].notna()]
 
                 for label in cluster_df[cluster_col].unique():
                     label_data = cluster_df[cluster_df[cluster_col] == label]
@@ -822,13 +821,13 @@ class PhenotypePDFGenerator:
                     cluster_cols = [col for col in df.columns if col.startswith(cluster_col)]
                     if cluster_cols:
                         unique_labels = df[cluster_cols[0]].dropna().unique()
-                        # Filter out noise labels (-1) and convert to strings
-                        labels = [str(int(label)) for label in unique_labels if label != -1]
+                        # Convert to strings
+                        labels = [str(int(label)) for label in unique_labels ]
                         return sorted(labels, key=lambda x: int(x) if x.isdigit() else float('inf'))
 
                 # Fallback to syllable counts if available
                 syllable_counts = phenotype_results.get('syllable_counts', {})
-                labels = [str(label) for label in syllable_counts.keys() if label != -1]
+                labels = [str(label) for label in syllable_counts.keys()]
                 return sorted(labels, key=lambda x: int(x) if str(x).isdigit() else float('inf'))
         except Exception as e:
             logging.error(f"Error getting possible labels: {e}")
