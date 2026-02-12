@@ -50,67 +50,12 @@ class PhenotypePDFGenerator:
         # Spectrogram parameters
         self.spec_params = SpectrogramParams()
 
-    def generate_manual_phenotype_pdf(self, phenotype_results: Dict[str, Any],
-                                      syllable_database_path: str,
-                                      overwrite: bool = True) -> str:
-        """
-        Generate PDF for manual phenotype analysis.
-
-        Args:
-            phenotype_results: Results from calculate_phenotypes_for_label_type()
-            syllable_database_path: Path to syllable database CSV
-            overwrite: Whether to overwrite existing PDF
-
-        Returns:
-            str: Path to generated PDF
-        """
-        try:
-            output_path = self.pdf_output_dir / f'{self.bird_name}_manual_phenotypes.pdf'
-
-            if output_path.exists() and not overwrite:
-                logging.info(f"Manual PDF already exists: {output_path}")
-                return str(output_path)
-
-            # Load syllable database for duration/gap statistics
-            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
-
-            # Find existing phenotype plots
-            plot_paths = self._find_phenotype_plots('manual')
-
-            # Generate example spectrograms
-            spec_images = self._generate_example_spectrograms(n_specs=4, label_type='manual')
-
-            # Create PDF
-            pdf = FPDF(orientation='L', unit='mm', format='A4')
-            pdf.set_auto_page_break(auto=True, margin=5)
-            pdf.add_page()
-
-            # Add content sections
-            self._add_phenotype_header(pdf, phenotype_results, 'Manual Labels')
-            self._add_basic_phenotype_stats(pdf, phenotype_results)
-            self._add_syllable_statistics_table(pdf, phenotype_results, syllable_stats)
-            self._add_repeat_statistics_table(pdf, phenotype_results)
-            self._add_phenotype_images(pdf, plot_paths)
-            self._add_spectrogram_examples(pdf, spec_images)
-
-            # Save PDF
-            self._save_pdf(pdf, output_path, overwrite)
-
-            # Cleanup temp images
-            self._cleanup_temp_images(spec_images)
-
-            logging.info(f"Generated manual phenotype PDF: {output_path}")
-            return str(output_path)
-
-        except Exception as e:
-            logging.error(f"Error generating manual phenotype PDF: {e}")
-            return ""
-
     def generate_automated_phenotype_pdf(self, phenotype_results: Dict[str, Any],
                                          clustering_metadata: Dict[str, Any],
                                          syllable_database_path: str,
                                          rank: int = 0,
-                                         overwrite: bool = True) -> str:
+                                         overwrite: bool = True,
+                                         overwrite_spectrograms: bool = False) -> str:
         """
         Generate PDF for automated phenotype analysis.
 
@@ -120,6 +65,7 @@ class PhenotypePDFGenerator:
             syllable_database_path: Path to syllable database CSV
             rank: Clustering rank (0 for best)
             overwrite: Whether to overwrite existing PDF
+            overwrite_spectrograms: Whether to regenerate existing spectrograms
 
         Returns:
             str: Path to generated PDF
@@ -137,8 +83,9 @@ class PhenotypePDFGenerator:
             # Find existing phenotype plots
             plot_paths = self._find_phenotype_plots(f'rank{rank}')
 
-            # Generate example spectrograms with automated labels
-            spec_images = self._generate_example_spectrograms(n_specs=4, label_type='automated', rank=rank)
+            # Generate example spectrograms with automated labels (8 instead of 4)
+            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='automated',
+                                                              rank=rank, overwrite_spectrograms=overwrite_spectrograms)
 
             # Create PDF
             pdf = FPDF(orientation='L', unit='mm', format='A4')
@@ -151,20 +98,89 @@ class PhenotypePDFGenerator:
             self._add_basic_phenotype_stats(pdf, phenotype_results)
             self._add_syllable_statistics_table(pdf, phenotype_results, syllable_stats)
             self._add_repeat_statistics_table(pdf, phenotype_results)
+
+            # Add new page for analysis images to prevent cutoff
+            pdf.add_page()
             self._add_phenotype_images(pdf, plot_paths)
-            self._add_spectrogram_examples(pdf, spec_images)
+
+            # Add new page for spectrograms
+            pdf.add_page()
+            self._add_spectrogram_examples(pdf, spec_images, 'automated', phenotype_results, rank)
 
             # Save PDF
             self._save_pdf(pdf, output_path, overwrite)
 
-            # Cleanup temp images
-            self._cleanup_temp_images(spec_images)
+            # Note: Don't cleanup spec_images anymore - they're saved permanently
 
             logging.info(f"Generated automated phenotype PDF: {output_path}")
             return str(output_path)
 
         except Exception as e:
             logging.error(f"Error generating automated phenotype PDF: {e}")
+            return ""
+
+    def generate_manual_phenotype_pdf(self, phenotype_results: Dict[str, Any],
+                                      syllable_database_path: str,
+                                      overwrite: bool = True,
+                                      overwrite_spectrograms: bool = False) -> str:
+        """
+        Generate PDF for manual phenotype analysis.
+
+        Args:
+            phenotype_results: Results from calculate_phenotypes_for_label_type()
+            syllable_database_path: Path to syllable database CSV
+            overwrite: Whether to overwrite existing PDF
+            overwrite_spectrograms: Whether to regenerate existing spectrograms
+
+        Returns:
+            str: Path to generated PDF
+        """
+        try:
+            output_path = self.pdf_output_dir / f'{self.bird_name}_manual_phenotypes.pdf'
+
+            if output_path.exists() and not overwrite:
+                logging.info(f"Manual PDF already exists: {output_path}")
+                return str(output_path)
+
+            # Load syllable database for duration/gap statistics
+            syllable_stats = self._load_syllable_database_stats(syllable_database_path)
+
+            # Find existing phenotype plots
+            plot_paths = self._find_phenotype_plots('manual')
+
+            # Generate example spectrograms (8 instead of 4)
+            spec_images = self._generate_example_spectrograms(n_specs=8, label_type='manual',
+                                                              overwrite_spectrograms=overwrite_spectrograms)
+
+            # Create PDF
+            pdf = FPDF(orientation='L', unit='mm', format='A4')
+            pdf.set_auto_page_break(auto=True, margin=5)
+            pdf.add_page()
+
+            # Add content sections
+            self._add_phenotype_header(pdf, phenotype_results, 'Manual Labels')
+            self._add_basic_phenotype_stats(pdf, phenotype_results)
+            self._add_syllable_statistics_table(pdf, phenotype_results, syllable_stats)
+            self._add_repeat_statistics_table(pdf, phenotype_results)
+
+            # Add new page for analysis images to prevent cutoff
+            pdf.add_page()
+            self._add_phenotype_images(pdf, plot_paths)
+
+            # Add new page for spectrograms
+            pdf.add_page()
+            self._add_spectrogram_examples(pdf, spec_images, 'manual', phenotype_results)
+
+            # Save PDF
+            self._save_pdf(pdf, output_path, overwrite)
+
+            # Note: Don't cleanup spec_images anymore - they're saved permanently
+
+            logging.info(f"Generated manual phenotype PDF: {output_path}")
+            return str(output_path)
+
+        except Exception as e:
+            logging.error(f"Error generating manual phenotype PDF: {e}")
             return ""
 
     def _load_syllable_database_stats(self, database_path: str) -> Dict[str, Dict[str, float]]:
@@ -241,13 +257,18 @@ class PhenotypePDFGenerator:
             logging.error(f"Error finding phenotype plots: {e}")
             return PhenotypePDFPaths("", "", "")
 
-    def _generate_example_spectrograms(self, n_specs: int = 4,
+    def _generate_example_spectrograms(self, n_specs: int = 8,
                                        label_type: str = 'manual',
-                                       rank: int = 0) -> List[str]:
+                                       rank: int = 0,
+                                       overwrite_spectrograms: bool = False) -> List[str]:
         """Generate example spectrograms with phenotype labels."""
         spec_paths = []
 
         try:
+            # Create persistent spectrograms directory
+            spectrograms_dir = self.bird_path / 'spectrograms' / 'labelled'
+            spectrograms_dir.mkdir(parents=True, exist_ok=True)
+
             # Get syllable files
             syllable_dir = self.bird_path / 'data' / 'syllables'
             if not syllable_dir.exists():
@@ -265,13 +286,24 @@ class PhenotypePDFGenerator:
 
             for i, syl_file in enumerate(sampled_files):
                 try:
-                    spec_path = self._create_phenotype_spectrogram(
-                        syl_file, label_type, rank, i
+                    # Check if spectrogram already exists
+                    existing_spec_path = self._get_existing_spectrogram_path(
+                        syl_file, label_type, rank, spectrograms_dir
                     )
-                    if spec_path:
-                        spec_paths.append(spec_path)
+
+                    if existing_spec_path and not overwrite_spectrograms:
+                        # Reuse existing spectrogram
+                        logging.debug(f"Reusing existing spectrogram: {existing_spec_path}")
+                        spec_paths.append(existing_spec_path)
+                    else:
+                        # Create new spectrogram
+                        spec_path = self._create_phenotype_spectrogram(
+                            syl_file, label_type, rank, i, spectrograms_dir
+                        )
+                        if spec_path:
+                            spec_paths.append(spec_path)
                 except Exception as e:
-                    logging.error(f"Error creating spectrogram for {syl_file}: {e}")
+                    logging.error(f"Error processing spectrogram for {syl_file}: {e}")
                     continue
 
         except Exception as e:
@@ -279,11 +311,46 @@ class PhenotypePDFGenerator:
 
         return spec_paths
 
+    def _get_existing_spectrogram_path(self, syl_file: Path, label_type: str,
+                                       rank: int, spectrograms_dir: Path) -> Optional[str]:
+        """Check if spectrogram already exists for this syllable file."""
+        try:
+            # Get the base audio filename from the syllable file
+            with tables.open_file(str(syl_file), 'r') as f:
+                audio_filename_raw = f.root.audio_filename.read()
+                if isinstance(audio_filename_raw[0], bytes):
+                    audio_filename = audio_filename_raw[0].decode('utf-8')
+                else:
+                    audio_filename = str(audio_filename_raw[0])
+
+                # Extract base name without extension
+                audio_base = Path(audio_filename).stem
+
+                # Create expected filename pattern
+                if label_type == 'manual':
+                    expected_pattern = f"{audio_base}_manual_*.png"
+                else:
+                    expected_pattern = f"{audio_base}_automated_rank{rank}_*.png"
+
+                # Look for existing files matching this pattern
+                existing_files = list(spectrograms_dir.glob(expected_pattern))
+
+                if existing_files:
+                    # Return the most recent one
+                    most_recent = max(existing_files, key=lambda p: p.stat().st_mtime)
+                    return str(most_recent)
+
+        except Exception as e:
+            logging.debug(f"Error checking for existing spectrogram: {e}")
+
+        return None
+
     def _create_phenotype_spectrogram(self, syl_file: Path,
                                       label_type: str, rank: int,
-                                      file_idx: int, duration: float = 6.0) -> Optional[str]:
+                                      file_idx: int, spectrograms_dir: Path,
+                                      duration: float = 6.0) -> Optional[str]:
         """Create spectrogram with phenotype labels."""
-        self.spec_params.max_dur = duration  # TODO this could cause errors later, but is preventing full song spec now
+        self.spec_params.max_dur = duration
         try:
             with tables.open_file(str(syl_file), 'r') as f:
                 # Read syllable data
@@ -296,6 +363,9 @@ class PhenotypePDFGenerator:
                     audio_filename = audio_filename_raw[0].decode('utf-8')
                 else:
                     audio_filename = str(audio_filename_raw[0])
+
+                # Extract base name for output filename
+                audio_base = Path(audio_filename).stem
 
                 # Resolve audio file path
                 if not os.path.isfile(audio_filename):
@@ -314,9 +384,30 @@ class PhenotypePDFGenerator:
                         for item in manual_raw
                     ])
                 elif label_type == 'automated':
-                    # For automated, we'd need to load from syllable database
-                    # This is more complex - for now, create placeholder
-                    labels = np.array([f'C{i % 5}' for i in range(len(onsets))])
+                    # Load from syllable database using clustering labels
+                    try:
+                        syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
+                        if syllable_db_path.exists():
+                            df = pd.read_csv(syllable_db_path)
+                            # Find the song file in the database
+                            song_name = syl_file.name
+                            song_data = df[df['song_file'] == song_name]
+
+                            if not song_data.empty:
+                                # Get clustering labels for this rank
+                                cluster_col = f'cluster_rank{rank}_'
+                                cluster_cols = [col for col in song_data.columns if col.startswith(cluster_col)]
+                                if cluster_cols:
+                                    # Use the first matching cluster column
+                                    labels = song_data[cluster_cols[0]].values
+                                    labels = labels[~pd.isna(labels)]  # Remove NaN values
+                                    # Convert to integers and remove the 'C' prefix that was mentioned
+                                    labels = np.array([int(label) if not pd.isna(label) and label != -1 else -1
+                                                       for label in labels])
+                    except Exception as e:
+                        logging.debug(f"Could not load automated labels from database: {e}")
+                        # Fallback to placeholder labels
+                        labels = np.array([i % 5 for i in range(len(onsets))])
 
                 if labels is None or len(labels) == 0:
                     return None
@@ -354,7 +445,7 @@ class PhenotypePDFGenerator:
                 time_mask = (onsets >= first_time * 1000) & (onsets <= last_time * 1000)
                 syl_onsets = onsets[time_mask]
                 syl_offsets = offsets[time_mask]
-                syl_labels = labels[time_mask]
+                syl_labels = labels[time_mask] if len(labels) == len(onsets) else labels[:len(syl_onsets)]
 
                 if len(syl_onsets) <= 1:
                     return None
@@ -364,12 +455,13 @@ class PhenotypePDFGenerator:
                 ax.imshow(spec, aspect='auto', origin='lower')
                 ax.set_yticks([])
 
-                # Add syllable labels
+                # Add syllable labels ABOVE the spectrogram boundary
                 font_size = 8
                 colors = plt.cm.Set1(np.linspace(0, 1, 10))  # Color palette
 
                 for i, (onset, offset, label) in enumerate(zip(syl_onsets, syl_offsets, syl_labels)):
-                    if label in ['-', '', 's', 'z']:  # Skip non-syllable tokens
+                    if label in ['-', '', 's', 'z'] or (
+                            isinstance(label, (int, float)) and label < 0):  # Skip non-syllable tokens
                         continue
 
                     label_x = (onset / (duration * 1000)) * spec.shape[1]
@@ -377,7 +469,8 @@ class PhenotypePDFGenerator:
                     # Choose color based on label
                     color_idx = hash(str(label)) % len(colors)
 
-                    ax.text(label_x, spec.shape[0] + 20, str(label),
+                    # Position labels ABOVE the spectrogram (negative y coordinate)
+                    ax.text(label_x, -15, str(label),
                             color='black', fontsize=font_size, ha='center', va='top',
                             bbox=dict(facecolor=colors[color_idx], edgecolor='black',
                                       alpha=0.7, boxstyle='round'))
@@ -390,10 +483,14 @@ class PhenotypePDFGenerator:
                 ax.set_xlabel('Time (s)')
                 ax.set_title(f'{label_type.title()} Labels - {self.bird_name}')
 
-                # Save spectrogram
-                timestamp = pd.Timestamp.now().strftime('%H%M%S')
-                filename = f'phenotype_spec_{label_type}_{rank}_{file_idx}_{timestamp}.png'
-                file_path = self.temp_dir / filename
+                # Create output filename with timestamp
+                timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+                if label_type == 'manual':
+                    filename = f'{audio_base}_manual_{timestamp}.png'
+                else:
+                    filename = f'{audio_base}_automated_rank{rank}_{timestamp}.png'
+
+                file_path = spectrograms_dir / filename
 
                 plt.tight_layout()
                 plt.savefig(file_path, dpi=150, bbox_inches='tight')
@@ -423,8 +520,8 @@ class PhenotypePDFGenerator:
 
         pdf.set_font("Arial", size=7)
 
-        # Parameters table
-        col_width = 30
+        # Parameters table with wider columns
+        col_width = 35  # Increased from 30
         row_height = 4
 
         params = [
@@ -517,7 +614,7 @@ class PhenotypePDFGenerator:
 
     def _add_syllable_statistics_table(self, pdf: FPDF, phenotype_results: Dict[str, Any],
                                        syllable_stats: Dict[str, Dict[str, float]]):
-        """Add detailed syllable statistics table."""
+        """Add detailed syllable statistics table with improved formatting."""
         pdf.set_font("Arial", size=8, style='B')
         pdf.cell(0, 5, "Syllable Statistics:", ln=True)
         pdf.ln(2)
@@ -537,15 +634,16 @@ class PhenotypePDFGenerator:
         syllables = sorted(syl_counts.keys())
         total_syllables = sum(syl_counts.values())
 
-        # Calculate layout parameters
-        column_width = 12
+        # Calculate layout parameters - wider first column for row labels
+        first_column_width = 18  # Increased from 12 to accommodate longer labels
+        column_width = 10  # Slightly smaller data columns to compensate
         row_height = 3
-        max_columns_per_row = int((pdf.w - 20) / column_width)
+        max_columns_per_row = int((pdf.w - 20 - first_column_width) / column_width)
 
         # Helper function to print table rows
         def print_syllable_row(row_label: str, data_func, format_func=lambda x: str(x), start_idx: int = 0):
-            pdf.cell(column_width, row_height, row_label, border=1, align='C')
-            end_idx = min(start_idx + max_columns_per_row - 1, len(syllables))  # -1 for label column
+            pdf.cell(first_column_width, row_height, row_label, border=1, align='C')
+            end_idx = min(start_idx + max_columns_per_row, len(syllables))
 
             for i in range(start_idx, end_idx):
                 syl = syllables[i]
@@ -555,9 +653,12 @@ class PhenotypePDFGenerator:
             pdf.ln()
 
         # Print data in chunks if there are too many syllables
-        for start_idx in range(0, len(syllables), max_columns_per_row - 1):
+        for start_idx in range(0, len(syllables), max_columns_per_row):
             if start_idx > 0:
                 pdf.ln(2)  # Add space between chunks
+                # Check if we need a new page
+                if pdf.get_y() > pdf.h - 30:  # If near bottom of page
+                    pdf.add_page()
 
             # Syllable names
             print_syllable_row('Syllable', lambda syl: syl, start_idx=start_idx)
@@ -638,6 +739,11 @@ class PhenotypePDFGenerator:
             syllables = list(repeat_counts.columns)
             repeat_lengths = list(repeat_counts.index)
 
+            # Check if table will fit on current page
+            table_height = (len(repeat_lengths) + 1) * row_height + 10
+            if pdf.get_y() + table_height > pdf.h - 10:
+                pdf.add_page()
+
             # Header with syllables
             pdf.cell(15, row_height, 'Length', border=1, align='C')
             for syl in syllables:
@@ -655,7 +761,7 @@ class PhenotypePDFGenerator:
         pdf.ln(5)
 
     def _add_phenotype_images(self, pdf: FPDF, plot_paths: PhenotypePDFPaths):
-        """Add phenotype analysis images."""
+        """Add phenotype analysis images on a new page."""
         image_width = 90
         image_height = 70
         spacing = 5
@@ -689,32 +795,128 @@ class PhenotypePDFGenerator:
                       w=image_width, h=image_height)
             pdf.ln(image_height + 10)
 
-    def _add_spectrogram_examples(self, pdf: FPDF, spec_paths: List[str]):
-        """Add example spectrograms in a grid."""
+    def _add_spectrogram_examples(self, pdf: FPDF, spec_paths: List[str],
+                                  label_type: str, phenotype_results: Dict[str, Any], rank: int = 0):
+        """Add example spectrograms in a 4x2 grid with legend."""
         if not spec_paths:
             return
 
-        image_width = 100
-        image_height = 30
-        spacing = 5
+        # Image dimensions for 4x2 grid
+        image_width = 120
+        image_height = 35
+        spacing_x = 10
+        spacing_y = 5
+
+        # Legend dimensions
+        legend_width = 60
+        legend_x = 10 + (2 * image_width) + (2 * spacing_x) + 10  # Right side of spectrograms
 
         pdf.set_font("Arial", size=8, style='B')
         pdf.cell(0, 5, "Example Spectrograms:", ln=True)
         pdf.ln(5)
 
-        # Add spectrograms in pairs (2 columns)
-        for i in range(0, len(spec_paths), 2):
-            # First column
-            if i < len(spec_paths) and os.path.exists(spec_paths[i]):
-                pdf.image(spec_paths[i], x=10, y=pdf.get_y(),
-                          w=image_width, h=image_height)
+        # Get all possible labels for legend
+        all_labels = self._get_all_possible_labels(phenotype_results, label_type, rank)
 
-            # Second column
-            if i + 1 < len(spec_paths) and os.path.exists(spec_paths[i + 1]):
-                pdf.image(spec_paths[i + 1], x=10 + image_width + spacing, y=pdf.get_y(),
-                          w=image_width, h=image_height)
+        # Add spectrograms in 4x2 grid (4 rows, 2 columns)
+        for row in range(4):  # 4 rows
+            y_position = pdf.get_y()
 
-            pdf.ln(image_height + 5)
+            for col in range(2):  # 2 columns
+                spec_idx = row * 2 + col
+                if spec_idx < len(spec_paths) and os.path.exists(spec_paths[spec_idx]):
+                    x_position = 10 + col * (image_width + spacing_x)
+                    pdf.image(spec_paths[spec_idx], x=x_position, y=y_position,
+                              w=image_width, h=image_height)
+
+            # Add legend on the first row
+            if row == 0:
+                self._add_spectrogram_legend(pdf, all_labels, legend_x, y_position, legend_width)
+
+            pdf.ln(image_height + spacing_y)
+
+    def _get_all_possible_labels(self, phenotype_results: Dict[str, Any],
+                                 label_type: str, rank: int = 0) -> List[str]:
+        """Get all possible labels for the legend."""
+        try:
+            if label_type == 'manual':
+                # Get all syllable types from syllable counts
+                syllable_counts = phenotype_results.get('syllable_counts', {})
+                labels = list(syllable_counts.keys())
+                # Filter out non-syllable tokens
+                labels = [label for label in labels if label not in ['s', 'z', '-', '']]
+                return sorted(labels)
+            else:
+                # For automated labels, try to get from syllable database
+                syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
+                if syllable_db_path.exists():
+                    df = pd.read_csv(syllable_db_path)
+                    cluster_col = f'cluster_rank{rank}_'
+                    cluster_cols = [col for col in df.columns if col.startswith(cluster_col)]
+                    if cluster_cols:
+                        unique_labels = df[cluster_cols[0]].dropna().unique()
+                        # Filter out noise labels (-1) and convert to strings
+                        labels = [str(int(label)) for label in unique_labels if label != -1]
+                        return sorted(labels, key=lambda x: int(x) if x.isdigit() else float('inf'))
+
+                # Fallback to syllable counts if available
+                syllable_counts = phenotype_results.get('syllable_counts', {})
+                labels = [str(label) for label in syllable_counts.keys() if label != -1]
+                return sorted(labels, key=lambda x: int(x) if str(x).isdigit() else float('inf'))
+        except Exception as e:
+            logging.error(f"Error getting possible labels: {e}")
+            return []
+
+    def _add_spectrogram_legend(self, pdf: FPDF, labels: List[str],
+                                legend_x: float, legend_y: float, legend_width: float):
+        """Add vertical legend showing label-to-color mapping."""
+        if not labels:
+            return
+
+        # Color palette (same as used in spectrograms)
+        colors = plt.cm.Set1(np.linspace(0, 1, 10))
+
+        # Legend styling
+        box_size = 4
+        text_height = 4
+        legend_font_size = 6
+
+        pdf.set_font("Arial", size=legend_font_size, style='B')
+
+        # Legend title
+        current_y = legend_y
+        pdf.set_xy(legend_x, current_y)
+        pdf.cell(legend_width, text_height, "Label Colors:", ln=False)
+        current_y += text_height + 2
+
+        pdf.set_font("Arial", size=legend_font_size)
+
+        # Add each label with its color
+        for i, label in enumerate(labels[:10]):  # Limit to 10 to match color palette
+            # Calculate color (same logic as in spectrogram creation)
+            color_idx = hash(str(label)) % len(colors)
+            color_rgb = colors[color_idx][:3]  # Get RGB values
+
+            # Convert to 0-255 range for PDF
+            r = int(color_rgb[0] * 255)
+            g = int(color_rgb[1] * 255)
+            b = int(color_rgb[2] * 255)
+
+            # Draw colored box
+            pdf.set_xy(legend_x, current_y)
+            pdf.set_fill_color(r, g, b)
+            pdf.rect(legend_x, current_y, box_size, box_size, 'F')
+
+            # Add label text
+            pdf.set_xy(legend_x + box_size + 2, current_y)
+            pdf.set_text_color(0, 0, 0)  # Reset to black text
+            pdf.cell(legend_width - box_size - 2, text_height, str(label), ln=False)
+
+            current_y += text_height + 1
+
+            # Check if we need to continue to next column or stop
+            if current_y > legend_y + 120:  # Limit legend height
+                break
 
     def _save_pdf(self, pdf: FPDF, output_path: Path, overwrite: bool = True):
         """Save PDF file with error handling."""
@@ -737,15 +939,16 @@ class PhenotypePDFGenerator:
             except Exception as e:
                 logging.warning(f"Could not remove temp image {img_path}: {e}")
 
-
 def generate_phenotype_pdfs_from_saved_data(bird_path: str,
-                                            overwrite: bool = True) -> Dict[str, str]:
+                                            overwrite: bool = True,
+                                            overwrite_spectrograms: bool = False) -> Dict[str, str]:
     """
     Generate phenotype PDFs from saved detailed phenotype data.
 
     Args:
         bird_path: Path to bird directory
         overwrite: Whether to overwrite existing PDFs
+        overwrite_spectrograms: Whether to regenerate existing spectrograms
 
     Returns:
         Dict mapping PDF type to generated file path
@@ -770,7 +973,7 @@ def generate_phenotype_pdfs_from_saved_data(bird_path: str,
                     manual_results = pkl.load(f)
 
                 manual_pdf = generator.generate_manual_phenotype_pdf(
-                    manual_results, syllable_db_path, overwrite
+                    manual_results, syllable_db_path, overwrite, overwrite_spectrograms
                 )
                 if manual_pdf:
                     generated_pdfs['manual'] = manual_pdf
@@ -789,7 +992,7 @@ def generate_phenotype_pdfs_from_saved_data(bird_path: str,
                 clustering_metadata = auto_data['clustering_metadata']
 
                 auto_pdf = generator.generate_automated_phenotype_pdf(
-                    auto_results, clustering_metadata, syllable_db_path, 0, overwrite
+                    auto_results, clustering_metadata, syllable_db_path, 0, overwrite, overwrite_spectrograms
                 )
                 if auto_pdf:
                     generated_pdfs['automated'] = auto_pdf
@@ -802,7 +1005,6 @@ def generate_phenotype_pdfs_from_saved_data(bird_path: str,
     except Exception as e:
         logging.error(f"Error generating phenotype PDFs from saved data: {e}")
         return {}
-
 
 def integrate_with_phenotyping_pipeline(bird_path: str, config) -> Dict[str, str]:
     """
@@ -824,7 +1026,7 @@ def integrate_with_phenotyping_pipeline(bird_path: str, config) -> Dict[str, str
 
         # Generate PDFs from saved detailed data
         generated_pdfs = generate_phenotype_pdfs_from_saved_data(
-            bird_path, overwrite=True
+            bird_path, overwrite=True, overwrite_spectrograms=False
         )
 
         if generated_pdfs:
@@ -838,164 +1040,16 @@ def integrate_with_phenotyping_pipeline(bird_path: str, config) -> Dict[str, str
         return {}
 
 
-def _create_phenotype_spectrogram(self, syl_file: Path,
-                                  label_type: str, rank: int,
-                                  file_idx: int, duration: float = 6.0) -> Optional[str]:
-    """Create spectrogram with phenotype labels."""
-    try:
-        with tables.open_file(str(syl_file), 'r') as f:
-            # Read syllable data
-            onsets = f.root.onsets.read()
-            offsets = f.root.offsets.read()
-
-            # Read audio filename
-            audio_filename_raw = f.root.audio_filename.read()
-            if isinstance(audio_filename_raw[0], bytes):
-                audio_filename = audio_filename_raw[0].decode('utf-8')
-            else:
-                audio_filename = str(audio_filename_raw[0])
-
-            # Resolve audio file path
-            if not os.path.isfile(audio_filename):
-                audio_filename = replace_macaw_root(audio_filename)
-
-            if not os.path.isfile(audio_filename):
-                logging.warning(f"Audio file not found: {audio_filename}")
-                return None
-
-            # Read labels based on type
-            labels = None
-            if label_type == 'manual' and hasattr(f.root, 'manual'):
-                manual_raw = f.root.manual.read()
-                labels = np.array([
-                    item.decode('utf-8') if isinstance(item, bytes) else str(item)
-                    for item in manual_raw
-                ])
-            elif label_type == 'automated':
-                # Try to read from automated labels if they exist
-                if hasattr(f.root, 'auto'):
-                    auto_raw = f.root.auto.read()
-                    labels = np.array([int(item) for item in auto_raw])
-                else:
-                    # Load from syllable database using clustering labels
-                    try:
-                        syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
-                        if syllable_db_path.exists():
-                            df = pd.read_csv(syllable_db_path)
-                            # Find the song file in the database
-                            song_name = syl_file.name
-                            song_data = df[df['song_file'] == song_name]
-
-                            if not song_data.empty:
-                                # Get clustering labels for this rank
-                                cluster_col = f'cluster_rank{rank}_'
-                                cluster_cols = [col for col in song_data.columns if col.startswith(cluster_col)]
-                                if cluster_cols:
-                                    # Use the first matching cluster column
-                                    labels = song_data[cluster_cols[0]].values
-                                    labels = labels[~pd.isna(labels)]  # Remove NaN values
-                    except Exception as e:
-                        logging.debug(f"Could not load automated labels from database: {e}")
-                        # Fallback to placeholder labels
-                        labels = np.array([f'C{i % 5}' for i in range(len(onsets))])
-
-            if labels is None or len(labels) == 0:
-                return None
-
-            # Read and process audio
-            audio, fs = read_audio_file(audio_filename)
-            audio = rms_norm(audio)
-            audio = butter_bandpass_filter_sos(
-                audio,
-                lowcut=self.spec_params.min_freq,
-                highcut=self.spec_params.max_freq,
-                fs=fs,
-                order=5
-            )
-
-            # Set time window
-            first_time = max((onsets[0] / 1000 - 0.25), 0.0)
-            last_time = first_time + duration
-
-            # Ensure we don't exceed audio length
-            if len(audio) * (1 / fs) <= last_time:
-                last_time = (len(audio) - 1) * (1 / fs)
-
-            # Generate spectrogram
-            spec, _, t = get_song_spec(
-                t1=first_time,
-                t2=last_time,
-                audio=audio,
-                params=self.spec_params,
-                fs=fs,
-                downsample=False
-            )
-
-            # Filter syllables within time window
-            time_mask = (onsets >= first_time * 1000) & (onsets <= last_time * 1000)
-            syl_onsets = onsets[time_mask]
-            syl_offsets = offsets[time_mask]
-            syl_labels = labels[time_mask] if len(labels) == len(onsets) else labels[:len(syl_onsets)]
-
-            if len(syl_onsets) <= 1:
-                return None
-
-            # Create spectrogram plot
-            fig, ax = plt.subplots(figsize=(9, 3))
-            ax.imshow(spec, aspect='auto', origin='lower')
-            ax.set_yticks([])
-
-            # Add syllable labels
-            font_size = 8
-            colors = plt.cm.Set1(np.linspace(0, 1, 10))  # Color palette
-
-            for i, (onset, offset, label) in enumerate(zip(syl_onsets, syl_offsets, syl_labels)):
-                if label in ['-', '', 's', 'z'] or (
-                        isinstance(label, (int, float)) and label < 0):  # Skip non-syllable tokens
-                    continue
-
-                label_x = (onset / (duration * 1000)) * spec.shape[1]
-
-                # Choose color based on label
-                color_idx = hash(str(label)) % len(colors)
-
-                ax.text(label_x, spec.shape[0] + 20, str(label),
-                        color='black', fontsize=font_size, ha='center', va='top',
-                        bbox=dict(facecolor=colors[color_idx], edgecolor='black',
-                                  alpha=0.7, boxstyle='round'))
-
-            # Set time axis
-            time_ticks = np.arange(0, duration + 1)
-            x_ticks = np.linspace(0, spec.shape[1], len(time_ticks))
-            ax.set_xticks(x_ticks)
-            ax.set_xticklabels(time_ticks.astype(int))
-            ax.set_xlabel('Time (s)')
-            ax.set_title(f'{label_type.title()} Labels - {self.bird_name}')
-
-            # Save spectrogram
-            timestamp = pd.Timestamp.now().strftime('%H%M%S')
-            filename = f'phenotype_spec_{label_type}_{rank}_{file_idx}_{timestamp}.png'
-            file_path = self.temp_dir / filename
-
-            plt.tight_layout()
-            plt.savefig(file_path, dpi=150, bbox_inches='tight')
-            plt.close(fig)
-
-            return str(file_path)
-
-    except Exception as e:
-        logging.error(f"Error creating phenotype spectrogram from {syl_file}: {e}")
-        return None
-
-
 def batch_generate_phenotype_pdfs_from_saved_data(bird_paths: List[str],
-                                                  overwrite: bool = True) -> Dict[str, Dict[str, str]]:
+                                                  overwrite: bool = True,
+                                                  overwrite_spectrograms: bool = False) -> Dict[str, Dict[str, str]]:
     """
     Generate phenotype PDFs for multiple birds using saved detailed data.
 
     Args:
         bird_paths: List of paths to bird directories
         overwrite: Whether to overwrite existing PDFs
+        overwrite_spectrograms: Whether to regenerate existing spectrograms
 
     Returns:
         Dict mapping bird names to their generated PDF paths
@@ -1007,7 +1061,7 @@ def batch_generate_phenotype_pdfs_from_saved_data(bird_paths: List[str],
 
         try:
             bird_pdfs = generate_phenotype_pdfs_from_saved_data(
-                bird_path, overwrite
+                bird_path, overwrite, overwrite_spectrograms
             )
 
             if bird_pdfs:
@@ -1021,7 +1075,6 @@ def batch_generate_phenotype_pdfs_from_saved_data(bird_paths: List[str],
             continue
 
     return all_pdfs
-
 
 # Add function to load and use detailed data for manual testing
 def load_detailed_phenotype_data(bird_path: str) -> Tuple[Optional[Dict], List[Dict], List[Dict]]:
@@ -1072,7 +1125,6 @@ def load_detailed_phenotype_data(bird_path: str) -> Tuple[Optional[Dict], List[D
         return None, [], []
 
 
-# Update the main execution section to demonstrate the new workflow
 if __name__ == '__main__':
     # Setup logging
     logging.basicConfig(
@@ -1108,7 +1160,8 @@ if __name__ == '__main__':
             print("\n2. Testing PDF generation from saved detailed data...")
             generated_pdfs = generate_phenotype_pdfs_from_saved_data(
                 bird_path=example_bird_path,
-                overwrite=True
+                overwrite=True,
+                overwrite_spectrograms=False  # Don't regenerate spectrograms by default
             )
 
             if generated_pdfs:
@@ -1124,7 +1177,8 @@ if __name__ == '__main__':
 
             batch_results = batch_generate_phenotype_pdfs_from_saved_data(
                 bird_paths=example_bird_paths,
-                overwrite=True
+                overwrite=True,
+                overwrite_spectrograms=False
             )
 
             if batch_results:
@@ -1150,26 +1204,38 @@ if __name__ == '__main__':
             print("Integrated Phenotype PDF Generation Pipeline Test Complete")
             print("=" * 70)
 
-            print("\nIntegration Summary:")
-            print("1. Modified phenotype_bird() to save detailed data structures")
-            print("2. PDF generator reads from saved pickle files with full data")
-            print("3. Automatic integration via integrate_with_phenotyping_pipeline()")
-            print("4. Batch processing support for multiple birds")
-            print("5. Fallback to syllable database for automated labels in spectrograms")
+            print("\nNew Features Added:")
+            print("1. Persistent spectrogram storage in [bird]/spectrograms/labelled/")
+            print("2. Spectrogram reuse with overwrite_spectrograms flag")
+            print("3. 8 spectrograms in 4x2 grid layout")
+            print("4. Labels positioned above spectrogram boundaries")
+            print("5. Vertical legend showing all possible label colors")
+            print("6. Improved table formatting with wider columns")
+            print("7. New pages for analysis images to prevent cutoff")
+            print("8. Fixed automated label loading from syllable database")
+            print("9. Removed 'C' prefix from automated integer labels")
 
-            print("\nData Flow:")
-            print("phenotype_bird() → save_detailed_phenotype_data() → *.pkl files")
-            print("*.pkl files → generate_phenotype_pdfs_from_saved_data() → PDFs")
+            print("\nSpectrogram Management:")
+            print("- Spectrograms saved as: [audio_base]_[label_type]_[timestamp].png")
+            print("- Reused if already exists (unless overwrite_spectrograms=True)")
+            print("- Random sampling with intelligent reuse")
 
             print("\nFiles Created:")
+            print("- [bird]/spectrograms/labelled/[audio]_manual_[timestamp].png")
+            print("- [bird]/spectrograms/labelled/[audio]_automated_rank0_[timestamp].png")
             print("- data/phenotype_detailed/manual_phenotype_data.pkl")
             print("- data/phenotype_detailed/automated_phenotype_data_rank0.pkl")
-            print("- data/phenotype_detailed/automated_phenotype_data_rank1.pkl")
-            print("- data/pdfs/bird_manual_phenotypes.pdf")
-            print("- data/pdfs/bird_automated_phenotypes_rank0.pdf")
+            print("- data/pdfs/[bird]_manual_phenotypes.pdf")
+            print("- data/pdfs/[bird]_automated_phenotypes_rank0.pdf")
+
+            print("\nUsage Examples:")
+            print("# Generate PDFs with fresh spectrograms:")
+            print("generate_phenotype_pdfs_from_saved_data(bird_path, overwrite_spectrograms=True)")
+            print()
+            print("# Reuse existing spectrograms (faster):")
+            print("generate_phenotype_pdfs_from_saved_data(bird_path, overwrite_spectrograms=False)")
 
         except Exception as e:
             print(f"Error during testing: {e}")
             import traceback
-
             traceback.print_exc()
