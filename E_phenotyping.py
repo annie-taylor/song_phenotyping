@@ -11,6 +11,7 @@ from enum import Enum
 
 import numpy as np
 import pandas as pd
+import pickle as pkl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tables
@@ -37,7 +38,7 @@ class PhenotypingConfig:
     repeat_candidate_range: range = None
 
     # Processing options
-    use_top_n_clusterings: int = 5  # How many top clustering results to process
+    use_top_n_clusterings: int = 5  # How many top clustering results t00o process
     generate_plots: bool = True
 
     # Visualization
@@ -70,9 +71,9 @@ class LabelHandler:
     @property
     def non_syl_tokens(self) -> List[Union[str, int]]:
         if self.label_type == LabelType.MANUAL:
-            return ['s', 'z', '-', '\r']
+            return ['s', 'z', '\r']
         else:
-            return [-5, -3, -1]  # -1 is HDBSCAN noise label
+            return [-5, -3]
 
     def normalize_labels(self, raw_labels: List[Any]) -> List[Union[str, int]]:
         """Convert raw labels to consistent format."""
@@ -1230,6 +1231,9 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
                 'min_samples': np.nan
             }]
 
+        # Save detailed phenotype data for PDF generation
+        save_detailed_phenotype_data(bird_path, manual_results, auto_results, clustering_results)
+
         # Create unified results DataFrame
         results_df = create_unified_phenotype_row(
             bird_name, manual_results, auto_results, clustering_results, config
@@ -1245,12 +1249,65 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
             _generate_phenotype_plots(bird_path, syllable_data, manual_results, auto_results, clustering_results,
                                       config)
 
+        # Generate PDFs if requested
+        if config.generate_plots:  # Use same flag for now
+            from pdfs import integrate_with_phenotyping_pipeline
+            pdf_results = integrate_with_phenotyping_pipeline(bird_path, config)
+            if pdf_results:
+                logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
+
         logging.info(f"Successfully completed phenotyping for bird: {bird_name}")
         return True
 
     except Exception as e:
         logging.error(f"Error in phenotyping pipeline for {bird_name}: {e}")
         logging.error(traceback.format_exc())
+        return False
+
+def save_detailed_phenotype_data(bird_path: str,
+                                 manual_results: Dict[str, Any],
+                                 auto_results: List[Dict[str, Any]],
+                                 clustering_results: List[Dict[str, Any]]) -> bool:
+    """
+    Save detailed phenotype data structures for PDF generation.
+
+    Args:
+        bird_path: Path to bird directory
+        manual_results: Manual phenotype results with full data structures
+        auto_results: List of automated phenotype results with full data structures
+        clustering_results: List of clustering metadata
+
+    Returns:
+        bool: Success status
+    """
+    try:
+        # Create detailed data directory
+        detailed_data_dir = os.path.join(bird_path, 'data', 'phenotype_detailed')
+        os.makedirs(detailed_data_dir, exist_ok=True)
+
+        # Save manual results if available
+        if manual_results.get('repertoire_size') is not None and not np.isnan(
+                manual_results.get('repertoire_size', np.nan)):
+            manual_path = os.path.join(detailed_data_dir, 'manual_phenotype_data.pkl')
+            with open(manual_path, 'wb') as f:
+                pkl.dump(manual_results, f)
+            logging.info(f"Saved detailed manual phenotype data to: {manual_path}")
+
+        # Save automated results for each rank
+        for i, (auto_result, cluster_result) in enumerate(zip(auto_results, clustering_results)):
+            auto_data = {
+                'phenotype_results': auto_result,
+                'clustering_metadata': cluster_result
+            }
+            auto_path = os.path.join(detailed_data_dir, f'automated_phenotype_data_rank{i}.pkl')
+            with open(auto_path, 'wb') as f:
+                pkl.dump(auto_data, f)
+            logging.info(f"Saved detailed automated phenotype data rank {i} to: {auto_path}")
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Error saving detailed phenotype data: {e}")
         return False
 
 

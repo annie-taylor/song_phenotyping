@@ -229,11 +229,11 @@ class SyllableDatabase:
                 manual_labels = None
                 if hasattr(f.root, 'manual'):
                     manual_labels = f.root.manual.read()
-                    manual_labels = [label.decode('utf-8') if isinstance(label, bytes) else str(label)
+                    manual_labels = [label.decode('utf-8') if isinstance(label, (bytes, np.bytes_)) else str(label)
                                      for label in manual_labels]
 
                 # Convert hashes to strings
-                hashes = [h.decode('utf-8') if isinstance(h, bytes) else str(h) for h in hashes]
+                hashes = [h.decode('utf-8') if isinstance(h, (bytes, np.bytes_)) else str(h) for h in hashes]
 
                 # Process each syllable
                 for i, (waveform, onset, offset, hash_id, pos_idx) in enumerate(
@@ -245,13 +245,16 @@ class SyllableDatabase:
                             logging.debug(f"Skipping empty waveform for syllable {i} in {filename}")
                             continue
 
+                        # Remove nans from waveform (all but the longest waveform will have this)
+                        waveform = waveform[~np.isnan(waveform)]
+
                         # Extract features from waveform
                         features = self._extract_features_from_audio(waveform)
 
                         # Calculate temporal features
-                        duration_ms = (offset - onset) * 1000  # Convert to milliseconds
-                        start_time_ms = onset * 1000
-                        end_time_ms = offset * 1000
+                        duration_ms = (offset - onset)  # Convert to milliseconds
+                        start_time_ms = onset
+                        end_time_ms = offset
 
                         # Calculate context features (gaps to previous/next syllables)
                         prev_gap_ms = self._calculate_prev_gap(i, onsets, offsets)
@@ -386,7 +389,11 @@ class SyllableDatabase:
                 tempo, _ = librosa.beat.beat_track(
                     onset_envelope=onset_strength, sr=sr, hop_length=self.feature_params.hop_length
                 )
-                features['tempo_estimate'] = float(tempo)
+                # Fix for deprecation warning - ensure tempo is a scalar
+                if isinstance(tempo, np.ndarray):
+                    features['tempo_estimate'] = float(tempo.item()) if tempo.size > 0 else np.nan
+                else:
+                    features['tempo_estimate'] = float(tempo)
             except:
                 features['tempo_estimate'] = np.nan
 
@@ -502,7 +509,7 @@ class SyllableDatabase:
         prev_offset = offsets[syllable_idx - 1]
         current_onset = onsets[syllable_idx]
         gap_seconds = current_onset - prev_offset
-        return gap_seconds * 1000  # Convert to milliseconds
+        return gap_seconds
 
     def _calculate_next_gap(self, syllable_idx: int, onsets: np.ndarray, offsets: np.ndarray) -> float:
         """Calculate gap to next syllable in milliseconds."""
@@ -512,7 +519,7 @@ class SyllableDatabase:
         current_offset = offsets[syllable_idx]
         next_onset = onsets[syllable_idx + 1]
         gap_seconds = next_onset - current_offset
-        return gap_seconds * 1000  # Convert to milliseconds
+        return gap_seconds
 
     def _load_clustering_labels(self) -> Dict[str, Dict[str, int]]:
         """
@@ -609,6 +616,88 @@ class SyllableDatabase:
         return hash_to_label
 
 
+    def _process_hdf5_array(self, array_data: np.ndarray, field_name: str, node) -> Union[np.ndarray, list]:
+        """
+        Process HDF5 array data based on its type and expected field structure.
+
+        Args:
+            array_data: Raw array data from HDF5
+            field_name: Name of the field
+            node: HDF5 node object for type information
+
+        Returns:
+            Processed data in the correct format for DataFrame
+        """
+        try:
+            # Get array properties
+            dtype = array_data.dtype
+            shape = array_data.shape
+
+            logging.debug(f"Processing field '{field_name}': dtype={dtype}, shape={shape}")
+
+            # Handle string/Unicode fields (bytes need to be decoded)
+            if dtype.kind in ['U', 'S', 'a']:  # Unicode, byte string, or void
+                if field_name in ['hash_id', 'bird_name', 'song_file', 'manual_label', 'clustering_labels']:
+                    # Convert bytes to strings if needed
+                    if dtype.kind == 'S' or (dtype.kind == 'U' and array_data.dtype.char == 'S'):
+                        processed = [item.decode('utf-8') if isinstance(item, bytes) else str(item)
+                                     for item in array_data]
+                    else:
+                        processed = [str(item) for item in array_data]
+                    return processed
+                else:
+                    # Generic string handling
+                    return [item.decode('utf-8') if isinstance(item, bytes) else str(item)
+                            for item in array_data]
+
+            # Handle multi-dimensional numeric arrays (MFCC features)
+            elif field_name in ['mfcc_means', 'mfcc_stds']:
+                if array_data.ndim == 2:
+                    # Convert 2D array to list of lists for DataFrame compatibility
+                    return [row.tolist() for row in array_data]
+                elif array_data.ndim == 1:
+                    # Handle case where it might have been flattened
+                    expected_length = self.feature_params.n_mfcc
+                    if len(array_data) % expected_length == 0:
+                        n_records = len(array_data) // expected_length
+                        reshaped = array_data.reshape(n_records, expected_length)
+                        return [row.tolist() for row in reshaped]
+                    else:
+                        # Fallback: return as list
+                        return array_data.tolist()
+                else:
+                    return array_data.tolist()
+
+            # Handle 1D numeric arrays
+            elif array_data.ndim == 1:
+                # Check for numeric types
+                if dtype.kind in ['i', 'u', 'f', 'c']:  # integer, unsigned int, float, complex
+                    return array_data
+                else:
+                    # Convert to appropriate Python types
+                    return array_data.tolist()
+
+            # Handle higher-dimensional arrays (shouldn't occur in our case, but safety)
+            elif array_data.ndim > 2:
+                logging.warning(f"Unexpected {array_data.ndim}D array for field '{field_name}'. Converting to list.")
+                return array_data.tolist()
+
+            # Handle 2D arrays (other than MFCC)
+            elif array_data.ndim == 2:
+                logging.warning(f"Unexpected 2D array for field '{field_name}'. Converting to list of lists.")
+                return [row.tolist() for row in array_data]
+
+            # Default case
+            else:
+                return array_data
+
+        except Exception as e:
+            logging.error(f"Error processing HDF5 array for field '{field_name}': {e}")
+            logging.error(f"Array dtype: {array_data.dtype}, shape: {array_data.shape}")
+            # Return as-is and let pandas handle it
+            return array_data
+
+
     def _resolve_file_path(self, file_path: str) -> str:
         """
         Resolve file path, handling cross-platform and network path issues.
@@ -637,7 +726,6 @@ class SyllableDatabase:
             logging.warning(f"Error resolving path {file_path}: {e}")
             return file_path
 
-
     def _save_to_hdf5(self, records: List[SyllableRecord]) -> bool:
         """
         Save syllable records to HDF5 format for efficient analysis.
@@ -653,22 +741,80 @@ class SyllableDatabase:
                 # Convert records to structured arrays for efficient storage
                 data_dict = self._records_to_arrays(records)
 
-                # Save each array to HDF5
+                # Save each array to HDF5 with explicit type handling
                 for key, array in data_dict.items():
-                    if isinstance(array, list):
-                        # Handle list data (like MFCC coefficients)
-                        array = np.array(array)
+                    try:
+                        if isinstance(array, list):
+                            # Handle list data (like MFCC coefficients)
+                            array = np.array(array)
 
-                    f.create_array('/', key, obj=array)
+                        # Ensure proper data types for specific fields
+                        if key in ['hash_id', 'bird_name', 'song_file', 'manual_label', 'clustering_labels']:
+                            # String fields - ensure Unicode string type with sufficient length
+                            if array.dtype.kind not in ['U', 'S']:
+                                array = np.array([str(item) for item in array], dtype='U')
+                            else:
+                                # Ensure we have Unicode strings, not byte strings
+                                max_len = max(len(str(item)) for item in array) if len(array) > 0 else 1
+                                array = array.astype(f'U{max_len}')
 
-                # Save metadata
+                        elif key in ['mfcc_means', 'mfcc_stds']:
+                            # MFCC fields - ensure 2D float array
+                            if array.ndim == 1:
+                                # Reshape if somehow flattened
+                                expected_length = self.feature_params.n_mfcc
+                                if len(array) % expected_length == 0:
+                                    n_records = len(array) // expected_length
+                                    array = array.reshape(n_records, expected_length)
+                            array = array.astype(np.float64)
+
+                        elif key in ['syllable_index', 'position_in_song', 'song_length_syllables']:
+                            # Integer fields
+                            array = array.astype(np.int32)
+
+                        else:
+                            # Numeric fields - ensure float64 for consistency
+                            if array.dtype.kind in ['i', 'u', 'f']:
+                                array = array.astype(np.float64)
+
+                        # Create the array in HDF5
+                        f.create_array('/', key, obj=array)
+                        logging.debug(f"Saved field '{key}' with dtype {array.dtype} and shape {array.shape}")
+
+                    except Exception as e:
+                        logging.error(f"Error saving field '{key}': {e}")
+                        logging.error(f"Array type: {type(array)}, dtype: {getattr(array, 'dtype', 'N/A')}")
+                        raise
+
+                # Save metadata with numpy type conversion
                 metadata = {
-                    'n_syllables': len(records),
+                    'n_syllables': int(len(records)),
                     'bird_name': self.bird_name,
-                    'feature_params': asdict(self.feature_params)
+                    'feature_params': asdict(self.feature_params),
+                    'creation_timestamp': pd.Timestamp.now().isoformat(),
+                    'hdf5_version': tables.__version__
                 }
 
-                f.create_array('/', 'metadata', obj=np.array([json.dumps(metadata)], dtype='U'))
+                # Convert any numpy types in feature_params to native Python types
+                def convert_numpy_types(obj):
+                    if isinstance(obj, np.integer):
+                        return int(obj)
+                    elif isinstance(obj, np.floating):
+                        return float(obj)
+                    elif isinstance(obj, np.bool_):
+                        return bool(obj)
+                    elif isinstance(obj, dict):
+                        return {k: convert_numpy_types(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [convert_numpy_types(item) for item in obj]
+                    else:
+                        return obj
+
+                metadata = convert_numpy_types(metadata)
+
+                # Save metadata as JSON string in Unicode array
+                metadata_json = json.dumps(metadata)
+                f.create_array('/', 'metadata', obj=np.array([metadata_json], dtype=f'U{len(metadata_json)}'))
 
             logging.info(f"Saved {len(records)} records to HDF5: {self.hdf5_path}")
             return True
@@ -720,26 +866,90 @@ class SyllableDatabase:
 
                 if field_name == 'clustering_labels':
                     # Handle clustering labels dictionary
-                    # Convert to JSON string for storage
-                    values.append(json.dumps(value) if value else '{}')
+                    if value:
+                        converted_labels = {}
+                        for k, v in value.items():
+                            # Convert numpy int64 to native Python int
+                            if isinstance(v, np.integer):
+                                converted_labels[k] = int(v)
+                            else:
+                                converted_labels[k] = v
+                        values.append(json.dumps(converted_labels))
+                    else:
+                        values.append('{}')
+
                 elif isinstance(value, list):
                     # Handle list fields (like MFCC coefficients)
-                    values.append(value)
+                    if field_name in ['mfcc_means', 'mfcc_stds']:
+                        expected_length = self.feature_params.n_mfcc
+                        if len(value) != expected_length:
+                            # Pad or truncate to expected length
+                            padded_value = (value + [np.nan] * expected_length)[:expected_length]
+                            values.append(padded_value)
+                        else:
+                            values.append(value)
+                    else:
+                        values.append(value)
+
+                elif value is None:
+                    # Handle None values appropriately
+                    if field_name in ['manual_label']:
+                        values.append('')  # Empty string for string fields
+                    else:
+                        values.append(np.nan)  # NaN for numeric fields
+
                 else:
                     values.append(value)
 
-            # Convert to appropriate numpy array (moved outside the record loop)
-            if field_name == 'clustering_labels' or field_name in ['hash_id', 'bird_name', 'song_file', 'manual_label']:
-                # String fields
-                data_dict[field_name] = np.array(values, dtype='U')
-            elif field_name in ['mfcc_means', 'mfcc_stds']:
-                # List fields - convert to 2D array
-                data_dict[field_name] = np.array(values)
-            else:
-                # Numeric fields
-                data_dict[field_name] = np.array(values)
+            # Convert to appropriate numpy array with explicit type handling
+            try:
+                if field_name == 'clustering_labels':
+                    # JSON strings - use Unicode with sufficient length
+                    max_len = max(len(s) for s in values) if values else 1
+                    data_dict[field_name] = np.array(values, dtype=f'U{max_len}')
+
+                elif field_name in ['hash_id', 'bird_name', 'song_file', 'manual_label']:
+                    # String fields - ensure all are strings and use Unicode
+                    str_values = [str(v) if v is not None else '' for v in values]
+                    max_len = max(len(s) for s in str_values) if str_values else 1
+                    data_dict[field_name] = np.array(str_values, dtype=f'U{max_len}')
+
+                elif field_name in ['mfcc_means', 'mfcc_stds']:
+                    # 2D numeric arrays
+                    array_data = np.array(values, dtype=np.float64)
+                    logging.debug(f"Created {field_name} array with shape: {array_data.shape}")
+                    data_dict[field_name] = array_data
+
+                elif field_name in ['syllable_index', 'position_in_song', 'song_length_syllables']:
+                    # Integer fields - ensure int32
+                    int_values = [int(v) if not pd.isna(v) else -1 for v in values]
+                    data_dict[field_name] = np.array(int_values, dtype=np.int32)
+
+                else:
+                    # All other numeric fields - use float64
+                    numeric_values = []
+                    for v in values:
+                        if v is None or pd.isna(v):
+                            numeric_values.append(np.nan)
+                        elif isinstance(v, (int, float, np.number)):
+                            numeric_values.append(float(v))
+                        else:
+                            # Try to convert to float, fallback to NaN
+                            try:
+                                numeric_values.append(float(v))
+                            except (ValueError, TypeError):
+                                numeric_values.append(np.nan)
+
+                    data_dict[field_name] = np.array(numeric_values, dtype=np.float64)
+
+            except Exception as e:
+                logging.error(f"Error converting field {field_name} to array: {e}")
+                logging.error(f"Sample values: {values[:3] if len(values) > 3 else values}")
+                logging.error(f"Value types: {[type(v) for v in values[:3]]}")
+                raise
 
         return data_dict
+
 
     def _records_to_dataframe(self, records: List[SyllableRecord]) -> pd.DataFrame:
         """Convert list of records to pandas DataFrame for CSV storage."""
@@ -799,7 +1009,13 @@ class SyllableDatabase:
                 for node in f.list_nodes(f.root, classname='Array'):
                     if node._v_name == 'metadata':
                         continue
-                    data_dict[node._v_name] = node.read()
+
+                    array_data = node.read()
+                    field_name = node._v_name
+
+                    # Handle different data types based on HDF5 node properties
+                    processed_data = self._process_hdf5_array(array_data, field_name, node)
+                    data_dict[field_name] = processed_data
 
             # Convert to DataFrame
             df = pd.DataFrame(data_dict)
@@ -809,12 +1025,17 @@ class SyllableDatabase:
                 clustering_cols = {}
                 for idx, labels_json in enumerate(df['clustering_labels']):
                     try:
+                        # Handle both string and bytes
+                        if isinstance(labels_json, (bytes, np.bytes_)):
+                            labels_json = labels_json.decode('utf-8')
+
                         labels_dict = json.loads(labels_json) if labels_json != '{}' else {}
                         for method_id, label in labels_dict.items():
                             if method_id not in clustering_cols:
                                 clustering_cols[method_id] = [np.nan] * len(df)
                             clustering_cols[method_id][idx] = label
-                    except:
+                    except Exception as e:
+                        logging.debug(f"Error processing clustering labels at index {idx}: {e}")
                         continue
 
                 # Add clustering columns to DataFrame
@@ -829,25 +1050,20 @@ class SyllableDatabase:
             return pd.DataFrame()
 
     def analyze_clustering_quality(self, clustering_method_id: str) -> Dict[str, Any]:
-        """
-        Analyze feature distributions within clusters for a specific clustering method.
+        """Keep the comprehensive analysis but reduce logging verbosity."""
 
-        Args:
-            clustering_method_id: ID of clustering method to analyze
+        # Temporarily reduce logging to avoid overflow
+        original_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.ERROR)  # Only show errors during analysis
 
-        Returns:
-            Dict[str, Any]: Analysis results including within-cluster variance, separation metrics
-        """
         try:
             # Load database
             df = self.load_database()
             if df.empty:
-                logging.error("Cannot analyze clustering: database is empty")
                 return {}
 
             cluster_col = f'cluster_{clustering_method_id}'
             if cluster_col not in df.columns:
-                logging.error(f"Clustering method {clustering_method_id} not found in database")
                 return {}
 
             # Get feature columns (exclude identifiers and labels)
@@ -857,15 +1073,11 @@ class SyllableDatabase:
 
             # Remove rows with missing cluster labels
             analysis_df = df[df[cluster_col] != -1].copy()
-
             if analysis_df.empty:
-                logging.warning(f"No valid cluster assignments found for {clustering_method_id}")
                 return {}
 
             unique_clusters = analysis_df[cluster_col].unique()
             n_clusters = len(unique_clusters)
-
-            logging.info(f"Analyzing {n_clusters} clusters for method {clustering_method_id}")
 
             analysis_results = {
                 'clustering_method': clustering_method_id,
@@ -881,7 +1093,8 @@ class SyllableDatabase:
                 cluster_data = analysis_df[analysis_df[cluster_col] == cluster_id]
                 analysis_results['cluster_sizes'][str(cluster_id)] = len(cluster_data)
 
-            # Analyze feature distributions
+            # Analyze feature distributions (keep all your existing logic)
+            separation_ratios = []
             for feature in feature_cols:
                 if feature in ['mfcc_means', 'mfcc_stds']:
                     continue  # Skip complex features for now
@@ -890,7 +1103,9 @@ class SyllableDatabase:
                 if len(feature_data) == 0:
                     continue
 
-                # Calculate within-cluster variance vs between-cluster variance
+                # Your existing analysis logic here...
+                # (keeping all the variance calculations)
+
                 within_cluster_var = 0
                 between_cluster_var = 0
                 overall_mean = feature_data.mean()
@@ -910,11 +1125,7 @@ class SyllableDatabase:
 
                         cluster_means.append(cluster_mean)
                         cluster_vars.append(cluster_var)
-
-                        # Weighted within-cluster variance
                         within_cluster_var += cluster_var * cluster_size
-
-                        # Between-cluster variance component
                         between_cluster_var += cluster_size * (cluster_mean - overall_mean) ** 2
 
                 # Normalize variances
@@ -922,7 +1133,7 @@ class SyllableDatabase:
                 within_cluster_var /= total_samples
                 between_cluster_var /= total_samples
 
-                # Calculate separation ratio (higher is better)
+                # Calculate separation ratio
                 separation_ratio = between_cluster_var / within_cluster_var if within_cluster_var > 0 else np.inf
 
                 analysis_results['feature_analysis'][feature] = {
@@ -935,13 +1146,10 @@ class SyllableDatabase:
                     'overall_variance': feature_data.var()
                 }
 
-            # Calculate overall clustering quality metrics
-            separation_ratios = [
-                analysis_results['feature_analysis'][feature]['separation_ratio']
-                for feature in analysis_results['feature_analysis']
-                if not np.isinf(analysis_results['feature_analysis'][feature]['separation_ratio'])
-            ]
+                if not np.isinf(separation_ratio):
+                    separation_ratios.append(separation_ratio)
 
+            # Calculate overall clustering quality metrics
             analysis_results['cluster_separation'] = {
                 'mean_separation_ratio': np.mean(separation_ratios) if separation_ratios else 0,
                 'median_separation_ratio': np.median(separation_ratios) if separation_ratios else 0,
@@ -949,15 +1157,11 @@ class SyllableDatabase:
                 'max_separation_ratio': np.max(separation_ratios) if separation_ratios else 0
             }
 
-            logging.info(f"Clustering analysis complete for {clustering_method_id}")
-            logging.info(
-                f"  Mean separation ratio: {analysis_results['cluster_separation']['mean_separation_ratio']:.3f}")
-
             return analysis_results
 
-        except Exception as e:
-            logging.error(f"Error analyzing clustering quality: {e}")
-            return {}
+        finally:
+            # Restore original logging level
+            logging.getLogger().setLevel(original_level)
 
 
     def compare_manual_vs_clustering(self, clustering_method_id: str) -> Dict[str, Any]:
@@ -970,29 +1174,28 @@ class SyllableDatabase:
         Returns:
             Dict[str, Any]: Comparison results
         """
+        original_level = logging.getLogger().level
+        logging.getLogger().setLevel(logging.ERROR)
+
         try:
-            # Load database
+            # Your existing logic here, just remove the verbose logging statements
             df = self.load_database()
             if df.empty:
                 return {}
 
-            # Filter for syllables with both manual and cluster labels
             cluster_col = f'cluster_{clustering_method_id}'
             if cluster_col not in df.columns:
-                logging.error(f"Clustering method {clustering_method_id} not found")
                 return {}
 
             comparison_df = df[
                 (df['manual_label'].notna()) &
                 (df['manual_label'] != '') &
+                (df['manual_label'] != 'None') &  # Exclude 'None' labels
                 (df[cluster_col] != -1)
                 ].copy()
 
             if comparison_df.empty:
-                logging.warning("No syllables with both manual and cluster labels found")
                 return {}
-
-            logging.info(f"Comparing {len(comparison_df)} syllables with both label types")
 
             # Analyze manual label clustering quality
             manual_analysis = self._analyze_label_feature_consistency(
@@ -1012,7 +1215,7 @@ class SyllableDatabase:
                 'comparison_summary': {
                     'manual_mean_separation': manual_analysis.get('mean_separation_ratio', 0),
                     'clustering_mean_separation': cluster_analysis.get('mean_separation_ratio', 0),
-                    'relative_quality': 0  # Will be calculated below
+                    'relative_quality': 0
                 }
             }
 
@@ -1023,16 +1226,11 @@ class SyllableDatabase:
             if manual_sep > 0:
                 comparison_results['comparison_summary']['relative_quality'] = cluster_sep / manual_sep
 
-            logging.info(f"Manual vs clustering comparison complete:")
-            logging.info(f"  Manual separation ratio: {manual_sep:.3f}")
-            logging.info(f"  Clustering separation ratio: {cluster_sep:.3f}")
-            logging.info(f"  Relative quality: {comparison_results['comparison_summary']['relative_quality']:.3f}")
-
             return comparison_results
 
-        except Exception as e:
-            logging.error(f"Error comparing manual vs clustering: {e}")
-            return {}
+        finally:
+            # Restore original logging level
+            logging.getLogger().setLevel(original_level)
 
 
     def _analyze_label_feature_consistency(self, df: pd.DataFrame, label_col: str, label_name: str) -> Dict[str, Any]:
@@ -1120,7 +1318,6 @@ class SyllableDatabase:
             return analysis
 
         except Exception as e:
-            logging.error(f"Error analyzing label consistency for {label_name}: {e}")
             return {}
 
     def get_database_summary(self) -> Dict[str, Any]:
@@ -1254,6 +1451,101 @@ class SyllableDatabase:
             logging.error(f"Error saving analysis results: {e}")
             return ""
 
+    def analyze_top_clustering_methods(self, n_top_methods: int = 3) -> Dict[str, Dict[str, Any]]:
+        """
+        Analyze only the top N clustering methods instead of all methods.
+
+        Args:
+            n_top_methods: Number of top-ranked methods to analyze
+        """
+        # Load database to get available clustering methods
+        df = self.load_database()
+        if df.empty:
+            logging.error("Cannot analyze: database is empty")
+            return {}
+
+        # Get clustering columns and sort by rank
+        clustering_cols = [col for col in df.columns if col.startswith('cluster_rank')]
+        if not clustering_cols:
+            logging.warning("No clustering methods found in database")
+            return {}
+
+        clustering_cols.sort(key=lambda x: int(x.split('rank')[1].split('_')[0]))
+
+        # Take only top N methods
+        top_methods = clustering_cols[:n_top_methods]
+        clustering_methods = [col.replace('cluster_', '') for col in top_methods]
+
+        total_methods = len([c for c in df.columns if c.startswith('cluster_')])
+        logging.info(
+            f"Analyzing top {len(clustering_methods)} clustering methods (skipping {total_methods - len(clustering_methods)} lower-ranked methods)")
+
+        all_results = {}
+        for method_id in clustering_methods:
+            try:
+                # Use existing analysis functions (they work!)
+                quality_results = self.analyze_clustering_quality(method_id)
+                comparison_results = self.compare_manual_vs_clustering(method_id)
+
+                all_results[method_id] = {
+                    'clustering_quality': quality_results,
+                    'manual_comparison': comparison_results,
+                    'analysis_timestamp': pd.Timestamp.now().isoformat()
+                }
+
+            except Exception as e:
+                logging.error(f"Error analyzing method {method_id}: {e}")
+                all_results[method_id] = {'error': str(e)}
+
+        return all_results
+
+    def analyze_and_save_top_methods(self, n_top_methods: int = 3) -> Dict[str, Dict[str, Any]]:
+        """Generate analysis for top methods only and save to single summary file."""
+
+        # Analyze top methods
+        results = self.analyze_top_clustering_methods(n_top_methods)
+
+        if not results:
+            logging.warning("No analysis results generated")
+            return {}
+
+        # Save single comprehensive summary (instead of 77 files)
+        summary_path = self.save_analysis_results(results, 'top_clustering_analysis')
+
+        # Also create a simple summary table for quick inspection
+        summary_table = []
+        for method_id, data in results.items():
+            if 'error' not in data:
+                quality = data.get('clustering_quality', {})
+                comparison = data.get('manual_comparison', {})
+
+                summary_table.append({
+                    'method': method_id,
+                    'n_clusters': quality.get('n_clusters', 0),
+                    'n_syllables': quality.get('n_syllables', 0),
+                    'mean_separation': quality.get('cluster_separation', {}).get('mean_separation_ratio', 0),
+                    'relative_quality': comparison.get('comparison_summary', {}).get('relative_quality', 0),
+                    'manual_separation': comparison.get('comparison_summary', {}).get('manual_mean_separation', 0),
+                    'clustering_separation': comparison.get('comparison_summary', {}).get('clustering_mean_separation',
+                                                                                          0)
+                })
+
+        # Save summary table as CSV for easy inspection
+        if summary_table:
+            summary_df = pd.DataFrame(summary_table)
+            csv_path = os.path.join(self.database_dir, 'clustering_summary.csv')
+            summary_df.to_csv(csv_path, index=False)
+            logging.info(f"Saved summary table to: {csv_path}")
+
+            # Log key results
+            best_method = summary_table[0]  # First is rank 0
+            logging.info(f"Best method ({best_method['method']}): "
+                         f"{best_method['n_clusters']} clusters, "
+                         f"separation: {best_method['mean_separation']:.3f}, "
+                         f"vs manual: {best_method['relative_quality']:.3f}")
+
+        return results
+
 # ============================================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================================
@@ -1286,77 +1578,38 @@ def build_syllable_database(bird_path: str, force_rebuild: bool = False,
         logging.error(f"Failed to build database for {db.bird_name}")
         return db
 
-def analyze_all_clustering_methods(bird_path: str) -> Dict[str, Dict[str, Any]]:
+
+def analyze_top_clustering_methods_only(bird_path: str, n_methods: int = 3) -> Dict[str, Dict[str, Any]]:
     """
-    Analyze all clustering methods for a bird and compare with manual labels.
+    Analyze only top clustering methods instead of all methods.
 
     Args:
         bird_path: Path to bird directory
+        n_methods: Number of top methods to analyze (default=3)
 
     Returns:
-        Dict[str, Dict[str, Any]]: Analysis results for each clustering method
+        Dict[str, Dict[str, Any]]: Analysis results for top methods only
     """
     db = SyllableDatabase(bird_path)
+    return db.analyze_and_save_top_methods(n_methods)
 
-    # Load database to get available clustering methods
-    df = db.load_database()
-    if df.empty:
-        logging.error("Cannot analyze: database is empty")
-        return {}
 
-    clustering_cols = [col for col in df.columns if col.startswith('cluster_')]
-    clustering_methods = [col.replace('cluster_', '') for col in clustering_cols]
-
-    if not clustering_methods:
-        logging.warning("No clustering methods found in database")
-        return {}
-
-    logging.info(f"Analyzing {len(clustering_methods)} clustering methods")
-
-    all_results = {}
-    for method_id in clustering_methods:
-        logging.info(f"Analyzing clustering method: {method_id}")
-
-        try:
-            # Analyze clustering quality
-            quality_results = db.analyze_clustering_quality(method_id)
-
-            # Compare with manual labels if available
-            comparison_results = db.compare_manual_vs_clustering(method_id)
-
-            # Combine results
-            all_results[method_id] = {
-                'clustering_quality': quality_results,
-                'manual_comparison': comparison_results,
-                'analysis_timestamp': pd.Timestamp.now().isoformat()
-            }
-
-            # Save individual results
-            db.save_analysis_results(all_results[method_id], f'analysis_{method_id}')
-
-        except Exception as e:
-            logging.error(f"Error analyzing method {method_id}: {e}")
-            all_results[method_id] = {'error': str(e)}
-
-        # Save combined results
-    db.save_analysis_results(all_results, 'all_clustering_analysis')
-
-    logging.info(f"Completed analysis of all clustering methods for {db.bird_name}")
-    return all_results
-
-def main(bird_paths: List[str], force_rebuild: bool = False) -> None:
+def main(bird_paths: List[str], force_rebuild: bool = False, n_methods: int = 3) -> None:
     """
     Main function to build syllable databases for multiple birds.
 
     Args:
         bird_paths: List of paths to bird directories
         force_rebuild: Whether to rebuild existing databases
+        n_methods: Number of top clustering methods to analyze
     """
     try:
         logging.info(f"Building syllable databases for {len(bird_paths)} birds")
+        logging.info(f"Will analyze top {n_methods} clustering methods per bird")
 
         successful_birds = []
         failed_birds = []
+        analysis_summary = []
 
         for bird_path in tqdm(bird_paths, desc="Processing birds"):
             bird_name = os.path.basename(bird_path)
@@ -1364,15 +1617,33 @@ def main(bird_paths: List[str], force_rebuild: bool = False) -> None:
             try:
                 logging.info(f"Processing bird: {bird_name}")
 
-                # Build database
+                # Build database (keep all features)
                 db = build_syllable_database(bird_path, force_rebuild=force_rebuild)
 
-                # Analyze all clustering methods
-                analysis_results = analyze_all_clustering_methods(bird_path)
+                # Analyze only top N methods instead of all
+                analysis_results = analyze_top_clustering_methods_only(bird_path, n_methods)
 
                 if analysis_results:
                     successful_birds.append(bird_name)
-                    logging.info(f"Successfully processed {bird_name}")
+
+                    # Extract key metrics for cross-bird summary
+                    best_method_id = list(analysis_results.keys())[0]
+                    if 'error' not in analysis_results[best_method_id]:
+                        quality = analysis_results[best_method_id]['clustering_quality']
+                        comparison = analysis_results[best_method_id]['manual_comparison']
+
+                        analysis_summary.append({
+                            'bird': bird_name,
+                            'best_method': best_method_id,
+                            'n_clusters': quality.get('n_clusters', 0),
+                            'n_syllables': quality.get('n_syllables', 0),
+                            'separation_ratio': quality.get('cluster_separation', {}).get('mean_separation_ratio', 0),
+                            'relative_quality': comparison.get('comparison_summary', {}).get('relative_quality', 0)
+                        })
+
+                        logging.info(f"  → {quality.get('n_clusters', 0)} clusters, "
+                                     f"separation: {quality.get('cluster_separation', {}).get('mean_separation_ratio', 0):.3f}, "
+                                     f"vs manual: {comparison.get('comparison_summary', {}).get('relative_quality', 0):.3f}")
                 else:
                     failed_birds.append(bird_name)
                     logging.warning(f"No analysis results for {bird_name}")
@@ -1382,8 +1653,22 @@ def main(bird_paths: List[str], force_rebuild: bool = False) -> None:
                 failed_birds.append(bird_name)
                 continue
 
+        # Save cross-bird summary
+        if analysis_summary:
+            summary_df = pd.DataFrame(analysis_summary)
+            summary_path = 'all_birds_clustering_summary.csv'
+            summary_df.to_csv(summary_path, index=False)
+            logging.info(f"Saved cross-bird summary to: {summary_path}")
+
+            # Overall statistics
+            logging.info(f"\nOverall Results:")
+            logging.info(f"  Average separation ratio: {summary_df['separation_ratio'].mean():.3f}")
+            logging.info(f"  Average relative quality: {summary_df['relative_quality'].mean():.3f}")
+            logging.info(f"  Best performing bird: {summary_df.loc[summary_df['relative_quality'].idxmax(), 'bird']} "
+                         f"(quality: {summary_df['relative_quality'].max():.3f})")
+
         # Report results
-        logging.info(f"Database building complete:")
+        logging.info(f"\nDatabase building complete:")
         logging.info(f"  Successful: {len(successful_birds)} birds")
         logging.info(f"  Failed: {len(failed_birds)} birds")
 
@@ -1393,6 +1678,7 @@ def main(bird_paths: List[str], force_rebuild: bool = False) -> None:
     except Exception as e:
         logging.error(f"Error in main database building pipeline: {e}")
         raise
+
 
 if __name__ == '__main__':
     # Setup logging
@@ -1413,7 +1699,7 @@ if __name__ == '__main__':
     # Test on example datasets
     test_paths = [
         os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+        os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
     ]
 
     bird_paths = []
@@ -1433,4 +1719,3 @@ if __name__ == '__main__':
         main(bird_paths, force_rebuild=False)
     else:
         logging.error("No bird directories found")
-

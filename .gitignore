@@ -1,6 +1,9 @@
 *.xml
 *.iml
 *.log
+*.ipynb~
 .git
 .idea
+analysis_results
 logs
+*__pycache__*
