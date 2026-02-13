@@ -16,9 +16,16 @@ class SpectrogramParams:
     fs: float = 32000.0
     padding: float = 0.0
 
+    slice_length: Optional[float] = None  # in milliseconds
+    songs_per_bird: int = 20
+    overwrite_existing: bool = False
+    
     def __post_init__(self):
-        # Validate parameters
-        self.validate_params()
+        """Validate parameters after initialization."""
+        if self.slice_length is not None and self.slice_length <= 0:
+            raise ValueError("slice_length must be positive")
+        if self.songs_per_bird <= 0:
+            raise ValueError("songs_per_bird must be positive")
 
     def validate_params(self):
         """

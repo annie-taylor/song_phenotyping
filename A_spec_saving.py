@@ -3,8 +3,6 @@ import logging
 import re
 from sys import platform
 import time
-import re
-from sys import platform
 from scipy.io import loadmat
 import numpy as np
 import hashlib
@@ -13,17 +11,24 @@ from random import sample
 import gc
 import shutil
 from tqdm import tqdm
-import psutil
 
-from tools.song_io import save_segmented_audio_data, get_song_specs
+# Import consolidated functions from song_io
+from tools.song_io import (
+    setup_logging,
+    get_memory_usage,
+    parse_audio_filename,
+    load_and_validate_metadata,
+    pad_waveforms_to_same_length,
+    generate_syllable_hashes,
+    split_long_syllables_with_mapping,
+    create_output_paths,
+    save_segmented_audio_data,
+    get_song_specs,
+    logger  # Use the centralized logger
+)
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_path_management import *
-
-
-def get_memory_usage():
-    """Get current memory usage in MB"""
-    return psutil.Process().memory_info().rss / 1024 / 1024
 
 
 def filepaths_from_wseg(seg_directory: str, save_path: str = None,
@@ -436,42 +441,6 @@ def standardize_bird_band(band_string):
         return None
 
 
-def parse_audio_filename(file_path: str) -> dict:
-    """
-    Parse audio filename to extract bird, date, and time components.
-
-    Returns:
-        dict with keys: 'bird', 'day', 'time', 'success'
-    """
-    try:
-        base_name = os.path.basename(file_path).split('.')[0]
-
-        if base_name is None:
-            return {'bird': None, 'day': None, 'time': None, 'success': False}
-
-        # Split the standardized base name
-        parts = base_name.split('_')
-
-        if len(parts) >= 2:
-            bird = parts[0]  # Already standardized by parse_bird_filename_simple
-            day = parts[1]  # Date component
-            time = parts[2] if len(parts) > 2 else None  # Time component (optional)
-
-            return {
-                'bird': bird,
-                'day': day,
-                'time': time,
-                'success': True
-            }
-        else:
-            logging.warning(f"Insufficient filename components: {base_name}")
-            return {'bird': None, 'day': None, 'time': None, 'success': False}
-
-    except Exception as e:
-        logging.error(f"Failed to parse filename {file_path}: {e}")
-        return {'bird': None, 'day': None, 'time': None, 'success': False}
-
-
 def resolve_audio_file_path(metadata_file_path: str, metadata_matfile: dict,
                             read_songpath_from_metadata: bool,
                             bird_folder: str = None, prefer_local: bool = True) -> tuple[str, float]:
@@ -565,106 +534,6 @@ def reconstruct_server_path(stored_path: str) -> str:
     return stored_path  # Fallback if parsing fails
 
 
-def load_and_validate_metadata(metadata_file_path: str, wseg_offset: float = 0.0) -> dict:
-    """
-    Load metadata from .mat file and validate required fields.
-
-    Returns:
-        dict with keys: 'fs', 'onsets', 'offsets', 'labels', 'is_valid_song', 'error'
-    """
-    try:
-        metadata_matfile = loadmat(metadata_file_path, squeeze_me=True)
-
-        # Extract sampling rate with fallback (i.e. defaults to 32000 if fs unavailable)
-        fs = metadata_matfile.get('Fs') or metadata_matfile.get('fs') or 32000.0
-
-        # Extract required arrays
-        raw_onsets = metadata_matfile.get('onsets')
-        raw_offsets = metadata_matfile.get('offsets')
-        labels = np.array(list(metadata_matfile.get('labels')))
-        del metadata_matfile
-        gc.collect()
-
-        # Check for missing required fields
-        if raw_onsets is None or raw_offsets is None or labels is None:
-            missing = []
-            if raw_onsets is None: missing.append('onsets')
-            if raw_offsets is None: missing.append('offsets')
-            if labels is None: missing.append('labels')
-            return {
-                'fs': fs, 'onsets': None, 'offsets': None, 'labels': None,
-                'is_valid_song': False, 'error': f"Missing required fields: {missing}"
-            }
-
-        # Apply offset and ensure arrays
-        onsets = np.atleast_1d(raw_onsets) + wseg_offset
-        offsets = np.atleast_1d(raw_offsets) + wseg_offset
-        labels = np.atleast_1d(labels)
-
-        # Validate array lengths match
-        if not (len(onsets) == len(offsets) == len(labels)):
-            return {
-                'fs': fs, 'onsets': onsets, 'offsets': offsets, 'labels': labels,
-                'is_valid_song': False,
-                'error': f"Array length mismatch: onsets={len(onsets)}, offsets={len(offsets)}, labels={len(labels)}"
-            }
-
-        # Validate onset/offset logic
-        if np.any(offsets <= onsets):
-            return {
-                'fs': fs, 'onsets': onsets, 'offsets': offsets, 'labels': labels,
-                'is_valid_song': False, 'error': "Invalid onset/offset pairs (offset <= onset)"
-            }
-
-        # Determine if this is a valid song (more than one syllable)
-        is_valid_song = len(onsets) > 1
-
-        return {
-            'fs': fs, 'onsets': onsets, 'offsets': offsets, 'labels': labels,
-            'is_valid_song': is_valid_song, 'error': None
-        }
-
-    except Exception as e:
-        return {
-            'fs': 32000.0, 'onsets': None, 'offsets': None, 'labels': None,
-            'is_valid_song': False, 'error': f"Failed to load metadata: {str(e)}"
-        }
-
-
-def split_long_syllables_with_mapping(onsets: np.ndarray, offsets: np.ndarray,
-                                      max_duration_ms: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Split syllables longer than max_duration and create mapping to original indices.
-
-    Returns:
-        tuple: (new_onsets, new_offsets, mapping_to_original_indices)
-    """
-    if len(onsets) == 0:
-        return onsets.copy(), offsets.copy(), np.array([], dtype=int)
-
-    new_onsets = []
-    new_offsets = []
-    mapping = []
-
-    for i, (onset, offset) in enumerate(zip(onsets, offsets)):
-        duration = offset - onset
-
-        if duration <= max_duration_ms:
-            # Short syllable - keep as is
-            new_onsets.append(onset)
-            new_offsets.append(offset)
-            mapping.append(i)
-        else:
-            # Long syllable - split into segments
-            segments = split_single_syllable(onset, offset, "", max_duration_ms)
-            for seg_onset, seg_offset, _ in segments:
-                new_onsets.append(seg_onset)
-                new_offsets.append(seg_offset)
-                mapping.append(i)  # All segments map to the same original syllable
-
-    return np.array(new_onsets), np.array(new_offsets), np.array(mapping)
-
-
 def split_long_syllables(onsets: np.ndarray, offsets: np.ndarray, labels: np.ndarray,
                          max_duration_ms: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -733,55 +602,6 @@ def split_single_syllable(onset: float, offset: float, label: str,
         segments.append((final_onset, final_offset, label))
 
     return segments
-
-
-def pad_waveforms_to_same_length(waveforms: list[np.ndarray],
-                                 time_arrays: list[np.ndarray] = None,
-                                 pad_value: float = np.nan) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """
-    Pad all waveforms (and optionally time arrays) to the same length.
-
-    Args:
-        waveforms: List of 1D numpy arrays of different lengths
-        time_arrays: Optional list of time arrays to pad alongside waveforms
-        pad_value: Value to use for padding (default: NaN)
-
-    Returns:
-        tuple: (padded_waveforms, padded_time_arrays or None)
-    """
-    if not waveforms:
-        return [], [] if time_arrays is not None else []
-
-    # Validate inputs
-    if time_arrays is not None and len(waveforms) != len(time_arrays):
-        raise ValueError(f"Waveforms and time arrays must have same length: {len(waveforms)} vs {len(time_arrays)}")
-
-    # Find maximum length
-    max_length = max(len(wav) for wav in waveforms)
-
-    # Pad waveforms
-    padded_waveforms = []
-    for wav in waveforms:
-        if len(wav) == max_length:
-            padded_waveforms.append(wav.copy())  # Copy to avoid modifying original
-        else:
-            padded_wav = np.full(max_length, pad_value, dtype=wav.dtype)
-            padded_wav[:len(wav)] = wav
-            padded_waveforms.append(padded_wav)
-
-    # Pad time arrays if provided
-    padded_time_arrays = None
-    if time_arrays is not None:
-        padded_time_arrays = []
-        for ts in time_arrays:
-            if len(ts) == max_length:
-                padded_time_arrays.append(ts.copy())
-            else:
-                padded_ts = np.full(max_length, pad_value, dtype=ts.dtype)
-                padded_ts[:len(ts)] = ts
-                padded_time_arrays.append(padded_ts)
-
-    return padded_waveforms, padded_time_arrays
 
 
 def pad_segmented_audio_data(segmented_data: dict) -> dict:
@@ -874,29 +694,6 @@ def create_segmented_audio_data(specs: List[np.ndarray], wavs: List[np.ndarray],
     return segmented_data
 
 
-def generate_syllable_hashes(base_identifier: str, indices: List[int]) -> List[str]:
-    """
-    Generate unique hash IDs for each syllable.
-
-    Args:
-        base_identifier: Base string (usually file path)
-        indices: List of syllable indices
-
-    Returns:
-        List of unique hash strings
-    """
-    hashes = []
-    for idx in indices:
-        # Create unique string for each syllable
-        unique_str = f"{base_identifier}_{idx}"
-        # Generate hash
-        hash_obj = hashlib.sha256()
-        hash_obj.update(unique_str.encode('utf-8'))
-        hashes.append(hash_obj.hexdigest())
-
-    return hashes
-
-
 def create_empty_segmented_data() -> Dict[str, Any]:
     """Create empty segmented data structure."""
     return {
@@ -909,24 +706,6 @@ def create_empty_segmented_data() -> Dict[str, Any]:
         'position_idxs': [],
         'hashes': []
     }
-
-
-def create_output_path(save_path: str, filename_info: Dict[str, str]) -> str:
-    """Create output file path and ensure directory structure exists."""
-    bird = filename_info['bird']
-    day = filename_info['day']
-    time = filename_info['time'] or 'unknown'
-
-    # Create directory structure
-    bird_dir = os.path.join(save_path, bird)
-    data_dir = os.path.join(bird_dir, 'data')
-    syllables_dir = os.path.join(data_dir, 'syllables')
-
-    os.makedirs(syllables_dir, exist_ok=True)
-
-    # Create output filename
-    output_filename = f'syllables_{bird}_{day}_{time}.h5'
-    return os.path.join(syllables_dir, output_filename)
 
 
 def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dict[str, Any],
