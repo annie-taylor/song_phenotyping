@@ -225,9 +225,15 @@ if __name__ == "__main__":
     # Setup logging using consolidated function
     logger = setup_logging()
 
+    from tools.system_utils import check_sys_for_macaw_root
+
     path_to_macaw = check_sys_for_macaw_root()
-    data_directory = os.path.join(path_to_macaw, 'annietaylor', 'x-foster', 'slice_test')
-    seg_directory = os.path.join(path_to_macaw, 'annietaylor', 'x-foster', 'metadata')
+
+    evsong_save_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    evsong_directory = os.path.join(evsong_save_directory, 'evsong test', 'copied data')
+
+    wseg_save_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
 
     songs_per_bird = 10
     bird_subset = ['bu10wh86']
@@ -235,13 +241,16 @@ if __name__ == "__main__":
     logger.info("🚀 Starting slice processing pipeline")
 
     slice_syllable_files_from_wseg(
-        seg_directory=seg_directory,
+        seg_directory=wseg_directory,
         file_ext='.wav.not.mat',
-        save_path=data_directory,
+        save_path=wseg_save_directory,
         verbose=False,
         songs_per_bird=songs_per_bird,
         song_or_call='song',
         bird_subset=bird_subset
     )
+
+    slice_syllable_files_from_evsonganaly(wav_directory=evsong_directory,
+                                          save_path=evsong_save_directory)
 
     logger.info("✅ Slice processing complete!")
