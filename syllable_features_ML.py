@@ -1227,7 +1227,6 @@ def run_advanced_analysis(bird_path: str, exclude_labels: List[str] = None,
 
     try:
         # Initialize base analyzer
-        from syllable_feature_analyzer import SyllableFeatureAnalyzer
         base_analyzer = SyllableFeatureAnalyzer(bird_path, exclude_labels)
 
         # Initialize advanced methods
@@ -1286,7 +1285,6 @@ def compare_analysis_methods(bird_path: str, exclude_labels: List[str] = None) -
     Returns:
         DataFrame comparing method performance
     """
-    from syllable_feature_analyzer import SyllableFeatureAnalyzer
 
     # Initialize analyzers
     base_analyzer = SyllableFeatureAnalyzer(bird_path, exclude_labels)
@@ -1369,12 +1367,17 @@ def compare_analysis_methods(bird_path: str, exclude_labels: List[str] = None) -
 
 if __name__ == "__main__":
     # Example usage
-    import sys
+    #import sys
 
-    if len(sys.argv) > 1:
-        bird_path = sys.argv[1]
-        print(f"Running advanced analysis for: {bird_path}")
+    test_paths = [
+        os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu85bu97'),
+        os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or18or24')
+    ]
 
+    #if len(sys.argv) > 1:
+    for bird_path in test_paths:
+        #bird_path = sys.argv[1]
+        print(f"Running analysis for: {bird_path}")
         # Run complete advanced analysis
         results = run_advanced_analysis(bird_path, correlation_threshold=0.8, max_features=12)
 
