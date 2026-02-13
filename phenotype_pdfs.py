@@ -555,7 +555,7 @@ class PhenotypePDFGenerator:
             logging.error(f"Error generating example spectrograms: {e}")
             return []
 
-    def _phenotype_header(self, c: canvas.Canvas, width: float, height: float,
+    def _add_phenotype_header(self, c: canvas.Canvas, width: float, height: float,
                               phenotype_results: Dict[str, Any], title: str,
                               clustering_metadata: Dict[str, Any] = None):
         """

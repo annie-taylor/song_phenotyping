@@ -19,7 +19,7 @@ from tools.song_io import get_song_spec, rms_norm, butter_bandpass_filter_sos
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_utils import read_audio_file
 from tools.system_utils import replace_macaw_root
-from pdfs import create_dual_labeled_spectrogram
+from phenotype_pdfs import create_dual_labeled_spectrogram
 
 
 @dataclass

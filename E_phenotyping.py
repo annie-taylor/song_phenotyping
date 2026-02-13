@@ -1251,7 +1251,7 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
 
         # Generate PDFs if requested
         if config.generate_plots:  # Use same flag for now
-            from pdfs import integrate_with_phenotyping_pipeline
+            from phenotype_pdfs import integrate_with_phenotyping_pipeline
             pdf_results = integrate_with_phenotyping_pipeline(bird_path, config)
             if pdf_results:
                 logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
