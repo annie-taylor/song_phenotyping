@@ -304,7 +304,8 @@ def create_output_paths(save_path: str, bird: str) -> Dict[str, str]:
     paths = {
         'bird_dir': os.path.join(save_path, bird),
         'data_dir': os.path.join(save_path, bird, 'data'),
-        'syllables_dir': os.path.join(save_path, bird, 'data', 'syllables')
+        'syllables_dir': os.path.join(save_path, bird, 'data', 'syllables'),
+        'slices_dir': os.path.join(save_path, bird, 'data', 'slices')
     }
 
     for path in paths.values():
@@ -712,8 +713,8 @@ def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: Spe
             # Create output path
             paths = create_output_paths(save_path, file_info['bird'])
             h5file_save_path = os.path.join(
-                paths['syllables_dir'],
-                f"syllables_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
+                paths['slices_dir'],  # Use slices_dir for slice files
+                f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"  # Change filename prefix
             )
 
             # Skip if file already exists
@@ -948,7 +949,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         spec = np.log(abs(Sx[:, non_negative_time_indices]))
         t += max(0, t1)  # adjust time to start at t1
 
-        p5, p95 = np.percentile(spec, [5, 95])  # before padding
+        p5, p95 = np.percentile(spec, [10, 90])  # before padding
         exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
         if spec.shape[1] > exp_spec.shape[1]:
             logger.warning(f"✂️ Truncating spectrogram from {spec.shape[1]} to {exp_spec.shape[1]} frames. "

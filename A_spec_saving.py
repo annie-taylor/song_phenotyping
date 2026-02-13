@@ -977,8 +977,6 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
     logger.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
 
 
-
-
 def process_pipeline(pipeline_name: str, settings: dict):
     """Process a single pipeline (evsonganaly or wseg)."""
     logger.info("=" * 60)
@@ -996,11 +994,11 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 copy_locally=settings['copy_locally']
             )
 
-            # Process spectrograms
+            # Process spectrograms - songs_per_bird comes from params now
             save_specs_for_evsonganaly_birds(
                 metadata_file_paths=metadata_file_paths,
                 save_path=settings['save_dir'],
-                songs_per_bird=settings['songs_per_bird'],
+                songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
                 prefer_local=settings['copy_locally']
             )
@@ -1015,11 +1013,11 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 copy_locally=settings['copy_locally']
             )
 
-            # Process spectrograms
+            # Process spectrograms - songs_per_bird comes from params now
             save_specs_for_wseg_birds(
                 metadata_file_paths=wseg_metadata_paths,
                 save_path=settings['save_dir'],
-                songs_per_bird=settings['songs_per_bird'],
+                songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
                 prefer_local=settings['copy_locally']
             )
@@ -1028,7 +1026,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
 
     except Exception as e:
         logger.error(f"💥 Error in {pipeline_name} processing: {e}")
-        raise  # Re-raise to stop processing if critical
+        raise
 
 
 def main():
@@ -1047,7 +1045,6 @@ def main():
             'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
             'batch_file_naming': 'batch.txt.labeled',
             'bird_subset': ['or18or24'],
-            'songs_per_bird': 5,
             'copy_locally': True,
             'params': SpectrogramParams(
                 nfft=1024,
@@ -1062,7 +1059,6 @@ def main():
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
             'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
             'bird_subset': ['bu85bu97'],
-            'songs_per_bird': 5,
             'copy_locally': True,
             'params': SpectrogramParams(
                 nfft=1024,

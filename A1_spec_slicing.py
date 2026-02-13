@@ -84,8 +84,8 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
 
         # Use consolidated path creation
         paths = create_output_paths(save_path, bird)
-        syllables_dir = paths['syllables_dir']
-        already_saved_files = os.listdir(syllables_dir) if os.path.isdir(syllables_dir) else []
+        slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+        already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
         if len(already_saved_files) < params.songs_per_bird:
             needed_files = params.songs_per_bird - len(already_saved_files)
@@ -110,14 +110,14 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
                 logger.info(f"🎵 Processing {len(remaining_candidates)} files for {bird}")
                 save_spec_slices(
                     metadata_file_paths=remaining_candidates,
-                    save_path=save_path,
+                    save_path=save_path,  # save_spec_slices will use create_output_paths internally
                     params=params,
                     slice_length=params.slice_length,
                     verbose=verbose,
                     read_songpath_from_metadata=False
                 )
-        else:
-            logger.info(f'⏭️ {bird} already processed, skipping...')
+            else:
+                logger.info(f'⏭️ {bird} already processed, skipping...')
 
 
 def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = None,
@@ -184,8 +184,8 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
 
         # Use consolidated path creation
         paths = create_output_paths(save_path, bird)
-        syllables_dir = paths['syllables_dir']
-        already_saved_files = os.listdir(syllables_dir) if os.path.isdir(syllables_dir) else []
+        slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+        already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
         if len(already_saved_files) < params.songs_per_bird:
             needed_files = params.songs_per_bird - len(already_saved_files)
@@ -200,8 +200,8 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
             for path in metadata_file_paths:
                 file_info = parse_audio_filename(path)
                 if file_info['success']:
-                    # Check if this file was already processed
-                    expected_output = f"syllables_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
+                    # Check if this file was already processed - UPDATE FILENAME PREFIX
+                    expected_output = f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
                     if expected_output not in already_saved_files:
                         remaining_candidates.append(path)
 
@@ -210,12 +210,14 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
                 logger.info(f"🎵 Processing {len(remaining_candidates)} wseg files for {bird}")
                 save_spec_slices(
                     metadata_file_paths=remaining_candidates,
-                    save_path=save_path,
+                    save_path=save_path,  # save_spec_slices will use create_output_paths internally
                     params=params,
                     slice_length=slice_length,
                     verbose=verbose,
                     read_songpath_from_metadata=True
                 )
+            else:
+                logger.info(f'⏭️ No new files found for {bird}')
         else:
             logger.info(f'⏭️ {bird} already processed, skipping...')
 
