@@ -7,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 import random
 import tables
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -827,6 +828,649 @@ class SliceValidator(SpectrogramVisualizer):
         axes[1].axvline(np.mean(slice_durations), color='red', linestyle='--',
                         label=f'Mean: {np.mean(slice_durations):.1f} ms')
         axes[1].legend()
+
+
+def load_spectrogram_from_hash(target_hash: str, bird_path: str) -> np.ndarray:
+    """
+    Load original spectrogram for a specific hash from syllable HDF5 files.
+
+    Args:
+        target_hash: Hash identifier to find
+        bird_path: Path to bird directory (containing data/syllables)
+
+    Returns:
+        numpy array of spectrogram or None if not found
+    """
+    try:
+        syllables_dir = os.path.join(bird_path, 'data', 'syllables')
+
+        if not os.path.exists(syllables_dir):
+            logging.warning(f"Syllables directory not found: {syllables_dir}")
+            return None
+
+        # Get all syllable HDF5 files
+        syllable_files = [f for f in os.listdir(syllables_dir)
+                          if f.endswith('.h5') and f.startswith('syllables_')]
+
+        for filename in syllable_files:
+            file_path = os.path.join(syllables_dir, filename)
+
+            try:
+                with tables.open_file(file_path, mode='r') as f:
+                    # Read hashes from this file
+                    hashes_raw = f.root.hashes.read()
+                    hashes = [h.decode('utf-8') if isinstance(h, bytes) else str(h)
+                              for h in hashes_raw]
+
+                    # Check if our target hash is in this file
+                    if target_hash in hashes:
+                        # Find the index
+                        hash_idx = hashes.index(target_hash)
+
+                        # Load the original spectrogram
+                        spectrogram = f.root.spectrograms[hash_idx]
+
+                        return spectrogram
+
+            except Exception as e:
+                logging.debug(f"Error reading {filename}: {e}")
+                continue
+
+        logging.warning(f"Hash {target_hash} not found in any syllable file")
+        return None
+
+    except Exception as e:
+        logging.error(f"Error loading spectrogram for hash {target_hash}: {e}")
+        return None
+
+
+def interactive_plot_umap_v2(embeddings: np.ndarray, hashes: list,
+                             ground_truth_labels: list = None,
+                             cluster_labels: np.ndarray = None,
+                             bird: str = '', bird_path: str = None):
+    """
+    Interactive UMAP plot adapted for new data structure.
+
+    Args:
+        embeddings: UMAP embeddings array (N x 2)
+        hashes: List of sample hash identifiers
+        ground_truth_labels: Ground truth labels from original data (optional)
+        cluster_labels: Cluster assignments from clustering (optional)
+        bird: Bird identifier for plot titles
+        bird_path: Path to bird directory for loading spectrograms
+    """
+    try:
+        import matplotlib
+        matplotlib.use('TkAgg')
+        plt.ion()
+
+        # Determine what labels to use for coloring
+        plot_labels = None
+        label_type = "None"
+
+        if cluster_labels is not None:
+            plot_labels = cluster_labels
+            label_type = "Cluster"
+        elif ground_truth_labels is not None:
+            # Convert string labels to integers for coloring
+            unique_labels, plot_labels = np.unique(ground_truth_labels, return_inverse=True)
+            label_type = "Ground Truth"
+
+        # Create the plot
+        fig, ax = plt.subplots(figsize=(12, 10))
+
+        if plot_labels is not None:
+            scatter = ax.scatter(embeddings[:, 0], embeddings[:, 1],
+                                 s=20, c=plot_labels, cmap='tab10', alpha=0.7)
+            # Add colorbar
+            plt.colorbar(scatter, ax=ax, label=f'{label_type} Labels')
+        else:
+            scatter = ax.scatter(embeddings[:, 0], embeddings[:, 1],
+                                 s=20, alpha=0.7, color='blue')
+
+        ax.set_title(f'Interactive UMAP - {bird}\nClick points to view spectrograms')
+        ax.set_xlabel('UMAP 1')
+        ax.set_ylabel('UMAP 2')
+
+        def on_click(event):
+            try:
+                if event.xdata is None or event.ydata is None:
+                    return
+
+                x_click, y_click = event.xdata, event.ydata
+
+                # Find closest point
+                distances = np.sqrt((embeddings[:, 0] - x_click) ** 2 +
+                                    (embeddings[:, 1] - y_click) ** 2)
+                closest_idx = np.argmin(distances)
+
+                # Get information about the clicked point
+                clicked_hash = hashes[closest_idx]
+                clicked_gt_label = ground_truth_labels[closest_idx] if ground_truth_labels else "N/A"
+                clicked_cluster = cluster_labels[closest_idx] if cluster_labels is not None else "N/A"
+
+                print(f"Clicked point {closest_idx}: Hash={clicked_hash[:12]}..., "
+                      f"GT_Label={clicked_gt_label}, Cluster={clicked_cluster}")
+
+                # Load and display spectrogram
+                if bird_path:
+                    spec = load_spectrogram_from_hash(clicked_hash, bird_path)
+
+                    if spec is not None:
+                        # Create new figure for spectrogram
+                        spec_fig, spec_ax = plt.subplots(figsize=(12, 8))
+
+                        # Display spectrogram
+                        im = spec_ax.imshow(spec, aspect='auto', origin='lower',
+                                            cmap='viridis', interpolation='nearest')
+
+                        # Add colorbar
+                        plt.colorbar(im, ax=spec_ax, label='Amplitude')
+
+                        # Set title with all available information
+                        title_parts = [f'{bird} - Point {closest_idx}']
+                        title_parts.append(f'Hash: {clicked_hash[:12]}...')
+                        if clicked_gt_label != "N/A":
+                            title_parts.append(f'GT Label: {clicked_gt_label}')
+                        if clicked_cluster != "N/A":
+                            title_parts.append(f'Cluster: {clicked_cluster}')
+
+                        spec_ax.set_title(' | '.join(title_parts))
+                        spec_ax.set_xlabel('Time Bins')
+                        spec_ax.set_ylabel('Frequency Bins')
+
+                        plt.tight_layout()
+                        plt.show()
+                    else:
+                        print(f"Could not load spectrogram for hash: {clicked_hash}")
+                else:
+                    print("No bird_path provided - cannot load spectrogram")
+
+            except Exception as e:
+                print(f"Error in click handler: {e}")
+                logging.error(f"Error in click handler: {e}")
+
+        # Connect click event
+        fig.canvas.mpl_connect('button_press_event', on_click)
+
+        # Add instructions
+        ax.text(0.02, 0.98, 'Click on points to view spectrograms',
+                transform=ax.transAxes, fontsize=10,
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7),
+                verticalalignment='top')
+
+        plt.show()
+
+    except Exception as e:
+        logging.error(f"Error in interactive plot: {e}")
+
+
+def load_data_for_interactive_plot(embeddings_path: str, cluster_labels_path: str = None,
+                                   bird_path: str = None):
+    """
+    Convenience function to load all data needed for interactive plotting.
+
+    Args:
+        embeddings_path: Path to UMAP embeddings HDF5 file
+        cluster_labels_path: Path to cluster labels HDF5 file (optional)
+        bird_path: Path to bird directory (optional, for spectrogram loading)
+
+    Returns:
+        dict: Dictionary with loaded data ready for interactive plotting
+    """
+    try:
+        # Load embeddings and ground truth labels
+        embeddings, hashes, ground_truth_labels = load_umap_embeddings(embeddings_path)
+        if embeddings is None:
+            logging.error(f"Could not load embeddings from {embeddings_path}")
+            return None
+
+        data = {
+            'embeddings': embeddings,
+            'hashes': hashes,
+            'ground_truth_labels': ground_truth_labels,
+            'cluster_labels': None,
+            'bird_path': bird_path
+        }
+
+        # Load cluster labels if provided
+        if cluster_labels_path:
+            cluster_labels, cluster_hashes, scores = load_labels(cluster_labels_path)
+            if cluster_labels is not None:
+                # Verify hash alignment
+                if len(hashes) == len(cluster_hashes) and all(h1 == h2 for h1, h2 in zip(hashes, cluster_hashes)):
+                    data['cluster_labels'] = cluster_labels
+                else:
+                    logging.warning("Hash mismatch between embeddings and cluster labels")
+
+        return data
+
+    except Exception as e:
+        logging.error(f"Error loading data for interactive plot: {e}")
+        return None
+
+
+def create_label_spectrograms_pdf(embeddings_path: str, cluster_labels_path: str,
+                                  bird_path: str, save_path: str, bird_str: str,
+                                  max_samples_per_label: int = 1000):
+    """
+    Create PDFs with spectrogram examples for each cluster label.
+
+    Args:
+        embeddings_path: Path to UMAP embeddings HDF5 file
+        cluster_labels_path: Path to cluster labels HDF5 file
+        bird_path: Path to bird directory (containing data/syllables)
+        save_path: Directory to save PDF files
+        bird_str: Bird identifier for filenames
+        max_samples_per_label: Maximum number of spectrograms per label
+    """
+    try:
+        # Load embeddings and hashes
+        embeddings, hashes, ground_truth_labels = load_umap_embeddings(embeddings_path)
+        if embeddings is None:
+            logging.error(f"Could not load embeddings from {embeddings_path}")
+            return False
+
+        # Load cluster labels
+        cluster_labels, cluster_hashes, scores = load_labels(cluster_labels_path)
+        if cluster_labels is None:
+            logging.error(f"Could not load cluster labels from {cluster_labels_path}")
+            return False
+
+        # Ensure hashes match between embeddings and cluster labels
+        if len(hashes) != len(cluster_hashes) or not all(h1 == h2 for h1, h2 in zip(hashes, cluster_hashes)):
+            logging.warning("Hash mismatch between embeddings and cluster labels")
+            # You might want to implement hash alignment here
+
+        # Get unique cluster labels (exclude noise if using HDBSCAN)
+        unique_clusters = np.unique(cluster_labels)
+        non_noise_clusters = unique_clusters[unique_clusters != -1]  # Remove noise cluster
+
+        logging.info(f"Creating PDFs for {len(non_noise_clusters)} clusters")
+
+        # Create save directory
+        os.makedirs(save_path, exist_ok=True)
+
+        # Process each cluster
+        for cluster_id in tqdm(non_noise_clusters, desc="Creating cluster PDFs"):
+            try:
+                # Get indices for this cluster
+                cluster_indices = np.where(cluster_labels == cluster_id)[0]
+
+                if len(cluster_indices) == 0:
+                    continue
+
+                # Sample if too many spectrograms
+                if len(cluster_indices) > max_samples_per_label:
+                    sampled_indices = np.random.choice(cluster_indices,
+                                                       size=max_samples_per_label,
+                                                       replace=False)
+                else:
+                    sampled_indices = cluster_indices
+
+                # Get hashes for this cluster
+                cluster_hashes_subset = [hashes[i] for i in sampled_indices]
+
+                # Load spectrograms for this cluster
+                spectrograms = []
+                valid_hashes = []
+                valid_gt_labels = []
+
+                for i, hash_id in enumerate(cluster_hashes_subset):
+                    spec = load_spectrogram_from_hash(hash_id, bird_path)
+                    if spec is not None:
+                        spectrograms.append(spec)
+                        valid_hashes.append(hash_id)
+                        # Add ground truth label if available
+                        if ground_truth_labels:
+                            original_idx = sampled_indices[i]
+                            valid_gt_labels.append(ground_truth_labels[original_idx])
+
+                if not spectrograms:
+                    logging.warning(f"No spectrograms found for cluster {cluster_id}")
+                    continue
+
+                # Create PDF for this cluster
+                pdf_filename = f'{bird_str}_cluster_{cluster_id}.pdf'
+                pdf_path = os.path.join(save_path, pdf_filename)
+
+                create_spectrogram_pdf(
+                    spectrograms=spectrograms,
+                    output_pdf_path=pdf_path,
+                    title=f'{bird_str} - Cluster {cluster_id}',
+                    hashes=valid_hashes,
+                    ground_truth_labels=valid_gt_labels if valid_gt_labels else None
+                )
+
+                logging.info(f"Created PDF for cluster {cluster_id}: {len(spectrograms)} spectrograms")
+
+            except Exception as e:
+                logging.error(f"Error processing cluster {cluster_id}: {e}")
+                continue
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Error creating label spectrogram PDFs: {e}")
+        return False
+
+
+def create_spectrogram_pdf(spectrograms: list, output_pdf_path: str,
+                           title: str = "", hashes: list = None,
+                           ground_truth_labels: list = None,
+                           images_per_page: int = 25):
+    """
+    Create a multi-page PDF with spectrogram grids.
+
+    Args:
+        spectrograms: List of 2D numpy arrays (spectrograms)
+        output_pdf_path: Path for output PDF file
+        title: Title for the PDF pages
+        hashes: Optional list of hash IDs for labeling
+        ground_truth_labels: Optional list of ground truth labels
+        images_per_page: Number of spectrograms per page
+    """
+    try:
+        if not spectrograms:
+            logging.warning("No spectrograms provided for PDF creation")
+            return
+        # Calculate grid size
+        grid_size = int(np.ceil(np.sqrt(images_per_page)))
+
+        # Remove existing file if it exists
+        if os.path.exists(output_pdf_path):
+            try:
+                os.remove(output_pdf_path)
+            except PermissionError:
+                logging.warning(f"Could not remove existing file: {output_pdf_path}")
+
+        with PdfPages(output_pdf_path) as pdf:
+            for page_start in range(0, len(spectrograms), images_per_page):
+                page_specs = spectrograms[page_start:page_start + images_per_page]
+                page_hashes = hashes[page_start:page_start + images_per_page] if hashes else None
+                page_gt_labels = ground_truth_labels[
+                    page_start:page_start + images_per_page] if ground_truth_labels else None
+
+                fig, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
+
+                # Handle single subplot case
+                if grid_size == 1:
+                    axes = [[axes]]
+                elif len(axes.shape) == 1:
+                    axes = axes.reshape(1, -1)
+
+                # Plot spectrograms
+                for i, spec in enumerate(page_specs):
+                    row = i // grid_size
+                    col = i % grid_size
+                    ax = axes[row][col]
+
+                    # Plot spectrogram
+                    im = ax.imshow(spec, aspect='auto', origin='lower', cmap='viridis')
+                    ax.axis('off')
+
+                    # Create title with available information
+                    title_parts = []
+                    if page_hashes and i < len(page_hashes):
+                        title_parts.append(f'{page_hashes[i][:8]}...')
+                    if page_gt_labels and i < len(page_gt_labels):
+                        title_parts.append(f'GT:{page_gt_labels[i]}')
+
+                    if title_parts:
+                        ax.set_title(' | '.join(title_parts), fontsize=8)
+
+                # Hide unused subplots
+                for i in range(len(page_specs), grid_size * grid_size):
+                    row = i // grid_size
+                    col = i % grid_size
+                    axes[row][col].axis('off')
+
+                # Add main title
+                if title:
+                    page_num = (page_start // images_per_page) + 1
+                    total_pages = int(np.ceil(len(spectrograms) / images_per_page))
+                    fig.suptitle(f'{title} - Page {page_num}/{total_pages}',
+                                 fontsize=16, y=0.98)
+
+                plt.tight_layout()
+                pdf.savefig(fig, bbox_inches='tight', dpi=150)
+                plt.close(fig)
+
+    except Exception as e:
+        logging.error(f"Error creating spectrogram PDF: {e}")
+
+
+def create_all_cluster_pdfs_for_bird(bird_path: str, bird_name: str,
+                                     embedding_filename: str = None,
+                                     cluster_filename: str = None):
+    """
+    Convenience function to create PDFs for all clusters of a bird.
+
+    Args:
+        bird_path: Path to bird directory
+        bird_name: Bird identifier
+        embedding_filename: Specific embedding file to use (best one if None)
+        cluster_filename: Specific cluster file to use (best one if None)
+    """
+    try:
+        data_path = os.path.join(bird_path, 'data')
+
+        # Find embedding file
+        if embedding_filename is None:
+            embeddings_dir = os.path.join(data_path, 'embeddings')
+            embedding_files = [f for f in os.listdir(embeddings_dir) if f.endswith('.h5')]
+            if not embedding_files:
+                logging.error(f"No embedding files found for {bird_name}")
+                return False
+            embedding_filename = embedding_files[0]  # Use first one or implement selection logic
+
+        embeddings_path = os.path.join(data_path, 'embeddings', embedding_filename)
+
+        # Find cluster file
+        if cluster_filename is None:
+            # Look for best cluster file in master summary
+            master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+            if os.path.exists(master_summary_path):
+                summary_df = pd.read_csv(master_summary_path)
+                if not summary_df.empty:
+                    # Get the best performing cluster file
+                    best_row = summary_df.iloc[0]  # Assuming sorted by performance
+                    cluster_filename = os.path.basename(str(best_row['label_path']))
+                else:
+                    logging.error(f"Empty master summary for {bird_name}")
+                    return False
+            else:
+                logging.error(f"No master summary found for {bird_name}")
+                return False
+
+        # Find the cluster file path
+        labelling_dir = os.path.join(data_path, 'labelling')
+        cluster_labels_path = None
+
+        # Search through labelling subdirectories
+        for root, dirs, files in os.walk(labelling_dir):
+            if cluster_filename in files:
+                cluster_labels_path = os.path.join(root, cluster_filename)
+                break
+
+        if cluster_labels_path is None:
+            logging.error(f"Could not find cluster file {cluster_filename} for {bird_name}")
+            return False
+
+        # Create output directory
+        pdf_save_path = os.path.join(bird_path, 'figures', 'cluster_spectrograms')
+
+        # Create the PDFs
+        success = create_label_spectrograms_pdf(
+            embeddings_path=embeddings_path,
+            cluster_labels_path=cluster_labels_path,
+            bird_path=bird_path,
+            save_path=pdf_save_path,
+            bird_str=bird_name
+        )
+
+        if success:
+            logging.info(f"Successfully created cluster PDFs for {bird_name}")
+
+        return success
+
+    except Exception as e:
+        logging.error(f"Error creating cluster PDFs for {bird_name}: {e}")
+        return False
+
+
+def run_interactive_plot_from_results(bird_path: str, bird_name: str,
+                                      embedding_filename: str = None,
+                                      cluster_filename: str = None):
+    """
+    Convenience function to launch interactive plot from clustering results.
+
+    Args:
+        bird_path: Path to bird directory
+        bird_name: Bird identifier
+        embedding_filename: Specific embedding file (best one if None)
+        cluster_filename: Specific cluster file (best one if None)
+    """
+    try:
+        data_path = os.path.join(bird_path, 'data')
+
+        # Find embedding file (same logic as above)
+        if embedding_filename is None:
+            embeddings_dir = os.path.join(data_path, 'embeddings')
+            embedding_files = [f for f in os.listdir(embeddings_dir) if f.endswith('.h5')]
+            if not embedding_files:
+                logging.error(f"No embedding files found for {bird_name}")
+                return False
+            embedding_filename = embedding_files[0]
+
+        embeddings_path = os.path.join(data_path, 'embeddings', embedding_filename)
+
+        # Load data for plotting
+        cluster_labels_path = None
+        if cluster_filename is not None:
+            # Find cluster file path (same logic as above)
+            # Find cluster file path (same logic as above)
+            labelling_dir = os.path.join(data_path, 'labelling')
+            for root, dirs, files in os.walk(labelling_dir):
+                if cluster_filename in files:
+                    cluster_labels_path = os.path.join(root, cluster_filename)
+                    break
+
+            # Load data for interactive plotting
+        plot_data = load_data_for_interactive_plot(
+            embeddings_path=embeddings_path,
+            cluster_labels_path=cluster_labels_path,
+            bird_path=bird_path
+        )
+
+        if plot_data is None:
+            logging.error(f"Could not load data for interactive plot for {bird_name}")
+            return False
+
+        # Launch interactive plot
+        interactive_plot_umap_v2(
+            embeddings=plot_data['embeddings'],
+            hashes=plot_data['hashes'],
+            ground_truth_labels=plot_data['ground_truth_labels'],
+            cluster_labels=plot_data['cluster_labels'],
+            bird=bird_name,
+            bird_path=bird_path
+        )
+
+        return True
+
+    except Exception as e:
+        logging.error(f"Error running interactive plot for {bird_name}: {e}")
+        return False
+
+
+def run_interactive_plot_from_best_results(bird_path: str, bird_name: str):
+    """
+    Launch interactive plot using the best clustering results for a bird.
+
+    Args:
+        bird_path: Path to bird directory
+        bird_name: Bird identifier
+    """
+    try:
+        # Load master summary to find best results
+        master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+        if not os.path.exists(master_summary_path):
+            logging.error(f"No master summary found for {bird_name}")
+            return False
+
+        summary_df = pd.read_csv(master_summary_path)
+        if summary_df.empty:
+            logging.error(f"Empty master summary for {bird_name}")
+            return False
+
+        # Get the best result (first row, assuming sorted by performance)
+        best_row = summary_df.iloc[0]
+
+        # Extract embedding parameters to find embedding file
+        n_neighbors = best_row['n_neighbors']
+        min_dist = best_row['min_dist']
+        metric = best_row['metric']
+        embedding_filename = f'{metric}_{int(n_neighbors)}neighbors_{min_dist}dist.h5'
+
+        # Get cluster filename
+        cluster_filename = os.path.basename(str(best_row['label_path']))
+
+        logging.info(f"Using best results for {bird_name}:")
+        logging.info(f"  Embedding: {embedding_filename}")
+        logging.info(f"  Clusters: {cluster_filename}")
+        logging.info(f"  Composite Score: {best_row.get('composite_score', 'N/A')}")
+
+        return run_interactive_plot_from_results(
+            bird_path=bird_path,
+            bird_name=bird_name,
+            embedding_filename=embedding_filename,
+            cluster_filename=cluster_filename
+        )
+
+    except Exception as e:
+        logging.error(f"Error running interactive plot from best results for {bird_name}: {e}")
+        return False
+
+
+def example_usage_interactive_plot():
+"""Example of how to use the interactive plotting functions."""
+
+# Example 1: Plot from specific files
+bird_path = "/path/to/bird/directory"
+bird_name = "bu85bu97"
+
+# Use specific files
+success = run_interactive_plot_from_results(
+    bird_path=bird_path,
+    bird_name=bird_name,
+    embedding_filename="euclidean_20neighbors_0.1dist.h5",
+    cluster_filename="hdbscan_min_cluster_size20_min_samples5_labels.h5"
+)
+
+# Example 2: Use best results automatically
+success = run_interactive_plot_from_best_results(
+    bird_path=bird_path,
+    bird_name=bird_name
+)
+
+
+def example_usage_create_pdfs():
+    """Example of how to create cluster PDFs."""
+
+    bird_path = "/path/to/bird/directory"
+    bird_name = "bu85bu97"
+
+    # Create PDFs for all clusters using best results
+    success = create_all_cluster_pdfs_for_bird(
+        bird_path=bird_path,
+        bird_name=bird_name
+    )
+
+    if success:
+        print(f"PDFs created successfully for {bird_name}")
+    else:
+        print(f"Failed to create PDFs for {bird_name}")
 
 
 def main():

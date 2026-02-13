@@ -1048,7 +1048,7 @@ def main():
             'copy_locally': True,
             'params': SpectrogramParams(
                 nfft=1024,
-                hop=128,
+                hop=1,
                 max_dur=0.150,
                 songs_per_bird=5,
                 overwrite_existing=True
@@ -1062,7 +1062,7 @@ def main():
             'copy_locally': True,
             'params': SpectrogramParams(
                 nfft=1024,
-                hop=128,
+                hop=1,
                 max_dur=0.150,
                 songs_per_bird=5,
                 overwrite_existing=True

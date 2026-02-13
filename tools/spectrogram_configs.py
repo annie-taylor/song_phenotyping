@@ -8,7 +8,7 @@ class SpectrogramParams:
     """
     """
     nfft: int = 1024
-    hop: int = 128
+    hop: int = 1
     target_shape: tuple[int, int] = (int((nfft/2) + 1), 300)
     min_freq: float = 400.0
     max_freq: float = 15000.0

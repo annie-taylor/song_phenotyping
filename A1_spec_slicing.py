@@ -237,7 +237,7 @@ if __name__ == "__main__":
     wseg_save_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
     wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
 
-    songs_per_bird = 10
+    songs_per_bird = 5
     bird_subset = ['bu10wh86']
 
     logger.info("🚀 Starting slice processing pipeline")
