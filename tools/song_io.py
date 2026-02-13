@@ -148,7 +148,7 @@ def load_and_validate_metadata(metadata_file_path: str, wseg_offset: float = 0.0
         # Extract required arrays
         raw_onsets = metadata_matfile.get('onsets')
         raw_offsets = metadata_matfile.get('offsets')
-        labels = metadata_matfile.get('labels')
+        labels = list(metadata_matfile.get('labels'))
 
         # Clean up metadata file from memory
         del metadata_matfile
