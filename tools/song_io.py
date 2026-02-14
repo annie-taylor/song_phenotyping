@@ -1045,7 +1045,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
     assert s1 < s2, f"s1: {s1}, s2: {s2}, t1: {t1}, t2: {t2}"
 
     # if the segment is too small or invalid, return empty spectrogram
-    if (s1 < 0) or (s2 >= len(audio)):
+    if (s1 < 0) or (s2 > len(audio)):
         logger.debug(f"⚠️ Invalid segment bounds: s1={s1}, s2={s2}, audio_len={len(audio)}")
         return (np.full(params.target_shape, fill_value), np.zeros(s2 - s1), np.array([]))
     else:
@@ -1058,10 +1058,10 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         non_negative_time_indices = t >= 0
         non_negative_time_indices[-int(params.nfft / 2):] = False
         t = t[non_negative_time_indices]
-        spec = np.log(abs(Sx[:, non_negative_time_indices]))
+        spec = np.log(abs(Sx[:, non_negative_time_indices])  + EPSILON)
         t += max(0, t1)  # adjust time to start at t1
 
-        p5, p95 = np.percentile(spec, [10, 90])  # before padding
+        p5, p95 = np.percentile(spec, [2, 98])  # before padding
         exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
         if spec.shape[1] > exp_spec.shape[1]:
             logger.warning(f"✂️ Truncating spectrogram from {spec.shape[1]} to {exp_spec.shape[1]} frames. "
@@ -1070,7 +1070,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         exp_spec[:, :np.shape(spec)[1]] = spec[:, :]
         # Then normalize the whole thing
         exp_spec = (exp_spec - p5) / (p95 - p5)
-        exp_spec = np.clip(exp_spec, 0, 1)
+        #exp_spec = np.clip(exp_spec, 0, 1)
 
         if downsample:
             spec = downsample_spec(exp_spec, params)

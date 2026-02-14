@@ -15,6 +15,13 @@ from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_utils import read_audio_file
 from tools.audio_path_management import load_audio_paths_mapping, get_audio_path
 
+import matplotlib
+# Uncomment the one you want to use:
+matplotlib.use('MacOSX')     # macOS
+# matplotlib.use('TkAgg')      # Cross-platform default
+# matplotlib.use('Qt5Agg')     # If you have PyQt5
+# matplotlib.use('Agg')        # Headless/remote
+
 
 @dataclass
 class SongVisualizationConfig:
@@ -23,7 +30,7 @@ class SongVisualizationConfig:
     figure_size: Tuple[float, float] = (12, 6)
     colormap: str = 'viridis'
     max_files_per_bird: int = 10
-    skip_existing: bool = True
+    skip_existing: bool = False
 
 
 class SongVisualizer:
@@ -121,7 +128,7 @@ class SongVisualizer:
             params = SpectrogramParams()
             params.max_dur  = self.config.target_duration
             audio = butter_bandpass_filter_sos(
-                audio, lowcut=params.min_freq, highcut=params.max_freq, fs=sr, order=5
+                audio, lowcut=params.min_freq, highcut=params.max_freq, fs=sr, order=3
             )
 
             # Trim or pad to target duration
@@ -148,7 +155,6 @@ class SongVisualizer:
             ax.set_title(f'Song Spectrogram: {filename}')
 
             plt.tight_layout()
-            plt.show()
             return fig
 
         except Exception as e:

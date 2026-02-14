@@ -639,9 +639,9 @@ if __name__ == '__main__':
 
                 # Create config for testing
                 config = CatalogConfig(
-                    n_spectrograms=10,  # Small number for testing
-                    spectrograms_per_page=4,
-                    overwrite_spectrograms=False  # Reuse existing spectrograms
+                    n_spectrograms=20,  # Small number for testing
+                    spectrograms_per_page=2,
+                    overwrite_spectrograms=True # Reuse existing spectrograms
                 )
 
                 # Generate catalog (rank 0 only by default)

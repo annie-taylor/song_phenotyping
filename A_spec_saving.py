@@ -1042,7 +1042,7 @@ def main():
         'evsonganaly': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'evsong test warp'),
             'batch_file_naming': 'batch.txt.labeled',
             'bird_subset': ['or18or24'],
             'copy_locally': True,
@@ -1051,23 +1051,24 @@ def main():
                 hop=1,
                 max_dur=0.150,
                 songs_per_bird=5,
-                overwrite_existing=True
+                overwrite_existing=True,
+                use_warping=True
             )
         },
-        'wseg': {
-            'enabled': True,
-            'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-            'bird_subset': ['bu85bu97'],
-            'copy_locally': True,
-            'params': SpectrogramParams(
-                nfft=1024,
-                hop=1,
-                max_dur=0.150,
-                songs_per_bird=5,
-                overwrite_existing=True
-            )
-        }
+        # 'wseg': {
+        #     'enabled': True,
+        #     'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
+        #     'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        #     'bird_subset': ['bu85bu97'],
+        #     'copy_locally': True,
+        #     'params': SpectrogramParams(
+        #         nfft=1024,
+        #         hop=1,
+        #         max_dur=0.150,
+        #         songs_per_bird=5,
+        #         overwrite_existing=True
+        #     )
+        # }
     }
 
     # Process each pipeline

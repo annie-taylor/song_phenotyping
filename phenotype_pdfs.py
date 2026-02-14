@@ -170,7 +170,7 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                 return None
 
             # Create spectrogram plot with better spacing
-            fig, ax = plt.subplots(figsize=(12, 5))  # Increased height from 4 to 5
+            fig, ax = plt.subplots(figsize=(12, 4))
             ax.imshow(spec, aspect='auto', origin='lower', extent=[0, duration, 0, spec.shape[0]])
 
             # Remove frame/spines but keep time axis
