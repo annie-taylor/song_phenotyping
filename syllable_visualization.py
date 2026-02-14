@@ -240,29 +240,17 @@ def create_syllable_samples_for_bird(project_directory: str, bird: str,
 def example_usage():
     """Example of how to use the simple syllable sampling module."""
 
-    project_dir = "/Volumes/Extreme SSD/evsong test"
+    test_paths = [
+        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    ]
 
-    # Basic usage - all birds, default settings
-    results = quick_syllable_sampling(project_dir)
-    print(f"Created PDFs for {len(results)} birds")
+    for project_dir in test_paths:
 
-    # Custom number of syllables
-    results = quick_syllable_sampling(project_dir, syllables_per_bird=60)
+        # Basic usage - all birds, default settings
+        results = quick_syllable_sampling(project_dir)
+        print(f"Created PDFs for {len(results)} birds")
 
-    # Single bird
-    pdf_path = create_syllable_samples_for_bird(project_dir, "bird1", syllables_per_bird=50)
-    if pdf_path:
-        print(f"Created PDF: {pdf_path}")
-
-    # Custom configuration
-    config = SyllableSamplingConfig(
-        syllables_per_bird=30,
-        pdf_grid_size=(5, 2),  # 5 columns, 2 rows
-        random_seed=123
-    )
-
-    sampler = SyllableSampler(project_dir, config)
-    results = sampler.create_sample_pdfs(['bird1', 'bird2'])
 
 
 if __name__ == '__main__':

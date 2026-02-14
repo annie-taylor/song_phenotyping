@@ -1,6 +1,8 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, List
+
 import pandas as pd
+import numpy as np
 
 
 @dataclass
@@ -19,6 +21,12 @@ class SpectrogramParams:
     slice_length: Optional[float] = None  # in milliseconds
     songs_per_bird: int = 5
     overwrite_existing: bool = False
+
+    # Warping parameters
+    use_warping: bool = False
+    warp_freq_sum: bool = True  # Sum over frequency for warping
+    shift_lambdas: List[float] = field(default_factory=lambda: [100, 10, 1, 0])
+    slope_lambdas: List[float] = field(default_factory=lambda: [np.inf, np.inf, 10, 1])
     
     def __post_init__(self):
         """Validate parameters after initialization."""

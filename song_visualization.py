@@ -43,7 +43,7 @@ class SongVisualizer:
                     item.name != 'copied_data'):
 
                 # Check for audio path mapping
-                mapping_file = item / 'audio_paths.json'
+                mapping_file = item / 'audio_paths.txt'
                 if mapping_file.exists():
                     birds.append(item.name)
 
@@ -119,6 +119,7 @@ class SongVisualizer:
 
             # Apply filtering
             params = SpectrogramParams()
+            params.max_dur  = self.config.target_duration
             audio = butter_bandpass_filter_sos(
                 audio, lowcut=params.min_freq, highcut=params.max_freq, fs=sr, order=5
             )
@@ -147,15 +148,14 @@ class SongVisualizer:
             ax.set_title(f'Song Spectrogram: {filename}')
 
             plt.tight_layout()
+            plt.show()
             return fig
 
         except Exception as e:
             logger.warning(f"Failed to create spectrogram for {filename}: {e}")
             return None
 
-
 # Simple utility functions
-
 def quick_song_pdfs(project_directory: str, birds: List[str] = None,
                     target_duration: float = 8.0, max_files: int = 10) -> Dict[str, str]:
     """
@@ -178,35 +178,53 @@ def quick_song_pdfs(project_directory: str, birds: List[str] = None,
     visualizer = SongVisualizer(project_directory, config)
     return visualizer.create_song_pdfs(birds)
 
+def create_song_pdf_for_bird(project_directory: str, bird: str,
+                           target_duration: float = 8.0) -> Optional[str]:
+    """
+    Create song PDF for a single bird.
 
-# Example usage
+    Args:
+        project_directory: Path to project directory
+        bird: Bird name to process (should exist in project directory)
+        target_duration: Duration of song clips in seconds
+
+    Returns:
+        Path to created PDF or None if failed
+    """
+    config = SongVisualizationConfig(target_duration=target_duration)
+    visualizer = SongVisualizer(project_directory, config)
+    return visualizer._create_single_bird_pdf(bird)
+
 def example_usage():
     """Example of how to use the simplified song visualization module."""
 
-    project_dir = "/Volumes/Extreme SSD/evsong test"
+    project_directories = [
+        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    ]
 
-    # Basic usage - all birds, default settings
-    results = quick_song_pdfs(project_dir)
-    print(f"Created PDFs for {len(results)} birds")
+    # Process all projects
+    logger.info("🚀 Processing all projects...")
+    all_results = {}
 
-    # Custom duration and file limit
-    results = quick_song_pdfs(project_dir, target_duration=10.0, max_files=5)
+    for project_dir in project_directories:
+        logger.info(f"🔄 Processing project: {project_dir}")
 
-    # Single bird
-    pdf_path = create_song_pdf_for_bird(project_dir, "bird1", target_duration=6.0)
-    if pdf_path:
-        print(f"Created PDF: {pdf_path}")
+        if not os.path.exists(project_dir):
+            logger.warning(f"Project directory not found: {project_dir}")
+            all_results[project_dir] = {}
+            continue
 
-    # Custom configuration
-    config = SongVisualizationConfig(
-        target_duration=12.0,
-        figure_size=(15, 8),
-        colormap='plasma',
-        max_files_per_bird=8
-    )
+        try:
+            results = quick_song_pdfs(project_dir, target_duration=6.0, max_files=5)
+            all_results[project_dir] = results
 
-    visualizer = SongVisualizer(project_dir, config)
-    results = visualizer.create_song_pdfs(['bird1', 'bird2'])
+            successful = sum(1 for path in results.values() if path is not None)
+            logger.info(f"✅ {os.path.basename(project_dir)}: {successful}/{len(results)} birds successful")
+
+        except Exception as e:
+            logger.error(f"Error processing {project_dir}: {e}")
+            all_results[project_dir] = {}
 
 
 if __name__ == '__main__':
