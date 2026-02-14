@@ -180,7 +180,7 @@ class SyllableSampler:
                     ax = axes[i]
 
                     # Plot spectrogram
-                    ax.imshow(syl['spectrogram'], aspect='auto', origin='lower', cmap='viridis')
+                    ax.imshow(syl['spectrogram'], aspect='auto', origin='lower', cmap='plasma')
                     ax.set_xticks([])
                     ax.set_yticks([])
 

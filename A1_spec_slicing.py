@@ -17,15 +17,18 @@ from tools.song_io import (
 from tools.spectrogram_configs import SpectrogramParams
 from tools.system_utils import check_sys_for_macaw_root
 
+# Import the efficient file discovery functions from your first module
+from your_first_module import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_files
+
 
 def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: str = None,
-                                          file_ext: str = '.wav.not.mat',
+                                          batch_file_naming: str = 'batch.txt.labeled',
                                           params: 'SpectrogramParams' = None, verbose: bool = False,
-                                          slice_mode: bool = False, slice_length: float = None,
+                                          slice_length: float = None,
                                           overwrite: bool = False, songs_per_bird: int = 20,
-                                          read_from_batch_file: bool = False, birds_keep: list = None):
+                                          bird_subset: list = None, copy_locally: bool = False):
     """
-    Updated to use consolidated utilities from song_io
+    Updated to use efficient file discovery from the first module
     """
     if params is None:
         params = SpectrogramParams()
@@ -36,97 +39,92 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
     params.songs_per_bird = songs_per_bird
     params.overwrite_existing = overwrite
 
-    logger.info(f"🔍 Starting evsonganaly processing with slice_length={slice_length}ms")
+    logger.info(f"🔍 Starting evsonganaly slicing with slice_length={slice_length}ms")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
-    if not os.path.isdir(save_path):
-        os.mkdir(save_path)
+    # Use the efficient file discovery from your first module
+    metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(
+        wav_directory=wav_directory,
+        save_path=save_path,
+        batch_file_naming=batch_file_naming,
+        bird_subset=bird_subset,
+        copy_locally=copy_locally
+    )
 
-    birds = []
-    metadata_file_paths = {}
+    birds = list(metadata_file_paths.keys())
+    logger.info(f"🐦 Found {len(birds)} birds to process")
 
-    # File discovery logic (keep your existing logic)
-    if read_from_batch_file:
-        for root, dirs, files in os.walk(wav_directory, topdown=False):
-            for file in files:
-                if 'batch.txt.labeled' in file and 'labeled_songs_final' in root:
-                    songs = []
-                    with open(os.path.join(root, file), 'r') as f:
-                        for line in f:
-                            song_name = line.replace('\n', '.not.mat')
-                            songs.append(os.path.join(root, song_name))
-
-                    try:
-                        [bird, _, _] = line.split('_')[0:3]
-                    except ValueError:
-                        try:
-                            [bird, _] = line.split('_')[0:2]
-                        except ValueError:
-                            [bird, _] = line.split('.')[0:2]
-
-                    bird_folder = os.path.join(save_path, bird)
-                    if not os.path.isdir(bird_folder):
-                        os.mkdir(bird_folder)
-
-                    if bird not in birds:
-                        birds.append(bird)
-                        metadata_file_paths[bird] = songs
-                    else:
-                        for song in songs:
-                            metadata_file_paths[bird].append(song)
-
-    if birds_keep is not None:
-        birds = [bird for bird in birds if bird in birds_keep]
+    successful_birds = []
+    failed_birds = []
 
     # Process each bird using consolidated utilities
-    for bird in birds:
-        logger.info(f"🐦 Processing bird: {bird}")
+    for bird_idx, bird in enumerate(birds, 1):
+        logger.info(f"🔄 Processing bird {bird_idx}/{len(birds)}: {bird}")
+        logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
-        # Use consolidated path creation
-        paths = create_output_paths(save_path, bird)
-        slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
-        already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
+        try:
+            # Use consolidated path creation
+            paths = create_output_paths(save_path, bird)
+            slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+            already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
-        if len(already_saved_files) < params.songs_per_bird:
-            needed_files = params.songs_per_bird - len(already_saved_files)
+            needed_count = params.songs_per_bird - len(already_saved_files)
+            logger.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
-            if len(metadata_file_paths[bird]) > needed_files:
-                candidate_file_paths = sample(metadata_file_paths[bird], k=needed_files)
-            else:
-                candidate_file_paths = metadata_file_paths[bird]
+            if needed_count <= 0:
+                logger.info(f'  ⏭️ {bird} already processed, skipping...')
+                successful_birds.append(bird)
+                continue
 
-            # Remove already processed files using consolidated filename parsing
-            remaining_candidates = []
-            for path in candidate_file_paths:
-                file_info = parse_audio_filename(path)
-                if file_info['success']:
-                    # Check if this file was already processed
-                    expected_output = f"syllables_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
-                    if expected_output not in already_saved_files:
-                        remaining_candidates.append(path)
+            # Use the efficient file selection from your first module
+            logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
+            candidate_file_paths = select_new_files(
+                metadata_file_paths[bird],
+                already_saved_files,
+                needed_count
+            )
 
-            # Process files using the consolidated function
-            if remaining_candidates:
-                logger.info(f"🎵 Processing {len(remaining_candidates)} files for {bird}")
+            if candidate_file_paths:
+                logger.info(f"  🎵 Processing {len(candidate_file_paths)} files for {bird}")
+
+                # Process files using the consolidated function
                 save_spec_slices(
-                    metadata_file_paths=remaining_candidates,
+                    metadata_file_paths=candidate_file_paths,
                     save_path=save_path,  # save_spec_slices will use create_output_paths internally
                     params=params,
                     slice_length=params.slice_length,
                     verbose=verbose,
-                    read_songpath_from_metadata=False
+                    read_songpath_from_metadata=False,  # evsonganaly uses simple path mapping
+                    prefer_local=copy_locally
                 )
+
+                logger.info(f"  ✅ {bird} slicing complete")
+                successful_birds.append(bird)
             else:
-                logger.info(f'⏭️ {bird} already processed, skipping...')
+                logger.warning(f"  ❌ No new files found for {bird}")
+                failed_birds.append(bird)
+
+        except Exception as e:
+            logger.error(f"  💥 Error processing bird {bird}: {e}")
+            failed_birds.append(bird)
+
+        logger.info(f"📊 Memory usage after {bird}: {get_memory_usage():.1f} MB")
+        gc.collect()  # Force cleanup between birds
+
+    # Final summary
+    logger.info(f"🎯 Evsonganaly slicing complete! Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+    if failed_birds:
+        logger.warning(f"❌ Failed birds: {failed_birds}")
+    logger.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
 
 
 def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = None,
                                    file_ext: str = '.wav.not.mat',
                                    params: 'SpectrogramParams' = None, verbose: bool = False,
                                    songs_per_bird: int = 20, bird_subset: list = None,
-                                   song_or_call: str = 'song'):
+                                   song_or_call: str = 'song', copy_locally: bool = False):
     """
-    Updated to use consolidated utilities from song_io
+    Updated to use efficient file discovery from the first module
     """
     song_or_call = song_or_call.lower()
     if song_or_call not in ['song', 'call']:
@@ -145,81 +143,184 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
     params.slice_length = slice_length
     params.songs_per_bird = songs_per_bird
 
-    logger.info(f"🔍 Starting wseg processing with slice_length={slice_length}ms")
+    logger.info(f"🔍 Starting wseg slicing with slice_length={slice_length}ms")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
-    if not os.path.isdir(save_path):
-        os.mkdir(save_path)
+    # Use the efficient file discovery from your first module
+    metadata_file_paths = filepaths_from_wseg(
+        seg_directory=seg_directory,
+        save_path=save_path,
+        song_or_call=song_or_call,
+        file_ext=file_ext,
+        bird_subset=bird_subset,
+        copy_locally=copy_locally
+    )
 
-    song_file_paths = {}
-    birds = []
+    birds = list(metadata_file_paths.keys())
+    logger.info(f"🐦 Found {len(birds)} birds to process")
 
-    # Walk through the directory structure (keep existing logic)
-    for root, dirs, files in os.walk(seg_directory, topdown=False):
-        for file in files:
-            if file.endswith(file_ext) and (song_or_call in root):
-                path_to_file = os.path.join(root, file)
-
-                # Use consolidated filename parsing
-                file_info = parse_audio_filename(path_to_file)
-                if not file_info['success']:
-                    logger.warning(f"⚠️ Could not parse filename: {file}")
-                    continue
-
-                bird = file_info['bird']
-
-                if (bird_subset is None) or (bird in bird_subset):
-                    # Use consolidated path creation
-                    paths = create_output_paths(save_path, bird)
-
-                    if bird not in birds:
-                        birds.append(bird)
-                        song_file_paths[bird] = [path_to_file]
-                    else:
-                        song_file_paths[bird].append(path_to_file)
+    successful_birds = []
+    failed_birds = []
 
     # Process each bird using consolidated utilities
-    for bird in birds:
-        logger.info(f"🐦 Processing wseg bird: {bird}")
+    for bird_idx, bird in enumerate(birds, 1):
+        logger.info(f"🔄 Processing wseg bird {bird_idx}/{len(birds)}: {bird}")
+        logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
-        # Use consolidated path creation
-        paths = create_output_paths(save_path, bird)
-        slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
-        already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
+        try:
+            # Use consolidated path creation
+            paths = create_output_paths(save_path, bird)
+            slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+            already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
-        if len(already_saved_files) < params.songs_per_bird:
-            needed_files = params.songs_per_bird - len(already_saved_files)
+            needed_count = params.songs_per_bird - len(already_saved_files)
+            logger.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
-            if len(song_file_paths[bird]) > needed_files:
-                metadata_file_paths = sample(song_file_paths[bird], k=needed_files)
-            else:
-                metadata_file_paths = song_file_paths[bird]
+            if needed_count <= 0:
+                logger.info(f'  ⏭️ {bird} already processed, skipping...')
+                successful_birds.append(bird)
+                continue
 
-            # Remove already processed files using consolidated filename parsing
-            remaining_candidates = []
-            for path in metadata_file_paths:
-                file_info = parse_audio_filename(path)
-                if file_info['success']:
-                    # Check if this file was already processed - UPDATE FILENAME PREFIX
-                    expected_output = f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
-                    if expected_output not in already_saved_files:
-                        remaining_candidates.append(path)
+            # Use the efficient file selection from your first module
+            logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
+            candidate_file_paths = select_new_files(
+                metadata_file_paths[bird],
+                already_saved_files,
+                needed_count
+            )
 
-            # Process files using the consolidated function
-            if remaining_candidates:
-                logger.info(f"🎵 Processing {len(remaining_candidates)} wseg files for {bird}")
+            if candidate_file_paths:
+                logger.info(f"  🎵 Processing {len(candidate_file_paths)} wseg files for {bird}")
+
+                # Process files using the consolidated function
                 save_spec_slices(
-                    metadata_file_paths=remaining_candidates,
+                    metadata_file_paths=candidate_file_paths,
                     save_path=save_path,  # save_spec_slices will use create_output_paths internally
                     params=params,
                     slice_length=slice_length,
                     verbose=verbose,
-                    read_songpath_from_metadata=True
+                    read_songpath_from_metadata=True,  # wseg uses metadata-based path mapping
+                    prefer_local=copy_locally
                 )
+
+                logger.info(f"  ✅ {bird} slicing complete")
+                successful_birds.append(bird)
             else:
-                logger.info(f'⏭️ No new files found for {bird}')
-        else:
-            logger.info(f'⏭️ {bird} already processed, skipping...')
+                logger.warning(f"  ❌ No new files found for {bird}")
+                failed_birds.append(bird)
+
+        except Exception as e:
+            logger.error(f"  💥 Error processing wseg bird {bird}: {e}")
+            failed_birds.append(bird)
+
+        logger.info(f"📊 Memory usage after {bird}: {get_memory_usage():.1f} MB")
+        gc.collect()  # Force cleanup between birds
+
+    # Final summary
+    logger.info(f"🎯 Wseg slicing complete! Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+    if failed_birds:
+        logger.warning(f"❌ Failed birds: {failed_birds}")
+    logger.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
+
+
+def process_slicing_pipeline(pipeline_name: str, settings: dict):
+    """Process a single slicing pipeline (evsonganaly or wseg)."""
+    logger.info("=" * 60)
+    logger.info(f"✂️ {pipeline_name.upper()} SLICING")
+    logger.info("=" * 60)
+
+    try:
+        if pipeline_name == 'evsonganaly':
+            slice_syllable_files_from_evsonganaly(
+                wav_directory=settings['source_dir'],
+                save_path=settings['save_dir'],
+                batch_file_naming=settings['batch_file_naming'],
+                params=settings['params'],
+                verbose=settings.get('verbose', False),
+                slice_length=settings['params'].slice_length,
+                overwrite=settings['params'].overwrite_existing,
+                songs_per_bird=settings['params'].songs_per_bird,
+                bird_subset=settings['bird_subset'],
+                copy_locally=settings['copy_locally']
+            )
+
+        elif pipeline_name == 'wseg':
+            slice_syllable_files_from_wseg(
+                seg_directory=settings['source_dir'],
+                save_path=settings['save_dir'],
+                file_ext=settings.get('file_ext', '.wav.not.mat'),
+                params=settings['params'],
+                verbose=settings.get('verbose', False),
+                songs_per_bird=settings['params'].songs_per_bird,
+                bird_subset=settings['bird_subset'],
+                song_or_call=settings.get('song_or_call', 'song'),
+                copy_locally=settings['copy_locally']
+            )
+
+        logger.info(f"✅ {pipeline_name.capitalize()} slicing complete!")
+
+    except Exception as e:
+        logger.error(f"💥 Error in {pipeline_name} slicing: {e}")
+        raise
+
+
+def main():
+    """Main slicing pipeline with configurable parameters."""
+    import time
+    start_time = time.time()
+    logger.info("🚀 Starting slice processing pipeline")
+
+    # Setup
+    path_to_macaw = check_sys_for_macaw_root()
+
+    config = {
+        'evsonganaly': {
+            'enabled': True,
+            'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'evsong slice test'),
+            'batch_file_naming': 'batch.txt.labeled',
+            'bird_subset': ['or18or24'],
+            'copy_locally': True,
+            'verbose': False,
+            'params': SpectrogramParams(
+                nfft=1024,
+                hop=1,
+                max_dur=0.050,  # 50ms slices
+                slice_length=50,  # 50ms slices
+                songs_per_bird=5,
+                overwrite_existing=True
+            )
+        },
+        'wseg': {
+            'enabled': True,
+            'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg slice test'),
+            'bird_subset': ['bu10wh86'],
+            'copy_locally': True,
+            'verbose': False,
+            'file_ext': '.wav.not.mat',
+            'song_or_call': 'song',
+            'params': SpectrogramParams(
+                nfft=1024,
+                hop=1,
+                max_dur=0.050,  # 50ms slices
+                slice_length=50,  # 50ms slices
+                songs_per_bird=5,
+                overwrite_existing=True
+            )
+        }
+    }
+
+    # Process each pipeline
+    for pipeline_name, settings in config.items():
+        if not settings['enabled']:
+            logger.info(f"⏭️ Skipping {pipeline_name.upper()} slicing (disabled)")
+            continue
+
+        process_slicing_pipeline(pipeline_name, settings)
+
+    total_time = time.time() - start_time
+    logger.info(f"🎯 All slicing complete! Total time: {total_time:.1f} seconds")
 
 
 # Updated main section for slicing module
@@ -227,32 +328,5 @@ if __name__ == "__main__":
     # Setup logging using consolidated function
     logger = setup_logging()
 
-    from tools.system_utils import check_sys_for_macaw_root
-
-    path_to_macaw = check_sys_for_macaw_root()
-
-    evsong_save_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    evsong_directory = os.path.join(evsong_save_directory, 'evsong test', 'copied data')
-
-    wseg_save_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    wseg_directory = os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata')
-
-    songs_per_bird = 5
-    bird_subset = ['bu10wh86']
-
     logger.info("🚀 Starting slice processing pipeline")
-
-    slice_syllable_files_from_wseg(
-        seg_directory=wseg_directory,
-        file_ext='.wav.not.mat',
-        save_path=wseg_save_directory,
-        verbose=False,
-        songs_per_bird=songs_per_bird,
-        song_or_call='song',
-        bird_subset=bird_subset
-    )
-
-    slice_syllable_files_from_evsonganaly(wav_directory=evsong_directory,
-                                          save_path=evsong_save_directory)
-
-    logger.info("✅ Slice processing complete!")
+    main()

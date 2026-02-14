@@ -34,13 +34,8 @@ class CatalogConfig:
     page_margin: int = 50
     image_height: int = 150
 
+
 class BirdCatalogPDFGenerator:
-    """
-    Generate comprehensive catalog PDFs containing chronologically sorted spectrograms.
-
-    Creates separate PDFs for each clustering rank with both manual and automated labels.
-    """
-
     def __init__(self, bird_path: str, config: CatalogConfig = None):
         self.bird_path = Path(bird_path)
         self.bird_name = self.bird_path.name
@@ -54,6 +49,24 @@ class BirdCatalogPDFGenerator:
         # Create directories
         self.spectrograms_dir.mkdir(parents=True, exist_ok=True)
         self.pdf_output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Add database caching
+        self.syllable_db = None
+        self._load_syllable_database()
+
+    def _load_syllable_database(self):
+        """Load and cache the syllable database once."""
+        try:
+            syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
+            if syllable_db_path.exists():
+                self.syllable_db = pd.read_csv(syllable_db_path)
+                logging.info(f"Loaded syllable database: {len(self.syllable_db)} rows")
+            else:
+                logging.warning(f"Syllable database not found: {syllable_db_path}")
+                self.syllable_db = None
+        except Exception as e:
+            logging.error(f"Error loading syllable database: {e}")
+            self.syllable_db = None
 
     def generate_catalog_pdf(self, rank: int = 0, overwrite: bool = True) -> str:
         """
@@ -85,7 +98,8 @@ class BirdCatalogPDFGenerator:
                     rank=rank,
                     spectrograms_dir=self.spectrograms_dir,
                     overwrite=self.config.overwrite_spectrograms,
-                    duration=self.config.duration
+                    duration=self.config.duration,
+                    syllable_db=self.syllable_db
                 )
                 if spec_path:
                     spectrogram_paths.append((spec_path, timestamp_info))
@@ -639,7 +653,7 @@ if __name__ == '__main__':
 
                 # Create config for testing
                 config = CatalogConfig(
-                    n_spectrograms=20,  # Small number for testing
+                    n_spectrograms=1,  # Small number for testing
                     spectrograms_per_page=2,
                     overwrite_spectrograms=True # Reuse existing spectrograms
                 )

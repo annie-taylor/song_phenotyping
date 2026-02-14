@@ -17,6 +17,7 @@ from reportlab.lib.units import inch, mm
 from reportlab.lib import colors
 from PIL import Image
 import tables
+import gc
 
 from tools.song_io import get_song_spec, rms_norm, butter_bandpass_filter_sos
 from tools.spectrogram_configs import SpectrogramParams
@@ -36,10 +37,10 @@ class PhenotypePDFPaths:
 def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int = 0,
                                     spectrograms_dir: Path = None,
                                     overwrite: bool = False,
-                                    duration: float = 6.0) -> Optional[str]:
+                                    duration: float = 6.0,
+                                    syllable_db: pd.DataFrame = None) -> Optional[str]:  # Add this parameter
     """
     Create spectrogram with both manual and automated labels (shared function).
-    FIXED: Better spacing, no frame, improved label positioning.
     """
     try:
         # Set up directories
@@ -96,11 +97,9 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
             # Load automated labels from syllable database
             automated_labels = None
             try:
-                syllable_db_path = bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
-                if syllable_db_path.exists():
-                    df = pd.read_csv(syllable_db_path)
+                if syllable_db is not None:  # Use cached database instead of loading
                     song_name = syl_file.name
-                    song_data = df[df['song_file'] == song_name]
+                    song_data = syllable_db[syllable_db['song_file'] == song_name]
 
                     if not song_data.empty:
                         cluster_col = f'cluster_rank{rank}_'
@@ -111,6 +110,8 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
                                 int(label) if not pd.isna(label) and label != -1 else -1
                                 for label in labels
                             ])
+                else:
+                    logging.debug("No syllable database available for automated labels")
             except Exception as e:
                 logging.debug(f"Could not load automated labels: {e}")
 
@@ -171,7 +172,7 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
 
             # Create spectrogram plot with better spacing
             fig, ax = plt.subplots(figsize=(12, 4))
-            ax.imshow(spec, aspect='auto', origin='lower', extent=[0, duration, 0, spec.shape[0]])
+            ax.imshow(spec, aspect='auto', origin='lower', cmap='plasma', extent=[0, duration, 0, spec.shape[0]])
 
             # Remove frame/spines but keep time axis
             ax.spines['top'].set_visible(False)
@@ -233,6 +234,7 @@ def create_dual_labeled_spectrogram(syl_file: Path, bird_path: Path, rank: int =
             plt.tight_layout()
             plt.savefig(file_path, dpi=150, bbox_inches='tight', facecolor='white')
             plt.close(fig)
+            gc.collect()
 
             logging.debug(f"Created new spectrogram: {file_path}")
             return str(file_path)

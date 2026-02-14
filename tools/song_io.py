@@ -1058,7 +1058,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         non_negative_time_indices = t >= 0
         non_negative_time_indices[-int(params.nfft / 2):] = False
         t = t[non_negative_time_indices]
-        spec = np.log(abs(Sx[:, non_negative_time_indices])  + EPSILON)
+        spec = np.log(abs(Sx[:, non_negative_time_indices]))
         t += max(0, t1)  # adjust time to start at t1
 
         p5, p95 = np.percentile(spec, [2, 98])  # before padding
@@ -1070,7 +1070,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         exp_spec[:, :np.shape(spec)[1]] = spec[:, :]
         # Then normalize the whole thing
         exp_spec = (exp_spec - p5) / (p95 - p5)
-        #exp_spec = np.clip(exp_spec, 0, 1)
+        exp_spec = np.clip(exp_spec, 0, 1)
 
         if downsample:
             spec = downsample_spec(exp_spec, params)
