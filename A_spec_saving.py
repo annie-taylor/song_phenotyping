@@ -20,7 +20,7 @@ from tools.song_io import (
     load_and_validate_metadata,
     pad_waveforms_to_same_length,
     generate_syllable_hashes,
-    split_long_syllables_with_mapping,
+    process_syllables_with_warping,
     create_output_paths,
     save_segmented_audio_data,
     get_song_specs,
@@ -615,11 +615,14 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
     try:
         logger.debug(f" 🎵 Processing audio: {os.path.basename(audio_file_path)}")
 
-        # Use the consolidated get_song_specs function that returns ProcessingResult
-        result = get_song_specs(
-            audio_file_path, metadata['onsets'], metadata['offsets'],
-            params=params, split_syllables=split_syllables, tempo=True
-        )
+        # Extract spectrograms
+        if hasattr(params, 'use_warping') and params.use_warping:
+            result = process_syllables_with_warping(audio_file_path, metadata['onsets'], metadata['offsets'],
+            params=params, split_syllables=split_syllables, tempo=False)
+        else:
+            # Use the consolidated get_song_specs function that returns ProcessingResult
+            result = get_song_specs(audio_file_path, metadata['onsets'], metadata['offsets'], params=params,
+                                   split_syllables=split_syllables, tempo=False)
 
         # Extract from ProcessingResult
         specs = result.specs
@@ -659,7 +662,7 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
         gc.collect()
 
         if verbose:
-            logger.info(f" ✅ Saved {len(valid_inds)} syllables to {output_path}")
+            logger.info(f" ✅ Saved {len(valid_inds)} syllables/slices to {output_path}")
 
         return True
 
@@ -729,10 +732,16 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
 
     # Create output path and check if already exists
     paths = create_output_paths(save_path, filename_info['bird'])
-    output_path = os.path.join(
-        paths['syllables_dir'],
-        f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
-    )
+    if params.slice_length:
+        output_path = os.path.join(
+            paths['slice_specs_dir'],
+            f"slices_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
+        )
+    else:
+        output_path = os.path.join(
+            paths['syllable_specs_dir'],
+            f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
+        )
     if os.path.exists(output_path):
         return {'status': 'skipped', 'reason': 'Output file already exists'}
 
@@ -828,7 +837,10 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, save_path: str =
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
+            if params.slice_length:
+                syllables_dir = os.path.join(save_path, bird, 'slice_data')
+            else:
+                syllables_dir = os.path.join(save_path, bird, 'syllable_data')
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -914,7 +926,10 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            syllables_dir = os.path.join(save_path, bird, 'data', 'syllables')
+            if params.slice_length:
+                syllables_dir = os.path.join(save_path, bird, 'slice_data')
+            else:
+                syllables_dir = os.path.join(save_path, bird, 'syllable_data')
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -994,7 +1009,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 copy_locally=settings['copy_locally']
             )
 
-            # Process spectrograms - songs_per_bird comes from params now
+            # Process spectrograms
             save_specs_for_evsonganaly_birds(
                 metadata_file_paths=metadata_file_paths,
                 save_path=settings['save_dir'],

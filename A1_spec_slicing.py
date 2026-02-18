@@ -16,9 +16,7 @@ from tools.song_io import (
 )
 from tools.spectrogram_configs import SpectrogramParams
 from tools.system_utils import check_sys_for_macaw_root
-
-# Import the efficient file discovery functions from your first module
-from your_first_module import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_files
+from A_spec_saving import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_files
 
 
 def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: str = None,
@@ -65,7 +63,7 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
         try:
             # Use consolidated path creation
             paths = create_output_paths(save_path, bird)
-            slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+            slices_dir = paths['slice_spec_dir']  # Use slices_dir instead of syllables_dir
             already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
             needed_count = params.songs_per_bird - len(already_saved_files)
@@ -170,7 +168,7 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
         try:
             # Use consolidated path creation
             paths = create_output_paths(save_path, bird)
-            slices_dir = paths['slices_dir']  # Use slices_dir instead of syllables_dir
+            slices_dir = paths['slice_spec_dir']  # Use slices_dir instead of syllables_dir
             already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
             needed_count = params.songs_per_bird - len(already_saved_files)

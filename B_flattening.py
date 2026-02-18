@@ -133,7 +133,8 @@ def find_syllable_files(syllables_dir: str) -> List[str]:
 def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
     """Process all syllable files for a bird."""
     try:
-        # Setup paths
+        # Setup paths TODO make this work for slices and syllables OR consider making seperate projects!!
+                            # the latter might be best b/c then we could define a project by spec params, etc.
         bird_folder = os.path.join(directory, bird)
         data_path = os.path.join(bird_folder, 'data')
         syllables_path = os.path.join(data_path, 'syllables')
