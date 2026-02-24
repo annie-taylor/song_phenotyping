@@ -649,7 +649,7 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
             mean_top_3=mean_top_3,
             low_f_mean=low_f_mean,
             mean_all=mean_all,
-            valid_indices=valid_inds,  # These now properly map to original indices
+            valid_indices=valid_inds,
             file_identifier=output_path
         )
 

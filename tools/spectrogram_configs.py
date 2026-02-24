@@ -24,16 +24,20 @@ class SpectrogramParams:
 
     # Warping parameters
     use_warping: bool = False
+    downsample: bool = False
+
+    # below largely deprecated, DTW is computationally expensive
     warp_freq_sum: bool = True  # Sum over frequency for warping
     shift_lambdas: List[float] = field(default_factory=lambda: [100, 10, 1, 0])
     slope_lambdas: List[float] = field(default_factory=lambda: [np.inf, np.inf, 10, 1])
-    
+
     def __post_init__(self):
         """Validate parameters after initialization."""
         if self.slice_length is not None and self.slice_length <= 0:
             raise ValueError("slice_length must be positive")
         if self.songs_per_bird <= 0:
             raise ValueError("songs_per_bird must be positive")
+
 
     def validate_params(self):
         """

@@ -19,6 +19,7 @@ from sys import platform
 from tqdm import tqdm
 from scipy.io import loadmat
 from scipy.signal import get_window, ShortTimeFFT
+from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import zoom
 from typing import List, Optional, Tuple, Dict, Any, Union
 from dataclasses import dataclass
@@ -27,7 +28,6 @@ from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_utils import read_audio_file
 from tools.signal_utils import smooth, butter_bandpass_filter_sos
 from tools.system_utils import fix_mixture_of_separators
-from tools.warping import align_specs, apply_warp
 
 import pyfftw.interfaces.scipy_fft
 
@@ -421,23 +421,24 @@ def tempo_estimates(audio_norm: np.ndarray, fs: int) -> Tuple[float, float, floa
         return np.nan, np.nan, np.nan
 
 
-def get_song_spec_with_warping(t1: float, t2: float, audio: np.ndarray, params: SpectrogramParams,
-                               fs: int = 32000, fill_value: float = -1 / EPSILON,
-                               use_warping: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Extract spectrogram with optional time warping instead of downsampling.
-    """
-    # Extract basic spectrogram (same as before, but don't downsample)
-    spec, audio_segment, t = get_song_spec(t1, t2, audio, params, fs, fill_value, downsample=False)
-
-    if use_warping and hasattr(params, 'use_warping') and params.use_warping:
-        # Return raw spec for batch warping later
-        return spec, audio_segment, t
-    else:
-        # Fall back to downsampling
-        if hasattr(params, 'target_shape'):
-            spec = downsample_spec(spec, params)
-        return spec, audio_segment, t
+# def get_song_spec_with_warping(t1: float, t2: float, audio: np.ndarray, params: SpectrogramParams,
+#                                fs: int = 32000, fill_value: float = -1 / EPSILON,
+#                                use_warping: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+#     """
+#     Extract spectrogram with optional time warping instead of downsampling.
+#     """
+#     # Extract basic spectrogram (same as before, but don't downsample)
+#     spec, audio_segment, t = get_song_spec(t1, t2, audio, params, fs, fill_value, downsample=False)
+#
+#     if use_warping and hasattr(params, 'use_warping') and params.use_warping:
+#         #TODO this is actually not where warping happens! So useless function....
+#         # Return raw spec for batch warping later
+#         return spec, audio_segment, t
+#     else:
+#         # Fall back to downsampling
+#         if hasattr(params, 'target_shape'):
+#             spec = downsample_spec(spec, params)
+#         return spec, audio_segment, t
 
 
 def process_syllables_with_warping(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
@@ -620,183 +621,6 @@ def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
                         f"in {audio_filename}: {e}")
 
     return ProcessingResult(specs, audio_segs, spec_t, valid_inds, tempos)
-
-#
-# def save_data_specs(metadata_file_paths: List[str], save_path: str, params: SpectrogramParams, verbose: bool = False,
-#                     read_songpath_from_metadata: bool = True) -> None:
-#     """
-#     Process syllable-based spectrograms from metadata files.
-#     Updated with emoji logging and better error handling.
-#     """
-#     logger.info(f"🎵 Starting syllable processing for {len(metadata_file_paths)} files")
-#     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
-#
-#     problem_files = []
-#     processed_count = 0
-#
-#     for idx, metadata_file_path in enumerate(tqdm(metadata_file_paths, "🔄 Processing syllable spectrograms..."), 1):
-#         try:
-#             # Check if file exists
-#             if not os.path.exists(metadata_file_path):
-#                 logger.warning(f"📁 File not found: {metadata_file_path}")
-#                 problem_files.append(metadata_file_path)
-#                 continue
-#
-#             # Get song file path using existing logic
-#             song_file_path, fs, syl_onsets, syl_offsets, labels = read_metadata(
-#                 metadata_file_path, read_songpath_from_metadata
-#             )
-#
-#             if not os.path.exists(song_file_path):
-#                 logger.warning(f"🎵 Audio file not found: {song_file_path}")
-#                 problem_files.append(metadata_file_path)
-#                 continue
-#
-#             # Validate song data
-#             try:
-#                 assert len(labels) == len(syl_offsets)
-#                 if len(syl_onsets) == 1:
-#                     logger.debug(f"⏭️ Single syllable file: {os.path.basename(metadata_file_path)}")
-#                     continue
-#                 if (syl_offsets[-1] - syl_onsets[0]) <= 2000:  # 2 seconds in ms
-#                     logger.debug(f"⏭️ Song too short: {os.path.basename(metadata_file_path)}")
-#                     continue
-#             except (TypeError, AssertionError):
-#                 logger.warning(f"⚠️ Invalid song data: {os.path.basename(metadata_file_path)}")
-#                 problem_files.append(metadata_file_path)
-#                 continue
-#
-#             # Parse filename info
-#             file_info = parse_audio_filename(song_file_path)
-#             if not file_info['success']:
-#                 logger.warning(f"📝 Could not parse filename: {song_file_path}")
-#                 problem_files.append(metadata_file_path)
-#                 continue
-#
-#             # Create output paths
-#             paths = create_output_paths(save_path, file_info['bird'])
-#             h5file_save_path = os.path.join(
-#                 paths['syllables_dir'],
-#                 f"syllables_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
-#             )
-#
-#             # Skip if file already exists
-#             if os.path.exists(h5file_save_path):
-#                 logger.debug(f"⏭️ File already exists: {os.path.basename(h5file_save_path)}")
-#                 continue
-#
-#             # Prepare segmented audio data dictionary
-#             segmented_audio_data = {
-#                 'spectrograms': [],
-#                 'waveforms': [],
-#                 'spec_t': [],
-#                 'manual': [],
-#                 'onsets': [],
-#                 'offsets': [],
-#                 'position_idxs': [],
-#                 'hashes': []
-#             }
-#
-#             # Split long syllables if needed
-#             syl_lengths = syl_offsets - syl_onsets
-#             long_mask = syl_lengths > params.max_dur * 1000
-#
-#             if np.any(long_mask):
-#                 logger.debug(f"✂️ Splitting {np.sum(long_mask)} long syllables")
-#                 n_sub_syls = (syl_lengths[long_mask] // (params.max_dur * 1000)).astype(int)
-#                 n_specs = len(syl_onsets) + np.sum(n_sub_syls)
-#
-#                 new_onsets = np.zeros(n_specs)
-#                 new_offsets = np.zeros(n_specs)
-#                 new_labels = np.empty(n_specs, dtype=str)
-#                 current_idx = 0
-#
-#                 for i in range(len(syl_onsets)):
-#                     if not long_mask[i]:
-#                         new_onsets[current_idx] = syl_onsets[i]
-#                         new_offsets[current_idx] = syl_offsets[i]
-#                         new_labels[current_idx] = labels[i]
-#                         current_idx += 1
-#                     else:
-#                         n_splits = n_sub_syls[np.sum(long_mask[:i])]
-#                         syl_dur = syl_lengths[i]
-#                         end_dur = syl_dur - (params.max_dur * 1000 * n_splits)
-#
-#                         for n in range(n_splits):
-#                             new_onsets[current_idx] = syl_onsets[i] + params.max_dur * 1000 * n
-#                             new_offsets[current_idx] = syl_onsets[i] + params.max_dur * 1000 * (n + 1)
-#                             new_labels[current_idx] = labels[i]
-#                             current_idx += 1
-#
-#                         new_onsets[current_idx] = syl_offsets[i] - end_dur
-#                         new_offsets[current_idx] = syl_offsets[i]
-#                         new_labels[current_idx] = labels[i]
-#                         current_idx += 1
-#
-#                 syl_onsets, syl_offsets, labels = new_onsets, new_offsets, new_labels
-#
-#             # Extract spectrograms
-#             if hasattr(params, 'use_warping') and params.use_warping:
-#                 result = process_syllables_with_warping(song_file_path, syl_onsets, syl_offsets, params)
-#             else:
-#                 result = get_song_specs(song_file_path, syl_onsets, syl_offsets, params=params)
-#             specs, wavs, ts, valid_inds = result.specs, result.waveforms, result.spec_times, result.valid_indices
-#
-#             if not valid_inds:
-#                 logger.warning(f"⚠️ No valid spectrograms: {os.path.basename(metadata_file_path)}")
-#                 problem_files.append(metadata_file_path)
-#                 continue
-#
-#             # Prepare data for saving
-#             onsets = [syl_onsets[i] for i in valid_inds]
-#             offsets = [syl_offsets[i] for i in valid_inds]
-#             valid_labels = [labels[i] for i in valid_inds]
-#             hashes = generate_syllable_hashes(h5file_save_path, valid_inds)
-#
-#             # Pad waveforms to same length
-#             padded_waveforms, padded_ts = pad_waveforms_to_same_length(wavs, ts)
-#
-#             # Build segmented data
-#             segmented_audio_data.update({
-#                 'spectrograms': specs,
-#                 'waveforms': padded_waveforms,
-#                 'spec_t': padded_ts,
-#                 'manual': valid_labels,
-#                 'onsets': onsets,
-#                 'offsets': offsets,
-#                 'position_idxs': valid_inds,
-#                 'hashes': hashes
-#             })
-#
-#             # Save to HDF5
-#             save_segmented_audio_data(h5file_save_path, song_file_path, segmented_audio_data)
-#             processed_count += 1
-#
-#             if verbose:
-#                 logger.info(f"✅ Saved {len(valid_inds)} syllables: {os.path.basename(h5file_save_path)}")
-#
-#             # Clean up memory
-#             del segmented_audio_data, specs, wavs, ts, padded_waveforms, padded_ts
-#             gc.collect()
-#
-#             # Periodic memory reporting
-#             if idx % 10 == 0:
-#                 logger.info(f"📊 Progress {idx}/{len(metadata_file_paths)}, "
-#                             f"memory: {get_memory_usage():.1f} MB")
-#
-#         except Exception as e:
-#             logger.error(f"💥 Unexpected error processing {metadata_file_path}: {e}")
-#             problem_files.append(metadata_file_path)
-#
-#     # Final summary
-#     logger.info(f"🎯 Syllable processing complete:")
-#     logger.info(f"  ✅ Successfully processed: {processed_count}")
-#     logger.info(f"  ❌ Failed files: {len(problem_files)}")
-#     logger.info(f"📊 Final memory usage: {get_memory_usage():.1f} MB")
-#
-#     if problem_files and verbose:
-#         logger.warning(f"Problem files: {[os.path.basename(f) for f in problem_files]}")
-
 
 def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: SpectrogramParams,
                      slice_length: Optional[float] = None, read_songpath_from_metadata: bool = True,
@@ -1091,27 +915,58 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         STFT = ShortTimeFFT(w, hop=params.hop, fs=fs)
         Sx = STFT.stft(audio_segment)
         t = STFT.t(len(audio_segment))
+        f = STFT.f
         non_negative_time_indices = t >= 0
         non_negative_time_indices[-int(params.nfft / 2):] = False
         t = t[non_negative_time_indices]
         spec = np.log(abs(Sx[:, non_negative_time_indices]))
         t += max(0, t1)  # adjust time to start at t1
 
-        p5, p95 = np.percentile(spec, [2, 98])  # before padding
-        exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
-        if spec.shape[1] > exp_spec.shape[1]:
-            logger.warning(f"✂️ Truncating spectrogram from {spec.shape[1]} to {exp_spec.shape[1]} frames. "
-                          f"Syllable: {t2 - t1:.4f}s, max_dur: {params.max_dur}s")
-            spec = spec[:, :exp_spec.shape[1]]
-        exp_spec[:, :np.shape(spec)[1]] = spec[:, :]
+        # begin DTW alternative block (regular interpolation over grid)
+        if params.use_warping:
+            # Create the interpolator using RegularGridInterpolator
+            interp = RegularGridInterpolator((t, f), spec.T,
+                                             method='linear',
+                                             bounds_error=False,
+                                             fill_value=fill_value)
+
+            target_freqs = np.linspace(params.min_freq, params.max_freq, params.target_shape[0])
+
+            # Define target times
+            duration = t2 - t1
+            if params.use_warping:
+                duration = np.sqrt(duration * params.max_dur)  # stretched duration
+            shoulder = 0.5 * (params.max_dur - duration)
+            target_times = np.linspace(t1 - shoulder, t2 + shoulder, params['num_time_bins'])
+
+            # Create meshgrid for interpolation points
+            target_times_grid, target_freqs_grid = np.meshgrid(target_times, target_freqs, indexing='ij')
+            points = np.column_stack([target_times_grid.ravel(), target_freqs_grid.ravel()])
+
+            # Interpolate
+            interp_spec = interp(points).reshape(len(target_times), len(target_freqs))
+            spec = interp_spec
+            p5, p95 = np.percentile(spec, [2, 98]) # after interpolation
+
+        else:
+            p5, p95 = np.percentile(spec, [2, 98])  # before padding
+            exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
+            if spec.shape[1] > exp_spec.shape[1]:
+                logger.warning(f"✂️ Truncating spectrogram from {spec.shape[1]} to {exp_spec.shape[1]} frames. "
+                               f"Syllable: {t2 - t1:.4f}s, max_dur: {params.max_dur}s")
+                spec = spec[:, :exp_spec.shape[1]]
+            exp_spec[:, :np.shape(spec)[1]] = spec[:, :]
+            spec = exp_spec
+
         # Then normalize the whole thing
-        exp_spec = (exp_spec - p5) / (p95 - p5)
+        exp_spec = (spec - p5) / (p95 - p5)
         exp_spec = np.clip(exp_spec, 0, 1)
 
         if downsample:
             spec = downsample_spec(exp_spec, params)
         else:
             spec = exp_spec
+
         return spec, audio_segment, t
 
 

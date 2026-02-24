@@ -48,7 +48,6 @@ def apply_warp(specs, warp_params):
 		warped_specs.append(warped_spec)
 	return np.array(warped_specs)
 
-
 def align_specs(specs, shift_λs, slope_λs, verbose=True):
 	"""
 	Align the spectrograms, return warping parameters and warped specs.

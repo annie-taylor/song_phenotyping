@@ -42,7 +42,7 @@ class SyllableSampler:
                     not item.name.startswith('.') and
                     item.name != 'copied_data'):
 
-                syllables_dir = item / 'data' / 'syllables'
+                syllables_dir = item / 'syllable_data' / 'specs'
                 if syllables_dir.exists() and list(syllables_dir.glob('*.h5')):
                     birds.append(item.name)
 
@@ -71,7 +71,7 @@ class SyllableSampler:
         bird_dir = self.project_directory / bird
 
         # Setup paths
-        syllables_dir = bird_dir / 'data' / 'syllables'
+        syllables_dir = bird_dir  / 'syllable_data' / 'specs'
         pdf_dir = bird_dir / 'pdfs'
         pdf_dir.mkdir(exist_ok=True)
         pdf_path = pdf_dir / f'{bird}_syllable_samples.pdf'
@@ -241,8 +241,8 @@ def example_usage():
     """Example of how to use the simple syllable sampling module."""
 
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+        #os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        #os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
         os.path.join('/Volumes', 'Extreme SSD', 'evsong test warp')
     ]
 
