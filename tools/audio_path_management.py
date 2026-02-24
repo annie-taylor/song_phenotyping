@@ -136,37 +136,37 @@ def get_audio_path(bird_folder: str, filepath_or_filename: str, prefer_local: bo
 
     raise FileNotFoundError(f"Neither local nor server path exists for {filename}")
 
-
-def get_audio_path(bird_folder: str, filepath_or_filename: str, prefer_local: bool = True) -> str:
-    """
-    Get audio file path with local/server preference.
-
-    Args:
-        bird_folder: Path to bird's folder
-        filepath_or_filename: Full path or just filename
-        prefer_local: If True, try local first, fallback to server
-    """
-    # Extract base filename using your existing function
-    filename = extract_base_name(filepath_or_filename) + '.wav'  # Ensure .wav extension
-
-    # Load mapping (creates file if doesn't exist)
-    mapping = load_audio_paths_mapping(bird_folder)
-
-    # Get paths for this file
-    if filename not in mapping:
-        raise FileNotFoundError(f"No audio path mapping found for {filename}")
-
-    paths = mapping[filename]
-
-    # Try preferred path first
-    if prefer_local and paths['local'] != 'NONE':
-        if os.path.exists(paths['local']):
-            return paths['local']
-        else:
-            logging.warning(f"Local file not found, falling back to server: {paths['local']}")
-
-    # Try server path
-    if os.path.exists(paths['server']):
-        return paths['server']
-
-    raise FileNotFoundError(f"Neither local nor server path exists for {filename}")
+#
+# def get_audio_path(bird_folder: str, filepath_or_filename: str, prefer_local: bool = True) -> str:
+#     """
+#     Get audio file path with local/server preference.
+#
+#     Args:
+#         bird_folder: Path to bird's folder
+#         filepath_or_filename: Full path or just filename
+#         prefer_local: If True, try local first, fallback to server
+#     """
+#     # Extract base filename using your existing function
+#     filename = extract_base_name(filepath_or_filename) + '.wav'  # Ensure .wav extension
+#
+#     # Load mapping (creates file if doesn't exist)
+#     mapping = load_audio_paths_mapping(bird_folder)
+#
+#     # Get paths for this file
+#     if filename not in mapping:
+#         raise FileNotFoundError(f"No audio path mapping found for {filename}")
+#
+#     paths = mapping[filename]
+#
+#     # Try preferred path first
+#     if prefer_local and paths['local'] != 'NONE':
+#         if os.path.exists(paths['local']):
+#             return paths['local']
+#         else:
+#             logging.warning(f"Local file not found, falling back to server: {paths['local']}")
+#
+#     # Try server path
+#     if os.path.exists(paths['server']):
+#         return paths['server']
+#
+#     raise FileNotFoundError(f"Neither local nor server path exists for {filename}")

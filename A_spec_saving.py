@@ -20,7 +20,6 @@ from tools.song_io import (
     load_and_validate_metadata,
     pad_waveforms_to_same_length,
     generate_syllable_hashes,
-    process_syllables_with_warping,
     create_output_paths,
     save_segmented_audio_data,
     get_song_specs,
@@ -148,7 +147,8 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
 def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                batch_file_naming: str = 'batch.txt.keep',
                                bird_subset: None | list = None,
-                               copy_locally: bool = False) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+                               copy_locally: bool = False,
+                               preferred_subdirs: list = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """
     Extract file paths from evsonganaly batch files and optionally copy files locally.
     """
@@ -158,123 +158,170 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     if save_path is not None:
         os.makedirs(save_path, exist_ok=True)
 
-    birds = []
-    metadata_file_paths = {}
-    wav_file_paths = {}
-    processed_files = 0
-    failed_files = 0
+    # if preferred_subdirs is None:
+    #     preferred_subdirs = ['labeled_song_final']  # , 'screening', 'baseline', 'baseline_for_tempo']
+
     batch_files_found = 0
+    batch_file_candidates = []
+    processed_directories = set()
+
+    bird_pattern = re.compile(r'\b[a-zA-Z]+\d+[a-zA-Z]*\d*\b')
 
     for root, dirs, files in os.walk(wav_directory, topdown=False):
         batch_files = [f for f in files if batch_file_naming in f]
 
         if batch_files:
-            batch_files_found += len(batch_files)
-            logger.info(f"  📁 Found {len(batch_files)} batch files in {root}")
+            batch_files_found += len(batch_files)  # Fix: increment counter
 
-        for file in batch_files:
-            try:
-                song_metadata = []
-                song_audio = []
-                batch_file_path = os.path.join(root, file)
+            # Extract bird and date from path
+            path_parts = root.split(os.sep)
+            if len(path_parts) >= 2:
+                date = path_parts[-1]
 
-                logger.info(f"  📄 Processing batch file: {file}")
+            # Apply bird subset filter
+            if bird_subset is not None and not any(bird in path_parts for bird in bird_subset):
+                continue
 
-                with open(batch_file_path, 'r') as f:
-                    lines = f.readlines()
-                    logger.info(f"    📝 Found {len(lines)} entries in batch file")
+            # Find bird name using pattern matching
+            bird = None
+            for part in path_parts:
+                if bird_pattern.match(part):
+                    bird = part
+                    break
 
-                    for line_idx, line in enumerate(lines):
-                        try:
-                            song_name = line.replace('\n', '.not.mat')
-                            song_metadata_path = os.path.join(root, song_name)
+            # Check if this is a preferred directory type
+            if preferred_subdirs is None:
+                is_preferred = True
+            else:
+                is_preferred = any(preferred in path_parts for preferred in preferred_subdirs)
 
-                            if os.path.isfile(song_metadata_path):
-                                audio_path = os.path.join(root, line.replace('\n', ''))
-                                song_audio.append(audio_path)
-                                song_metadata.append(song_metadata_path)
+            if is_preferred:
+                bird_date_key = f"{bird}_{date}"
 
-                                # Extract bird name
+                if bird_date_key not in processed_directories:
+                    processed_directories.add(bird_date_key)
+
+                    for file in batch_files:
+                        batch_file_candidates.append({
+                            'path': os.path.join(root, file),
+                            'root': root,
+                            'file': file,
+                            'bird': bird,
+                            'date': date,
+                        })
+
+                    logger.info(f"  📁 Selected {len(batch_files)} batch files from {bird}/{date}")
+                else:
+                    logger.debug(
+                        f"  ⏭️ Skipping {bird}/{date} - already processed preferred directory")
+
+    logger.info(f"🎯 Selected {len(batch_file_candidates)} unique batch files to process")
+
+    birds = []
+    metadata_file_paths = {}
+    wav_file_paths = {}
+    processed_files = 0
+    failed_files = 0
+
+    for batch_info in batch_file_candidates:
+        try:
+            song_metadata = []
+            song_audio = []
+
+            logger.info(f"  📄 Processing batch file: {batch_info['file']} from {batch_info['subdir_type']}")
+
+            with open(batch_info['path'], 'r') as f:
+                lines = f.readlines()
+                logger.info(f"    📝 Found {len(lines)} entries in batch file")
+
+                for line_idx, line in enumerate(lines):
+                    try:
+                        song_name = line.replace('\n', '.not.mat')
+                        song_metadata_path = os.path.join(batch_info['root'], song_name)  # Fix: use batch_info['root']
+
+                        if os.path.isfile(song_metadata_path):
+                            audio_path = os.path.join(batch_info['root'],
+                                                      line.replace('\n', ''))  # Fix: use batch_info['root']
+                            song_audio.append(audio_path)
+                            song_metadata.append(song_metadata_path)
+
+                            # Extract bird name (though we already know it from batch_info)
+                            try:
+                                [bird, _, _] = line.split('_')[0:3]
+                            except ValueError:
+                                logger.debug(f"    ⚠️ Trouble reading birdname from {line}, trying fallback")
                                 try:
-                                    [bird, _, _] = line.split('_')[0:3]
+                                    [bird, _] = line.split('_')[0:2]
                                 except ValueError:
-                                    logger.debug(f"    ⚠️ Trouble reading birdname from {line}, trying fallback")
-                                    try:
-                                        [bird, _] = line.split('_')[0:2]
-                                    except ValueError:
-                                        logger.debug(f"    ⚠️ Using final fallback for birdname from {line}")
-                                        [bird, _] = line.split('.')[0:2]
+                                    logger.debug(f"    ⚠️ Using final fallback for birdname from {line}")
+                                    [bird, _] = line.split('.')[0:2]
 
-                                # Apply bird subset filter
-                                if bird_subset is not None and bird not in bird_subset:
-                                    continue
+                            # Note: No need to filter by bird_subset again - already done above
 
-                                # Create bird folder and handle copying/mapping
-                                if save_path:
-                                    bird_folder = os.path.join(save_path, bird)
-                                    os.makedirs(bird_folder, exist_ok=True)
+                            # Create bird folder and handle copying/mapping
+                            if save_path:
+                                bird_folder = os.path.join(save_path, bird)
+                                os.makedirs(bird_folder, exist_ok=True)
 
-                                    filename = os.path.basename(audio_path)
+                                filename = os.path.basename(audio_path)
 
-                                    if copy_locally:
-                                        # Copy file locally
-                                        copied_data_dir = os.path.join(save_path, 'copied_data', bird)
-                                        os.makedirs(copied_data_dir, exist_ok=True)
-                                        local_path = os.path.join(copied_data_dir, filename)
+                                if copy_locally:
+                                    # Copy file locally
+                                    copied_data_dir = os.path.join(save_path, 'copied_data', bird)
+                                    os.makedirs(copied_data_dir, exist_ok=True)
+                                    local_path = os.path.join(copied_data_dir, filename)
 
-                                        if not os.path.exists(local_path):
-                                            try:
-                                                shutil.copy2(audio_path, local_path)
-                                                logger.debug(f"      📋 Copied {filename}")
-                                            except Exception as e:
-                                                logger.error(f"      ❌ Failed to copy {audio_path}: {e}")
-                                                local_path = None
+                                    if not os.path.exists(local_path):
+                                        try:
+                                            shutil.copy2(audio_path, local_path)
+                                            logger.debug(f"      📋 Copied {filename}")
+                                        except Exception as e:
+                                            logger.error(f"      ❌ Failed to copy {audio_path}: {e}")
+                                            local_path = None
 
-                                        # Update mapping with both paths
-                                        update_audio_paths_file(bird_folder, filename,
-                                                              local_path=local_path,
-                                                              server_path=audio_path)
-                                    else:
-                                        # Just update with server path
-                                        update_audio_paths_file(bird_folder, filename,
-                                                              server_path=audio_path)
-
-                                # Collect paths by bird
-                                if bird not in birds:
-                                    birds.append(bird)
-                                    metadata_file_paths[bird] = song_metadata.copy()
-                                    wav_file_paths[bird] = song_audio.copy()
-                                    logger.info(f"    🐦 Started processing bird: {bird}")
+                                    # Update mapping with both paths
+                                    update_audio_paths_file(bird_folder, filename,
+                                                            local_path=local_path,
+                                                            server_path=audio_path)
                                 else:
-                                    metadata_file_paths[bird].extend(song_metadata)
-                                    wav_file_paths[bird].extend(song_audio)
+                                    # Just update with server path
+                                    update_audio_paths_file(bird_folder, filename,
+                                                            server_path=audio_path)
 
-                                processed_files += 1
-                            else:
-                                logger.debug(f"    ⚠️ Metadata file not found: {song_metadata_path}")
+                            processed_files += 1
+                        else:
+                            logger.debug(f"    ⚠️ Metadata file not found: {song_metadata_path}")
 
-                        except Exception as e:
-                            logger.error(f"    💥 Error processing line {line_idx} in {file}: {e}")
-                            failed_files += 1
+                    except Exception as e:
+                        logger.error(f"    💥 Error processing line {line_idx} in {batch_info['file']}: {e}")
+                        failed_files += 1
 
-                        # Periodic progress updates for large batch files
-                        if (line_idx + 1) % 50 == 0:
-                            logger.info(f"    📊 Processed {line_idx + 1}/{len(lines)} lines, "
-                                       f"memory: {get_memory_usage():.1f} MB")
+                    # Periodic progress updates for large batch files
+                    if (line_idx + 1) % 50 == 0:
+                        logger.info(f"    📊 Processed {line_idx + 1}/{len(lines)} lines, "
+                                    f"memory: {get_memory_usage():.1f} MB")
 
-                logger.info(f"  ✅ Completed batch file {file}: {len(song_metadata)} valid entries")
+            # Fix: Collect by bird AFTER processing the entire batch file
+            if song_metadata:  # Only if we found valid files
+                bird = batch_info['bird']  # Use the bird from batch_info
 
-            except Exception as e:
-                logger.error(f"  💥 Error processing batch file {file}: {e}")
-                failed_files += 1
+                if bird not in birds:
+                    birds.append(bird)
+                    metadata_file_paths[bird] = []
+                    wav_file_paths[bird] = []
+                    logger.info(f"    🐦 Started processing bird: {bird}")
 
-    # Apply bird subset filter to final results
-    if bird_subset is not None:
-        metadata_file_paths = {bird: paths for bird, paths in metadata_file_paths.items()
-                               if bird in bird_subset}
-        wav_file_paths = {bird: paths for bird, paths in wav_file_paths.items()
-                          if bird in bird_subset}
+                # Add all files from this batch to the bird's collection
+                metadata_file_paths[bird].extend(song_metadata)
+                wav_file_paths[bird].extend(song_audio)
 
+            logger.info(f"  ✅ Completed batch file {batch_info['file']}: {len(song_metadata)} valid entries")
+
+        except Exception as e:
+            logger.error(f"  💥 Error processing batch file {batch_info['file']}: {e}")
+            failed_files += 1
+
+    # Remove redundant bird subset filter - already applied above
     # Final summary
     total_birds = len(metadata_file_paths)
     total_metadata_files = sum(len(files) for files in metadata_file_paths.values())
@@ -293,6 +340,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
         logger.info(f"  {bird}: {len(metadata_file_paths[bird])} files")
 
     return metadata_file_paths, wav_file_paths
+
 
 
 def select_new_files(available_files: list[str], already_saved_files: list[str], needed_count: int) -> list[str]:
@@ -615,14 +663,9 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
     try:
         logger.debug(f" 🎵 Processing audio: {os.path.basename(audio_file_path)}")
 
-        # Extract spectrograms
-        if hasattr(params, 'use_warping') and params.use_warping:
-            result = process_syllables_with_warping(audio_file_path, metadata['onsets'], metadata['offsets'],
-            params=params, split_syllables=split_syllables, tempo=False)
-        else:
-            # Use the consolidated get_song_specs function that returns ProcessingResult
-            result = get_song_specs(audio_file_path, metadata['onsets'], metadata['offsets'], params=params,
-                                   split_syllables=split_syllables, tempo=False)
+        # Use the consolidated get_song_specs function that returns ProcessingResult
+        result = get_song_specs(audio_file_path, metadata['onsets'], metadata['offsets'], params=params,
+                               split_syllables=split_syllables, tempo=False)
 
         # Extract from ProcessingResult
         specs = result.specs
@@ -838,9 +881,9 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, save_path: str =
 
         try:
             if params.slice_length:
-                syllables_dir = os.path.join(save_path, bird, 'slice_data')
+                syllables_dir = os.path.join(save_path, bird, 'slice_data', 'specs')
             else:
-                syllables_dir = os.path.join(save_path, bird, 'syllable_data')
+                syllables_dir = os.path.join(save_path, bird, 'syllable_data', 'specs')
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -1067,7 +1110,8 @@ def main():
                 max_dur=0.150,
                 songs_per_bird=5,
                 overwrite_existing=True,
-                use_warping=True
+                use_warping=True,
+                downsample=True
             )
         },
         # 'wseg': {

@@ -3,6 +3,7 @@
 *.iml
 *.log
 *.ipynb~
+*.sqlite3
 .git
 .idea
 analysis_results

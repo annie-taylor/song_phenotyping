@@ -421,145 +421,6 @@ def tempo_estimates(audio_norm: np.ndarray, fs: int) -> Tuple[float, float, floa
         return np.nan, np.nan, np.nan
 
 
-# def get_song_spec_with_warping(t1: float, t2: float, audio: np.ndarray, params: SpectrogramParams,
-#                                fs: int = 32000, fill_value: float = -1 / EPSILON,
-#                                use_warping: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-#     """
-#     Extract spectrogram with optional time warping instead of downsampling.
-#     """
-#     # Extract basic spectrogram (same as before, but don't downsample)
-#     spec, audio_segment, t = get_song_spec(t1, t2, audio, params, fs, fill_value, downsample=False)
-#
-#     if use_warping and hasattr(params, 'use_warping') and params.use_warping:
-#         #TODO this is actually not where warping happens! So useless function....
-#         # Return raw spec for batch warping later
-#         return spec, audio_segment, t
-#     else:
-#         # Fall back to downsampling
-#         if hasattr(params, 'target_shape'):
-#             spec = downsample_spec(spec, params)
-#         return spec, audio_segment, t
-
-
-def process_syllables_with_warping(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
-                                   params: SpectrogramParams, split_syllables: bool = False,
-                                   tempo: bool = False) -> ProcessingResult:
-    """
-    Process syllables with optional batch time warping.
-    """
-    # Extract all spectrograms first (no downsampling)
-    raw_specs = []
-    audio_segs = []
-    spec_times = []
-    valid_inds = []
-
-    # Read audio file once
-    try:
-        audio, fs = read_audio_file(audio_filename)
-        logger.debug(f"🎵 Read audio file: {os.path.basename(audio_filename)}")
-    except Exception as e:
-        logger.error(f"💥 Failed to read audio file {audio_filename}: {e}")
-        return ProcessingResult(raw_specs, audio_segs, spec_times, valid_inds, None)
-
-    # Process audio
-    audio = rms_norm(audio)
-    audio = butter_bandpass_filter_sos(audio, lowcut=params.min_freq, highcut=params.max_freq, fs=fs, order=3)
-
-    # Calculate tempo if requested
-    tempos = tempo_estimates(audio, fs) if tempo else None
-
-    # Handle long syllables before processing
-    if split_syllables and hasattr(params, 'max_dur') and params.max_dur:
-        max_dur_ms = params.max_dur * 1000
-        processed_onsets, processed_offsets, syllable_to_original_mapping = split_long_syllables_with_mapping(
-            onsets, offsets, max_dur_ms
-        )
-    else:
-        # Filter out long syllables
-        if hasattr(params, 'max_dur') and params.max_dur:
-            max_dur_ms = params.max_dur * 1000
-            durations = offsets - onsets
-            valid_mask = durations <= max_dur_ms
-            processed_onsets = onsets[valid_mask]
-            processed_offsets = offsets[valid_mask]
-            syllable_to_original_mapping = np.where(valid_mask)[0]
-        else:
-            processed_onsets = onsets
-            processed_offsets = offsets
-            syllable_to_original_mapping = np.arange(len(onsets))
-
-    # Extract raw spectrograms
-    for i, (onset, offset) in enumerate(zip(processed_onsets, processed_offsets)):
-        try:
-            spec, audio_seg, t = get_song_spec_with_warping(
-                t1=onset / 1000, t2=offset / 1000, audio=audio, params=params, fs=fs, use_warping=True
-            )
-
-            if not (np.max(spec) == np.max(audio_seg) == np.max(t) == 0.0):
-                raw_specs.append(spec)
-                audio_segs.append(audio_seg)
-                spec_times.append(t)
-                valid_inds.append(syllable_to_original_mapping[i])
-        except Exception as e:
-            logger.error(f"💥 Failed to process syllable {i}: {e}")
-
-    if not raw_specs:
-        return ProcessingResult([], [], [], [])
-
-    # Apply warping if enabled
-    if hasattr(params, 'use_warping') and params.use_warping and len(raw_specs) > 1:
-        logger.info(f"🔄 Applying time warping to {len(raw_specs)} syllables")
-
-        # Convert to numpy array for warping
-        specs_array = np.array(raw_specs)
-
-        # Sum over frequency axis for better warping (as suggested in the code)
-        if hasattr(params, 'warp_freq_sum') and params.warp_freq_sum:
-            warp_specs = np.sum(specs_array, axis=1, keepdims=True)
-        else:
-            warp_specs = specs_array
-
-        # Apply warping with annealing schedule
-        shift_λs = getattr(params, 'shift_lambdas', [100, 10, 1, 0])
-        slope_λs = getattr(params, 'slope_lambdas', [np.inf, np.inf, 10, 1])
-
-        try:
-            warped_specs, warp_params = align_specs(warp_specs, shift_λs, slope_λs, verbose=False)
-
-            if warped_specs is not None:
-                # Apply same warping to full spectrograms
-                if hasattr(params, 'warp_freq_sum') and params.warp_freq_sum:
-                    # Need to apply warping to original specs
-                    final_specs = []
-                    for i, spec in enumerate(specs_array):
-                        warped_spec = apply_warp(spec[None], {
-                            'shifts': warp_params['shifts'][i:i + 1],
-                            'slopes': warp_params['slopes'][i:i + 1]
-                        })[0]
-                        final_specs.append(warped_spec)
-                    processed_specs = final_specs
-                else:
-                    processed_specs = list(warped_specs)
-
-                logger.info(f"✅ Successfully warped syllables")
-            else:
-                logger.warning("⚠️ Warping failed, falling back to original specs")
-                processed_specs = raw_specs
-
-        except Exception as e:
-            logger.error(f"💥 Warping failed: {e}, using original specs")
-            processed_specs = raw_specs
-    else:
-        processed_specs = raw_specs
-
-    # Final downsampling to target shape if needed
-    if hasattr(params, 'target_shape'):
-        final_specs = [downsample_spec(spec, params) for spec in processed_specs]
-    else:
-        final_specs = processed_specs
-
-    return ProcessingResult(final_specs, audio_segs, spec_times, valid_inds, tempos)
-
 def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray, params: SpectrogramParams,
                    split_syllables: bool = False, tempo: bool = False) -> ProcessingResult:
     """
@@ -621,6 +482,7 @@ def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
                         f"in {audio_filename}: {e}")
 
     return ProcessingResult(specs, audio_segs, spec_t, valid_inds, tempos)
+
 
 def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: SpectrogramParams,
                      slice_length: Optional[float] = None, read_songpath_from_metadata: bool = True,
@@ -925,7 +787,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         # begin DTW alternative block (regular interpolation over grid)
         if params.use_warping:
             # Create the interpolator using RegularGridInterpolator
-            interp = RegularGridInterpolator((t, f), spec.T,
+            interp = RegularGridInterpolator((f, t), spec.T,
                                              method='linear',
                                              bounds_error=False,
                                              fill_value=fill_value)
@@ -937,7 +799,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
             if params.use_warping:
                 duration = np.sqrt(duration * params.max_dur)  # stretched duration
             shoulder = 0.5 * (params.max_dur - duration)
-            target_times = np.linspace(t1 - shoulder, t2 + shoulder, params['num_time_bins'])
+            target_times = np.linspace(t1 - shoulder, t2 + shoulder, int(np.ceil(params.max_dur / STFT.delta_t)))
 
             # Create meshgrid for interpolation points
             target_times_grid, target_freqs_grid = np.meshgrid(target_times, target_freqs, indexing='ij')
@@ -951,6 +813,7 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         else:
             p5, p95 = np.percentile(spec, [2, 98])  # before padding
             exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
+
             if spec.shape[1] > exp_spec.shape[1]:
                 logger.warning(f"✂️ Truncating spectrogram from {spec.shape[1]} to {exp_spec.shape[1]} frames. "
                                f"Syllable: {t2 - t1:.4f}s, max_dur: {params.max_dur}s")
