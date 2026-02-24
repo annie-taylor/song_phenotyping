@@ -136,8 +136,8 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
         # Setup paths TODO make this work for slices and syllables OR consider making seperate projects!!
                             # the latter might be best b/c then we could define a project by spec params, etc.
         bird_folder = os.path.join(directory, bird)
-        data_path = os.path.join(bird_folder, 'data')
-        syllables_path = os.path.join(data_path, 'syllables')
+        data_path = os.path.join(bird_folder, 'syllable_data')
+        syllables_path = os.path.join(data_path, 'specs')
 
         # Ensure data directory exists
         os.makedirs(data_path, exist_ok=True)

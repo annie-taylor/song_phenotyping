@@ -63,7 +63,7 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
         try:
             # Use consolidated path creation
             paths = create_output_paths(save_path, bird)
-            slices_dir = paths['slice_spec_dir']  # Use slices_dir instead of syllables_dir
+            slices_dir = paths['slice_specs_dir']  # Use slices_dir instead of syllables_dir
             already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
             needed_count = params.songs_per_bird - len(already_saved_files)
@@ -92,8 +92,7 @@ def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: 
                     params=params,
                     slice_length=params.slice_length,
                     verbose=verbose,
-                    read_songpath_from_metadata=False,  # evsonganaly uses simple path mapping
-                    prefer_local=copy_locally
+                    read_songpath_from_metadata=False
                 )
 
                 logger.info(f"  ✅ {bird} slicing complete")
@@ -168,7 +167,7 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
         try:
             # Use consolidated path creation
             paths = create_output_paths(save_path, bird)
-            slices_dir = paths['slice_spec_dir']  # Use slices_dir instead of syllables_dir
+            slices_dir = paths['slice_specs_dir']  # Use slices_dir instead of syllables_dir
             already_saved_files = os.listdir(slices_dir) if os.path.isdir(slices_dir) else []
 
             needed_count = params.songs_per_bird - len(already_saved_files)
@@ -197,8 +196,7 @@ def slice_syllable_files_from_wseg(seg_directory: str = None, save_path: str = N
                     params=params,
                     slice_length=slice_length,
                     verbose=verbose,
-                    read_songpath_from_metadata=True,  # wseg uses metadata-based path mapping
-                    prefer_local=copy_locally
+                    read_songpath_from_metadata=True
                 )
 
                 logger.info(f"  ✅ {bird} slicing complete")

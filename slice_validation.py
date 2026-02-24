@@ -42,7 +42,7 @@ class SliceValidator:
                     not item.name.startswith('.') and
                     item.name != 'copied_data'):
 
-                slices_dir = item / 'data' / 'slices'
+                slices_dir = item / 'slice_data' / 'specs'
                 if slices_dir.exists() and list(slices_dir.glob('*.h5')):
                     birds.append(item.name)
 
@@ -71,7 +71,7 @@ class SliceValidator:
         bird_dir = self.project_directory / bird
 
         # Setup paths
-        slices_dir = bird_dir / 'data' / 'slices'
+        slices_dir = bird_dir / 'slice_data' / 'specs'
         pdf_dir = bird_dir / 'pdfs'
         pdf_dir.mkdir(exist_ok=True)
         pdf_path = pdf_dir / f'{bird}_slice_validation.pdf'
@@ -179,9 +179,9 @@ class SliceValidator:
             audio = rms_norm(audio)
 
             # Apply filtering
-            params = SpectrogramParams()
+            params = SpectrogramParams(max_dur=np.ceil((end_ms - start_ms) / 1000.0))
             audio = butter_bandpass_filter_sos(
-                audio, lowcut=params.min_freq, highcut=params.max_freq, fs=fs, order=5
+                audio, lowcut=params.min_freq, highcut=params.max_freq, fs=fs, order=3
             )
 
             # Generate spectrogram for the time window
@@ -448,7 +448,7 @@ def validate_single_bird_slices(project_directory: str, bird: str) -> Optional[s
 def example_usage():
     """Example of how to use the simple slice validation module."""
 
-    project_dir = "/Volumes/Extreme SSD/wseg test"
+    project_dir = "/Volumes/Extreme SSD/evsong slice test"
 
     # Basic validation - all birds
     results = quick_slice_validation(project_dir)

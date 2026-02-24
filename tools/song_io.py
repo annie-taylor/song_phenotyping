@@ -547,7 +547,7 @@ def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: Spe
             # Create output path
             paths = create_output_paths(save_path, file_info['bird'])
             h5file_save_path = os.path.join(
-                paths['slices_dir'],  # Use slices_dir for slice files
+                paths['slice_specs_dir'],  # Use slices_dir for slice files
                 f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"  # Change filename prefix
             )
 
@@ -787,26 +787,31 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         # begin DTW alternative block (regular interpolation over grid)
         if params.use_warping:
             # Create the interpolator using RegularGridInterpolator
-            interp = RegularGridInterpolator((f, t), spec.T,
+            reasonable_fill = np.median(spec[np.isfinite(spec)])
+            interp = RegularGridInterpolator((f, t), spec,
                                              method='linear',
                                              bounds_error=False,
-                                             fill_value=fill_value)
+                                             fill_value=reasonable_fill)
 
-            target_freqs = np.linspace(params.min_freq, params.max_freq, params.target_shape[0])
-
+            target_freqs = np.linspace(max(params.min_freq, f.min()), min(params.max_freq, f.max()),
+                                       params.target_shape[0])
             # Define target times
             duration = t2 - t1
-            if params.use_warping:
-                duration = np.sqrt(duration * params.max_dur)  # stretched duration
             shoulder = 0.5 * (params.max_dur - duration)
-            target_times = np.linspace(t1 - shoulder, t2 + shoulder, int(np.ceil(params.max_dur / STFT.delta_t)))
+            target_times = np.linspace(max(t1 - shoulder, t.min()), min(t2 + shoulder, t.max()),
+                                       int(np.ceil(params.max_dur / STFT.delta_t)))
+            logger.debug(f"  🎯 Target ranges:")
+            logger.debug(
+                f"    target_freqs: [{target_freqs.min():.1f}, {target_freqs.max():.1f}] Hz ({len(target_freqs)} points)")
+            logger.debug(
+                f"    target_times: [{target_times.min():.3f}, {target_times.max():.3f}] s ({len(target_times)} points)")
 
             # Create meshgrid for interpolation points
-            target_times_grid, target_freqs_grid = np.meshgrid(target_times, target_freqs, indexing='ij')
-            points = np.column_stack([target_times_grid.ravel(), target_freqs_grid.ravel()])
+            target_freqs_grid, target_times_grid = np.meshgrid(target_freqs, target_times, indexing='ij')
+            points = np.column_stack([target_freqs_grid.ravel(), target_times_grid.ravel()])
 
             # Interpolate
-            interp_spec = interp(points).reshape(len(target_times), len(target_freqs))
+            interp_spec = interp(points).reshape(len(target_freqs), len(target_times))
             spec = interp_spec
             p5, p95 = np.percentile(spec, [2, 98]) # after interpolation
 

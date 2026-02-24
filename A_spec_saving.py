@@ -228,7 +228,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
             song_metadata = []
             song_audio = []
 
-            logger.info(f"  📄 Processing batch file: {batch_info['file']} from {batch_info['subdir_type']}")
+            logger.info(f"  📄 Processing batch file: {batch_info['file']}")
 
             with open(batch_info['path'], 'r') as f:
                 lines = f.readlines()
