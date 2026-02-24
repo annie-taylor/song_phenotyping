@@ -752,6 +752,86 @@ def downsample_spec(spec: np.ndarray, params) -> np.ndarray:
     downsampled_spec = zoom(spec, zoom_factors, order=1)  # bilinear is fine for time axis
     return downsampled_spec
 
+
+def extract_phase_features(Sx, params):
+    """Extract compact phase-derived features."""
+    phase = np.angle(Sx)
+
+    # Instantaneous frequency (phase derivative over time)
+    inst_freq = np.diff(np.unwrap(phase, axis=1), axis=1)
+
+    # Group delay (phase derivative over frequency)
+    group_delay = -np.diff(np.unwrap(phase, axis=0), axis=0)
+
+    # Downsample these too
+    if params.use_warping:
+        # Apply same interpolation logic to phase features
+        inst_freq_ds = downsample_spec(inst_freq, params)
+        group_delay_ds = downsample_spec(group_delay, params)
+    else:
+        inst_freq_ds = downsample_spec(inst_freq, params)
+        group_delay_ds = downsample_spec(group_delay, params)
+
+    return inst_freq_ds, group_delay_ds
+
+
+def extract_minimal_phase_feature(complex_spec_ds):
+    """Extract single most informative phase feature."""
+
+    # Phase coherence across time (captures temporal structure)
+    if complex_spec_ds.shape[1] > 1:
+        phase_coherence = np.abs(np.mean(
+            np.exp(1j * np.diff(np.angle(complex_spec_ds), axis=1)), axis=1
+        ))
+        return phase_coherence.reshape(-1, 1)  # Single column per frequency bin
+    else:
+        return np.zeros((complex_spec_ds.shape[0], 1))
+
+#
+# mag_features = []
+# phase_features = []
+#
+# for audio_segment in audio_segments:
+#     mag, phase_dict, _, _ = get_song_spec_with_phase(...)
+#
+#     mag_features.append(mag.flatten())
+#     # Only keep the most important phase feature
+#     phase_features.append(phase_dict['inst_freq'].flatten() * 0.2)  # Lower weight
+#
+# # Combine for UMAP
+# combined_features = np.column_stack([
+#     np.array(mag_features),
+#     np.array(phase_features)
+# ])
+
+def extract_compact_phase_features(complex_spec_ds):
+    """Extract minimal phase features from already-downsampled complex spectrogram."""
+
+    # Only compute what you need, on the small downsampled version
+    phase = np.angle(complex_spec_ds)
+
+    # Instantaneous frequency (only if you have >1 time frame)
+    if complex_spec_ds.shape[1] > 1:
+        inst_freq = np.diff(np.unwrap(phase, axis=1), axis=1)
+        # Pad to match original size
+        inst_freq = np.pad(inst_freq, ((0, 0), (0, 1)), mode='edge')
+    else:
+        inst_freq = np.zeros_like(phase)
+
+    # Group delay (only if you have >1 frequency bin)
+    if complex_spec_ds.shape[0] > 1:
+        group_delay = -np.diff(np.unwrap(phase, axis=0), axis=0)
+        # Pad to match original size
+        group_delay = np.pad(group_delay, ((0, 1), (0, 0)), mode='edge')
+    else:
+        group_delay = np.zeros_like(phase)
+
+    return {
+        'inst_freq': inst_freq,
+        'group_delay': group_delay
+    }
+
+
 def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramParams, fs: int = 32000,
                   fill_value: float = -1 / EPSILON, downsample: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -781,11 +861,36 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         non_negative_time_indices = t >= 0
         non_negative_time_indices[-int(params.nfft / 2):] = False
         t = t[non_negative_time_indices]
+        complex_spec = Sx[:, non_negative_time_indices]
         spec = np.log(abs(Sx[:, non_negative_time_indices]))
         t += max(0, t1)  # adjust time to start at t1
 
+        # inst_freq, group_delay = extract_phase_features(
+        #     Sx[:, non_negative_time_indices], params)
+
         # begin DTW alternative block (regular interpolation over grid)
         if params.use_warping:
+            # # Need to interpolate complex values carefully
+            # real_part = np.real(complex_spec)
+            # imag_part = np.imag(complex_spec)
+            #
+            # # Use same interpolation setup as magnitude
+            # reasonable_fill_real = np.median(real_part[np.isfinite(real_part)])
+            # reasonable_fill_imag = np.median(imag_part[np.isfinite(imag_part)])
+            #
+            # interp_real = RegularGridInterpolator((f, t), real_part,
+            #                                       method='linear', bounds_error=False,
+            #                                       fill_value=reasonable_fill_real)
+            # interp_imag = RegularGridInterpolator((f, t), imag_part,
+            #                                       method='linear', bounds_error=False,
+            #                                       fill_value=reasonable_fill_imag)
+            #
+            # # Same target grids as magnitude
+            # real_interp = interp_real(points).reshape(len(target_freqs), len(target_times))
+            # imag_interp = interp_imag(points).reshape(len(target_freqs), len(target_times))
+            #
+            # complex_spec_processed = real_interp + 1j * imag_interp
+
             # Create the interpolator using RegularGridInterpolator
             reasonable_fill = np.median(spec[np.isfinite(spec)])
             interp = RegularGridInterpolator((f, t), spec,
@@ -816,6 +921,14 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
             p5, p95 = np.percentile(spec, [2, 98]) # after interpolation
 
         else:
+            # # Apply same padding logic to complex spectrogram
+            # exp_complex = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))),
+            #                       0 + 0j, dtype=complex)
+            # if complex_spec.shape[1] > exp_complex.shape[1]:
+            #     complex_spec = complex_spec[:, :exp_complex.shape[1]]
+            # exp_complex[:, :complex_spec.shape[1]] = complex_spec
+            # complex_spec_processed = exp_complex
+
             p5, p95 = np.percentile(spec, [2, 98])  # before padding
             exp_spec = np.full((int(params.nfft / 2) + 1, int(np.ceil(params.max_dur / STFT.delta_t))), fill_value)
 
@@ -831,7 +944,21 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
         exp_spec = np.clip(exp_spec, 0, 1)
 
         if downsample:
+            # spec_mag = downsample_spec(exp_spec, params)  # Your existing magnitude
+            #
+            # # Downsample complex parts separately, then recombine
+            # real_ds = downsample_spec(np.real(complex_spec_processed), params)
+            # imag_ds = downsample_spec(np.imag(complex_spec_processed), params)
+            # complex_spec_ds = real_ds + 1j * imag_ds
             spec = downsample_spec(exp_spec, params)
+
+            # would need to reconsider positioning here
+            # if include_phase:
+            #     # Extract phase features from downsampled complex spectrogram
+            #     phase_features = extract_compact_phase_features(complex_spec_ds)
+            #     return spec_mag, phase_features, audio_segment, t
+            # else:
+            #     return spec_mag, audio_segment, t
         else:
             spec = exp_spec
 

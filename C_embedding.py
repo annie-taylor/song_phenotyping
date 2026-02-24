@@ -56,6 +56,49 @@ class UMAPParams:
         return instance
 
 
+def complex_spectrogram_distance(spec1, spec2):
+    # spec1, spec2 are complex spectrograms (magnitude + phase)
+    return np.linalg.norm(spec1 - spec2)
+
+def phase_aware_spectrogram_distance(spec1, spec2):
+    # Magnitude component (cosine-like)
+    mag1, mag2 = np.abs(spec1), np.abs(spec2)
+    mag_sim = np.dot(mag1.flatten(), mag2.flatten()) / (
+            np.linalg.norm(mag1) * np.linalg.norm(mag2))
+
+    # Phase coherence component
+    phase_diff = np.angle(spec1 * np.conj(spec2))
+    phase_coherence = np.mean(np.cos(phase_diff))
+
+    # Combine (higher weight on magnitude typically)
+    return 1 - (0.8 * mag_sim + 0.2 * phase_coherence)
+
+
+def polar_distance(spec1, spec2):
+    mag1, phase1 = np.abs(spec1), np.angle(spec1)
+    mag2, phase2 = np.abs(spec2), np.angle(spec2)
+
+    # Weighted combination
+    mag_dist = np.linalg.norm(mag1 - mag2)
+    phase_dist = np.mean(np.abs(np.angle(np.exp(1j * (phase1 - phase2)))))
+
+    return alpha * mag_dist + beta * phase_dist
+
+def group_delay_distance(spec1, spec2):
+    # Group delay = -d(phase)/d(frequency)
+    gd1 = -np.diff(np.unwrap(np.angle(spec1)), axis=0)
+    gd2 = -np.diff(np.unwrap(np.angle(spec2)), axis=0)
+
+    return np.linalg.norm(gd1 - gd2)
+
+
+def instantaneous_freq_distance(spec1, spec2):
+    # Compute instantaneous frequency from phase derivatives
+    if1 = np.diff(np.unwrap(np.angle(spec1)), axis=1)
+    if2 = np.diff(np.unwrap(np.angle(spec2)), axis=1)
+
+    return np.linalg.norm(if1 - if2)
+
 def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load all flattened spectrogram files from a directory.
