@@ -1,11 +1,14 @@
 *.csv
 *.xml
 *.iml
+*.json
 *.log
 *.ipynb~
 *.sqlite3
-.git
-.idea
+*.git*
+*.idea*
+*__pycache__*
 analysis_results
 logs
-*__pycache__*
+refs
+

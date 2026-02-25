@@ -831,7 +831,6 @@ def extract_compact_phase_features(complex_spec_ds):
         'group_delay': group_delay
     }
 
-
 def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramParams, fs: int = 32000,
                   fill_value: float = -1 / EPSILON, downsample: bool = True) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
