@@ -62,7 +62,7 @@ def create_output_directory():
     return output_dir
 
 
-def find_cross_fostered_birds_father_only(bird_list, db_path='2026-01-15-db.sqlite3'):
+def find_cross_fostered_birds_father_only(bird_list, db_path='../refs/2026-01-15-db.sqlite3'):
     con = sqlite3.connect(db_path)
     cur = con.cursor()
 
@@ -137,7 +137,7 @@ def find_cross_fostered_birds_father_only(bird_list, db_path='2026-01-15-db.sqli
     con.close()
     return cross_fostered_birds
 
-def get_cross_foster_birds_filtered(db_path='2026-01-15-db.sqlite3', include_females=False):
+def get_cross_foster_birds_filtered(db_path='../refs/2026-01-15-db.sqlite3', include_females=False):
     """
     Get cross-foster birds, filtered by sex
 
@@ -230,7 +230,7 @@ def get_all_relevant_fathers(cross_foster_birds):
     return fathers
 
 
-def get_home_reared_for_fathers(father_names, db_path='2026-01-15-db.sqlite3', include_females=False):
+def get_home_reared_for_fathers(father_names, db_path='../refs/2026-01-15-db.sqlite3', include_females=False):
     """
     Get all home-reared offspring for specific fathers
 
@@ -247,7 +247,6 @@ def get_home_reared_for_fathers(father_names, db_path='2026-01-15-db.sqlite3', i
     cur = con.cursor()
 
     home_reared_birds = []
-    database_errors = []
 
     for father_name in father_names:
         try:
@@ -328,34 +327,14 @@ def get_home_reared_for_fathers(father_names, db_path='2026-01-15-db.sqlite3', i
                     })
                     home_reared_birds.append(child_info)
 
-            # Check for database inconsistencies: nest offspring that aren't genetic offspring
-            for child_uuid, child_name, sex, hatch_date in nest_offspring:
-                if not child_name:
-                    continue
-
-                is_genetic_offspring = any(gen_child[0] == child_uuid for gen_child in genetic_offspring)
-
-                if not is_genetic_offspring:
-                    # This is a database error: nest father but not genetic father
-                    error_info = {
-                        'error_type': 'nest_father_not_genetic_father',
-                        'father_name': father_name,
-                        'child_name': child_name,
-                        'child_uuid': child_uuid,
-                        'description': f"Bird {child_name} lists {father_name} as nest father but not genetic father"
-                    }
-                    database_errors.append(error_info)
-                    logger.warning(f"Database inconsistency: {error_info['description']}")
-
         except Exception as e:
             logger.error(f"Error processing father {father_name}: {e}")
             continue
 
     con.close()
     logger.info(f"Found {len(home_reared_birds)} home-reared birds")
-    logger.info(f"Found {len(database_errors)} database inconsistencies")
 
-    return home_reared_birds, database_errors
+    return home_reared_birds
 
 
 def get_full_parent_info(child_uuid, cursor):
@@ -435,7 +414,7 @@ def get_full_parent_info(child_uuid, cursor):
     return parent_info
 
 
-def enhance_birds_with_database_info(birds, db_path='2026-01-15-db.sqlite3'):
+def enhance_birds_with_database_info(birds, db_path='../refs/2026-01-15-db.sqlite3'):
     """
     Add complete database information to bird records
 
@@ -793,6 +772,85 @@ def scan_csvs_for_additional_birds(csv_directory, known_birds, include_females=F
     return additional_birds
 
 
+def check_csv_birds_against_database(csv_birds, db_path='../refs/2026-01-15-db.sqlite3'):
+    """
+    Check which CSV birds exist in the database and populate their data
+
+    Args:
+        csv_birds: List of birds found in CSV files
+        db_path: Path to database
+
+    Returns:
+        tuple: (birds_found_in_csvs_with_db_data, birds_truly_not_in_database)
+    """
+    logger = logging.getLogger(__name__)
+    con = sqlite3.connect(db_path)
+    cur = con.cursor()
+
+    birds_with_db_data = []
+    birds_not_in_db = []
+
+    for csv_bird in csv_birds:
+        bird_name = csv_bird['child_name']
+
+        try:
+            # Check if this bird exists in the database AT ALL
+            uuid, exists = getUUIDfromBands(cur, bird_name)
+
+            if exists:
+                # Bird IS in database - get full data
+                logger.info(f"Found {bird_name} in database, populating full data")
+
+                # Get complete bird info from database
+                enhanced_bird = csv_bird.copy()
+                enhanced_bird['child_uuid'] = uuid
+                enhanced_bird['in_database'] = True
+
+                # Get full parent info
+                parent_info = get_full_parent_info(uuid, cur)
+                enhanced_bird.update(parent_info)
+
+                # Get basic bird info (sex, hatch_date, etc.)
+                info_query = "SELECT hatch_date, sex FROM birds_animal WHERE uuid=?"
+                result = cur.execute(info_query, (uuid,))
+                info_row = result.fetchone()
+
+                if info_row:
+                    enhanced_bird['hatch_date'] = info_row[0] if info_row[0] else 'Unknown'
+                    enhanced_bird['sex'] = info_row[1] if info_row[1] else 'U'
+
+                # Determine rearing type based on parent relationships
+                genetic_father = enhanced_bird.get('genetic_father', 'Unknown')
+                nest_father = enhanced_bird.get('nest_father', 'Unknown')
+
+                if genetic_father != 'Unknown' and nest_father != 'Unknown':
+                    if genetic_father == nest_father:
+                        enhanced_bird['rearing_type'] = 'HR'  # Home-reared
+                    else:
+                        enhanced_bird['rearing_type'] = 'CF'  # Cross-fostered
+                else:
+                    enhanced_bird['rearing_type'] = 'Unknown'
+
+                birds_with_db_data.append(enhanced_bird)
+
+            else:
+                # Bird is NOT in database
+                logger.info(f"{bird_name} not found in database")
+                csv_bird['in_database'] = False
+                birds_not_in_db.append(csv_bird)
+
+        except Exception as e:
+            logger.error(f"Error checking {bird_name} against database: {e}")
+            csv_bird['in_database'] = False
+            birds_not_in_db.append(csv_bird)
+
+    con.close()
+
+    logger.info(f"CSV birds found in database: {len(birds_with_db_data)}")
+    logger.info(f"CSV birds NOT in database: {len(birds_not_in_db)}")
+
+    return birds_with_db_data, birds_not_in_db
+
 def extract_birds_from_dataframe(df):
     """
     Extract potential bird names from a DataFrame
@@ -872,79 +930,128 @@ def add_song_counts(birds, audio_data_file="cross_fostered_bird_audio_data.json"
     return enhanced_birds
 
 
-def create_family_summary(all_birds):
+def create_family_summary(cross_foster_birds, home_reared_birds, csv_birds_in_db=None):
     """
-    Create family-level summary of cross-foster vs home-reared birds
+    Create family-level summary using the same logic as the older analysis
 
     Args:
-        all_birds: List of all bird records
+        cross_foster_birds: List of cross-foster bird records
+        home_reared_birds: List of home-reared bird records
+        csv_birds_in_db: List of CSV birds found in database (optional)
 
     Returns:
-        list: Family summary records
+        list: Family summary records with all three categories
     """
     logger = logging.getLogger(__name__)
 
-    # Group by genetic father
-    families = {}
+    # Combine all birds into one dataset
+    all_birds = cross_foster_birds + home_reared_birds
 
+    # Add CSV birds if provided
+    if csv_birds_in_db:
+        all_birds += csv_birds_in_db
+        logger.info(f"Including {len(csv_birds_in_db)} additional birds from CSV files")
+
+    # Create a DataFrame for easier manipulation (matching older analysis)
+    birds_data = []
     for bird in all_birds:
-        if not bird.get('in_database', True):  # Skip birds not in database for family analysis
-            continue
+        birds_data.append({
+            'bird_name': bird['child_name'],
+            'genetic_father': bird.get('genetic_father', 'Unknown'),
+            'nest_father': bird.get('nest_father', 'Unknown')
+        })
 
-        genetic_father = bird.get('genetic_father', 'Unknown')
-        if genetic_father == 'Unknown':
-            continue
+    df = pd.DataFrame(birds_data)
 
-        if genetic_father not in families:
-            families[genetic_father] = {
-                'genetic_father': genetic_father,
-                'cross_fostered_birds': [],
-                'home_reared_birds': [],
-                'cross_fostered_count': 0,
-                'home_reared_count': 0,
-                'total_offspring': 0,
-                'total_songs': 0
-            }
+    # Remove rows with missing critical data
+    df = df.dropna(subset=['bird_name', 'genetic_father', 'nest_father'])
+    df = df[df['genetic_father'] != 'Unknown']
+    df = df[df['nest_father'] != 'Unknown']
 
-        family = families[genetic_father]
-        rearing_type = bird.get('rearing_type', 'Unknown')
+    # Get all unique fathers (both genetic and nest) - SAME AS OLDER ANALYSIS
+    all_fathers = set(df['genetic_father'].unique()) | set(df['nest_father'].unique())
+    all_fathers = {f for f in all_fathers if pd.notna(f) and f != ''}
 
-        if rearing_type == 'CF':
-            family['cross_fostered_birds'].append(bird['child_name'])
-            family['cross_fostered_count'] += 1
-        elif rearing_type == 'HR':
-            family['home_reared_birds'].append(bird['child_name'])
-            family['home_reared_count'] += 1
+    logger.info(f"Analyzing {len(all_fathers)} unique fathers (genetic + nest)")
 
-        family['total_offspring'] += 1
-        family['total_songs'] += bird.get('total_songs', 0)
-
-        # Convert to list and add analysis flags
+    # Analyze each father - SAME LOGIC AS OLDER ANALYSIS
     family_summary = []
-    for father_name, family_data in families.items():
-        family_record = family_data.copy()
 
-        # Convert bird lists to strings
-        family_record['cross_fostered_birds'] = '; '.join(family_data['cross_fostered_birds'])
-        family_record['home_reared_birds'] = '; '.join(family_data['home_reared_birds'])
+    for father in sorted(all_fathers):
+        # Find all offspring where this bird is genetic father
+        genetic_offspring = df[df['genetic_father'] == father]['bird_name'].tolist()
+
+        # Find all offspring where this bird is nest father
+        nest_offspring = df[df['nest_father'] == father]['bird_name'].tolist()
+
+        # Categorize offspring - EXACT SAME LOGIC AS OLDER ANALYSIS
+        genetic_offspring_set = set(genetic_offspring)
+        nest_offspring_set = set(nest_offspring)
+
+        # Both genetic and nest father (home-reared)
+        home_reared = genetic_offspring_set & nest_offspring_set
+
+        # Nest father only (cross-fostered IN / tutored offspring)
+        cross_fostered_in = nest_offspring_set - genetic_offspring_set
+
+        # Genetic father only (fostered OUT)
+        fostered_out = genetic_offspring_set - nest_offspring_set
+
+        # Add song counts for each category
+        total_songs = 0
+        home_reared_songs = 0
+        cf_in_songs = 0
+        fostered_out_songs = 0
+
+        for bird in all_birds:
+            bird_name = bird['child_name']
+            songs = bird.get('total_songs', 0)
+            total_songs += songs
+
+            if bird_name in home_reared:
+                home_reared_songs += songs
+            elif bird_name in cross_fostered_in:
+                cf_in_songs += songs
+            elif bird_name in fostered_out:
+                fostered_out_songs += songs
+
+        # Create result row - MATCHING OLDER ANALYSIS STRUCTURE
+        family_record = {
+            'genetic_father': father,
+            'home_reared_count': len(home_reared),
+            'cross_fostered_in_count': len(cross_fostered_in),  # This is "tutored_count"
+            'fostered_out_count': len(fostered_out),  # This is "genetic_only_count"
+            'total_offspring': len(home_reared) + len(cross_fostered_in) + len(fostered_out),
+            'home_reared_birds': '; '.join(sorted(home_reared)),
+            'cross_fostered_in_birds': '; '.join(sorted(cross_fostered_in)),
+            'fostered_out_birds': '; '.join(sorted(fostered_out)),
+            'total_songs': total_songs,
+            'home_reared_songs': home_reared_songs,
+            'cf_in_songs': cf_in_songs,
+            'fostered_out_songs': fostered_out_songs
+        }
 
         # Add analysis suitability flags
         family_record['suitable_for_within_family_analysis'] = (
-                family_data['cross_fostered_count'] >= 2 and family_data['home_reared_count'] >= 2
+                family_record['home_reared_count'] >= 2 and family_record['cross_fostered_in_count'] >= 2
         )
-        family_record['has_cross_fostered'] = family_data['cross_fostered_count'] > 0
-        family_record['has_home_reared'] = family_data['home_reared_count'] > 0
+        family_record['has_home_reared'] = family_record['home_reared_count'] > 0
+        family_record['has_cross_fostered_in'] = family_record['cross_fostered_in_count'] > 0
+        family_record['has_fostered_out'] = family_record['fostered_out_count'] > 0
 
-        family_summary.append(family_record)
+        # Only include fathers that have at least one offspring
+        if family_record['total_offspring'] > 0:
+            family_summary.append(family_record)
 
     # Sort by total offspring (largest families first)
     family_summary.sort(key=lambda x: x['total_offspring'], reverse=True)
 
-    logger.info(f"Created family summary for {len(family_summary)} families")
+    logger.info(f"Created family summary for {len(family_summary)} fathers")
     suitable_count = sum(1 for f in family_summary if f['suitable_for_within_family_analysis'])
     logger.info(f"Families suitable for within-family analysis: {suitable_count}")
 
     return family_summary
+
 
 def save_birds_to_csv(birds, output_file, output_dir):
     """
@@ -983,15 +1090,8 @@ def save_birds_to_csv(birds, output_file, output_dir):
     except Exception as e:
         logging.error(f"Error saving {output_file}: {e}")
 
-
 def save_family_summary_to_csv(family_summary, output_dir):
-    """
-    Save family summary to CSV file
-
-    Args:
-        family_summary: List of family records
-        output_dir: Output directory
-    """
+    """Save family summary to CSV file with all three categories"""
     if not family_summary:
         logging.info("No families to save")
         return
@@ -999,9 +1099,11 @@ def save_family_summary_to_csv(family_summary, output_dir):
     filepath = os.path.join(output_dir, "family_summary_by_father.csv")
 
     columns = [
-        'genetic_father', 'total_offspring', 'cross_fostered_count', 'home_reared_count',
-        'total_songs', 'cross_fostered_birds', 'home_reared_birds',
-        'suitable_for_within_family_analysis', 'has_cross_fostered', 'has_home_reared'
+        'genetic_father', 'total_offspring',
+        'home_reared_count', 'cross_fostered_in_count', 'fostered_out_count',
+        'home_reared_birds', 'cross_fostered_in_birds', 'fostered_out_birds',
+        'total_songs', 'home_reared_songs', 'cf_in_songs', 'fostered_out_songs',
+        'suitable_for_within_family_analysis', 'has_home_reared', 'has_cross_fostered_in', 'has_fostered_out'
     ]
 
     try:
@@ -1016,36 +1118,8 @@ def save_family_summary_to_csv(family_summary, output_dir):
         logging.error(f"Error saving family summary: {e}")
 
 
-def save_database_errors_to_csv(database_errors, output_dir):
-    """
-    Save database inconsistencies to CSV file
-
-    Args:
-        database_errors: List of database error records
-        output_dir: Output directory
-    """
-    if not database_errors:
-        logging.info("No database errors found")
-        return
-
-    filepath = os.path.join(output_dir, "database_inconsistencies.csv")
-
-    columns = ['error_type', 'father_name', 'child_name', 'child_uuid', 'description']
-
-    try:
-        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=columns)
-            writer.writeheader()
-            writer.writerows(database_errors)
-
-        logging.info(f"Saved {len(database_errors)} database inconsistencies to {filepath}")
-
-    except Exception as e:
-        logging.error(f"Error saving database errors: {e}")
-
-
 def create_audit_summary_report(cross_foster_birds, home_reared_birds, csv_birds,
-                                family_summary, database_errors, output_dir):
+                                family_summary, output_dir):
     """
     Create a text summary report of the audit findings
 
@@ -1137,20 +1211,6 @@ def create_audit_summary_report(cross_foster_birds, home_reared_birds, csv_birds
                 f.write("Source files: " + ", ".join(sorted(all_sources)) + "\n")
             f.write("\n")
 
-            # Database errors summary
-            f.write("DATABASE INCONSISTENCIES\n")
-            f.write("-" * 24 + "\n")
-            f.write(f"Total inconsistencies found: {len(database_errors)}\n")
-            if database_errors:
-                error_types = {}
-                for error in database_errors:
-                    error_type = error['error_type']
-                    error_types[error_type] = error_types.get(error_type, 0) + 1
-
-                for error_type, count in error_types.items():
-                    f.write(f"  {error_type}: {count}\n")
-            f.write("\n")
-
             # Recommendations
             f.write("RECOMMENDATIONS\n")
             f.write("-" * 15 + "\n")
@@ -1165,11 +1225,6 @@ def create_audit_summary_report(cross_foster_birds, home_reared_birds, csv_birds
                 f.write("✓ Sufficient birds with songs for bulk analysis\n")
             else:
                 f.write("⚠ Limited birds with song data - may need to lower song count thresholds\n")
-
-            if database_errors:
-                f.write("⚠ Database inconsistencies found - recommend reviewing and cleaning\n")
-            else:
-                f.write("✓ No database inconsistencies detected\n")
 
             if csv_birds:
                 f.write("⚠ Additional birds found in CSV files - consider adding to database\n")
@@ -1201,7 +1256,7 @@ def main(include_females=False, csv_directory="/Users/annietaylor/Documents/ucsf
         all_fathers = get_all_relevant_fathers(cross_foster_birds)
 
         logger.info("=== PHASE 3: GET HOME-REARED OFFSPRING ===")
-        home_reared_birds, database_errors = get_home_reared_for_fathers(all_fathers, include_females=include_females)
+        home_reared_birds = get_home_reared_for_fathers(all_fathers, include_females=include_females)
 
         logger.info("=== PHASE 4: ENHANCE WITH DATABASE INFO ===")
         cross_foster_birds = enhance_birds_with_database_info(cross_foster_birds)
@@ -1217,17 +1272,22 @@ def main(include_females=False, csv_directory="/Users/annietaylor/Documents/ucsf
         cross_foster_birds = add_song_counts(cross_foster_birds)
         home_reared_birds = add_song_counts(home_reared_birds)
 
-        logger.info("=== PHASE 6: SCAN CSV FILES FOR ADDITIONAL BIRDS ===")
+        logger.info("=== PHASE 6: SCAN CSV FILES FOR ALL BIRDS ===")
         all_database_birds = set(bird['child_name'] for bird in cross_foster_birds + home_reared_birds)
         csv_birds = scan_csvs_for_additional_birds(csv_directory, all_database_birds, include_females=include_females)
 
-        logger.info("=== PHASE 7: CREATE FAMILY SUMMARY ===")
-        all_birds = cross_foster_birds + home_reared_birds
-        family_summary = create_family_summary(all_birds)
+        logger.info("=== PHASE 6b: CHECK CSV BIRDS AGAINST DATABASE ===")
+        csv_birds_in_db, csv_birds_not_in_db = check_csv_birds_against_database(csv_birds)
+
+        logger.info("=== PHASE 7: CREATE FAMILY SUMMARY (INCLUDING ALL DATABASE BIRDS) ===")
+        # Now include ALL database birds (original + CSV birds found in DB)
+        all_database_birds_complete = cross_foster_birds + home_reared_birds + csv_birds_in_db
+        family_summary = create_family_summary(cross_foster_birds, home_reared_birds, csv_birds_in_db)
 
         logger.info("=== PHASE 8: SAVE OUTPUT FILES ===")
 
         # Save individual bird datasets
+        all_birds = cross_foster_birds + home_reared_birds
         save_birds_to_csv(all_birds, "master_birds_inventory.csv", output_dir)
         save_birds_to_csv(cross_foster_birds, "cross_fostered_birds.csv", output_dir)
         save_birds_to_csv(home_reared_birds, "home_reared_birds.csv", output_dir)
@@ -1236,12 +1296,9 @@ def main(include_females=False, csv_directory="/Users/annietaylor/Documents/ucsf
         # Save family summary
         save_family_summary_to_csv(family_summary, output_dir)
 
-        # Save database errors
-        save_database_errors_to_csv(database_errors, output_dir)
-
         # Create summary report
         create_audit_summary_report(cross_foster_birds, home_reared_birds, csv_birds,
-                                    family_summary, database_errors, output_dir)
+                                    family_summary, output_dir)
 
         logger.info("=== AUDIT COMPLETE ===")
         logger.info(f"Output files saved to: {output_dir}/")
@@ -1249,7 +1306,6 @@ def main(include_females=False, csv_directory="/Users/annietaylor/Documents/ucsf
         logger.info(f"Home-reared birds: {len(home_reared_birds)}")
         logger.info(f"CSV-only birds: {len(csv_birds)}")
         logger.info(f"Families analyzed: {len(family_summary)}")
-        logger.info(f"Database errors: {len(database_errors)}")
 
         # Quick analysis summary
         suitable_families = [f for f in family_summary if f['suitable_for_within_family_analysis']]
@@ -1258,14 +1314,12 @@ def main(include_females=False, csv_directory="/Users/annietaylor/Documents/ucsf
         logger.info(f"\nKEY FINDINGS:")
         logger.info(f"  Families suitable for within-family analysis: {len(suitable_families)}")
         logger.info(f"  Birds with song data: {birds_with_songs}/{len(all_birds)}")
-        logger.info(f"  Database inconsistencies: {len(database_errors)}")
 
         return {
             'cross_foster_birds': cross_foster_birds,
             'home_reared_birds': home_reared_birds,
             'csv_birds': csv_birds,
             'family_summary': family_summary,
-            'database_errors': database_errors,
             'output_directory': output_dir
         }
 
@@ -1291,5 +1345,4 @@ if __name__ == "__main__":
     print("  - home_reared_birds.csv")
     print("  - birds_not_in_database.csv")
     print("  - family_summary_by_father.csv")
-    print("  - database_inconsistencies.csv")
     print("  - audit_summary_report.txt")

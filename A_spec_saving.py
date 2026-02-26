@@ -1049,7 +1049,8 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 save_path=settings['save_dir'],
                 batch_file_naming=settings['batch_file_naming'],
                 bird_subset=settings['bird_subset'],
-                copy_locally=settings['copy_locally']
+                copy_locally=settings['copy_locally'],
+                preferred_subdirs = ['labeled_song_final']
             )
 
             # Process spectrograms
@@ -1099,16 +1100,16 @@ def main():
     config = {
         'evsonganaly': {
             'enabled': True,
-            'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled', 'or-or'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'evsong test warp'),
+            'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
             'batch_file_naming': 'batch.txt.labeled',
-            'bird_subset': ['or18or24'],
+            'bird_subset': None,
             'copy_locally': True,
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
                 max_dur=0.150,
-                songs_per_bird=5,
+                songs_per_bird=30,
                 overwrite_existing=True,
                 use_warping=True,
                 downsample=True
