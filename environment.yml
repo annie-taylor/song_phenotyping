@@ -1,0 +1,8 @@
+name: song_phenotyping
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - setuptools
+  - notebook
+prefix: /Users/annietaylor/anaconda3/envs/song_phenotyping
