@@ -1101,7 +1101,7 @@ def main():
         'evsonganaly': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
+            'save_dir': os.path.join('..', 'ssharma_RNA_seq'),
             'batch_file_naming': 'batch.txt.labeled',
             'bird_subset': None,
             'copy_locally': True,
