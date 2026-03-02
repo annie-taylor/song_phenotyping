@@ -1,14 +1,19 @@
 *.csv
-*.xml
-*.iml
-*.json
+*.DS_Store*
 *.log
-*.ipynb~
-*.sqlite3
-*.git*
 *.idea*
+*.ipynb~
+*.ipynb_checkpoints*
+*.iml
+*.git*
+*.json
+*jupyter*
+*.sqlite3
+*.virtual_documents/*
+*.xml
 *__pycache__*
 analysis_results
 logs
 refs
+Volumes*
 

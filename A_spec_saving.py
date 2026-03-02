@@ -34,10 +34,26 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         song_or_call: str = 'song',
                         file_ext: str = '.wav.not.mat',
                         bird_subset: None | list = None,
-                        copy_locally: bool = False) -> Dict[str, List[str]]:
+                        copy_locally: bool = False,
+                        prefer_local: bool = False) -> Dict[str, List[str]]:
     """
     Extract WhisperSeg metadata file paths organized by bird and optionally copy audio files.
+    If prefer_local=True, will try to use local cache first (no server access needed).
     """
+
+    # If prefer_local is True, try local cache first (avoids server scanning)
+    if prefer_local and save_path and os.path.exists(save_path):
+        logger.info("🔄 prefer_local=True, using local cache (no server access)")
+
+        metadata_file_paths = filepaths_from_local_cache(save_path, bird_subset)
+
+        if metadata_file_paths:
+            logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
+            return metadata_file_paths
+        else:
+            logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
+            return {}
+
     logger.info(f"🔍 Scanning wseg directory: {seg_directory}")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
@@ -84,23 +100,39 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         if audio_path and os.path.exists(audio_path):
                             filename = os.path.basename(audio_path)
 
-                            # Copy file locally
+                            # Copy audio file locally
                             copied_data_dir = os.path.join(save_path, 'copied_data', bird)
                             os.makedirs(copied_data_dir, exist_ok=True)
-                            local_path = os.path.join(copied_data_dir, filename)
+                            local_audio_path = os.path.join(copied_data_dir, filename)
 
-                            if not os.path.exists(local_path):
+                            if not os.path.exists(local_audio_path):
                                 try:
-                                    shutil.copy2(audio_path, local_path)
-                                    logger.debug(f"  📋 Copied {filename}")
+                                    shutil.copy2(audio_path, local_audio_path)
+                                    logger.debug(f"  📋 Copied audio: {filename}")
                                 except Exception as e:
-                                    logger.error(f"  ❌ Failed to copy {audio_path}: {e}")
-                                    local_path = None
+                                    logger.error(f"  ❌ Failed to copy audio {audio_path}: {e}")
+                                    local_audio_path = None
+
+                            # ALSO COPY THE METADATA FILE
+                            metadata_filename = os.path.basename(file_path)
+                            local_metadata_path = os.path.join(copied_data_dir, metadata_filename)
+
+                            if not os.path.exists(local_metadata_path):
+                                try:
+                                    shutil.copy2(file_path, local_metadata_path)
+                                    logger.debug(f"  📋 Copied metadata: {metadata_filename}")
+                                except Exception as e:
+                                    logger.error(f"  ❌ Failed to copy metadata {file_path}: {e}")
 
                             # Update mapping with both paths
                             update_audio_paths_file(bird_folder, filename,
-                                                    local_path=local_path,
+                                                    local_path=local_audio_path,
                                                     server_path=audio_path)
+
+                            # Also update metadata mapping
+                            update_audio_paths_file(bird_folder, metadata_filename,
+                                                    local_path=local_metadata_path,
+                                                    server_path=file_path)
                         else:
                             logger.warning(f"  ⚠️ Could not resolve audio path for {file_path}")
 
@@ -148,10 +180,31 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                batch_file_naming: str = 'batch.txt.keep',
                                bird_subset: None | list = None,
                                copy_locally: bool = False,
+                               prefer_local: bool = False,
                                preferred_subdirs: list = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """
     Extract file paths from evsonganaly batch files and optionally copy files locally.
+    If prefer_local=True, will try to use local cache first (no server access needed).
     """
+
+    # If prefer_local is True, try local cache first (avoids server scanning)
+    if prefer_local and save_path and os.path.exists(save_path):
+        logger.info("🔄 prefer_local=True, using local cache (no server access)")
+
+        metadata_file_paths = filepaths_from_local_cache(save_path, bird_subset)
+
+        if metadata_file_paths:
+            logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
+            # For evsonganaly, derive wav_file_paths from metadata paths
+            wav_file_paths = {}
+            for bird, metadata_paths in metadata_file_paths.items():
+                wav_file_paths[bird] = [path.replace('.wav.not.mat', '.wav') for path in metadata_paths]
+
+            return metadata_file_paths, wav_file_paths
+        else:
+            logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
+            return {}, {}
+
     logger.info(f"🔍 Scanning evsonganaly directory: {wav_directory}")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
@@ -266,27 +319,47 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                 filename = os.path.basename(audio_path)
 
                                 if copy_locally:
-                                    # Copy file locally
+                                    # Copy audio file locally
                                     copied_data_dir = os.path.join(save_path, 'copied_data', bird)
                                     os.makedirs(copied_data_dir, exist_ok=True)
-                                    local_path = os.path.join(copied_data_dir, filename)
+                                    local_audio_path = os.path.join(copied_data_dir, filename)
 
-                                    if not os.path.exists(local_path):
+                                    if not os.path.exists(local_audio_path):
                                         try:
-                                            shutil.copy2(audio_path, local_path)
-                                            logger.debug(f"      📋 Copied {filename}")
+                                            shutil.copy2(audio_path, local_audio_path)
+                                            logger.debug(f"      📋 Copied audio: {filename}")
                                         except Exception as e:
-                                            logger.error(f"      ❌ Failed to copy {audio_path}: {e}")
-                                            local_path = None
+                                            logger.error(f"      ❌ Failed to copy audio {audio_path}: {e}")
+                                            local_audio_path = None
 
-                                    # Update mapping with both paths
+                                    # ALSO COPY THE METADATA FILE
+                                    metadata_filename = os.path.basename(song_metadata_path)
+                                    local_metadata_path = os.path.join(copied_data_dir, metadata_filename)
+
+                                    if not os.path.exists(local_metadata_path):
+                                        try:
+                                            shutil.copy2(song_metadata_path, local_metadata_path)
+                                            logger.debug(f"      📋 Copied metadata: {metadata_filename}")
+                                        except Exception as e:
+                                            logger.error(f"      ❌ Failed to copy metadata {song_metadata_path}: {e}")
+
+                                    # Update mapping with both paths (audio and metadata)
                                     update_audio_paths_file(bird_folder, filename,
-                                                            local_path=local_path,
+                                                            local_path=local_audio_path,
                                                             server_path=audio_path)
+
+                                    # Also update metadata mapping
+                                    update_audio_paths_file(bird_folder, metadata_filename,
+                                                            local_path=local_metadata_path,
+                                                            server_path=song_metadata_path)
                                 else:
                                     # Just update with server path
                                     update_audio_paths_file(bird_folder, filename,
                                                             server_path=audio_path)
+                                    # Also update metadata mapping
+                                    update_audio_paths_file(bird_folder, metadata_filename,
+                                                            local_path=local_metadata_path,
+                                                            server_path=song_metadata_path)
 
                             processed_files += 1
                         else:
@@ -714,6 +787,77 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
         return False
 
 
+def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict[str, List[str]]:
+    """
+    Discover metadata file paths from local cache by reading audio_paths.txt files.
+    Returns LOCAL metadata paths for truly offline operation.
+    """
+    logger.info(f"🔍 Discovering files from local cache: {save_path}")
+
+    metadata_file_paths = {}
+
+    if not os.path.exists(save_path):
+        logger.warning(f"Save path does not exist: {save_path}")
+        return metadata_file_paths
+
+    # Scan for bird directories
+    for item in os.listdir(save_path):
+        bird_folder = os.path.join(save_path, item)
+
+        # Skip non-directories and special directories
+        if not os.path.isdir(bird_folder) or item in ['copied_data']:
+            continue
+
+        # Apply bird subset filter
+        if bird_subset is not None and item not in bird_subset:
+            continue
+
+        # Check if we have cached files for this bird
+        audio_paths_file = os.path.join(bird_folder, 'audio_paths.txt')
+        if not os.path.exists(audio_paths_file):
+            logger.debug(f"  ⚠️ No audio_paths.txt found for {item}")
+            continue
+
+        logger.info(f"  🐦 Reading cached files for bird: {item}")
+
+        # Read audio_paths.txt to get LOCAL metadata paths
+        bird_metadata_files = []
+        try:
+            with open(audio_paths_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#') or not line:
+                        continue
+
+                    parts = line.split('|')
+                    if len(parts) >= 3:
+                        bird_id, local_path, server_path = parts[0], parts[1], parts[2]
+
+                        # Look for metadata files (not audio files)
+                        if local_path.endswith('.not.mat'):
+                            # Check if LOCAL metadata file exists
+                            if os.path.exists(local_path):
+                                bird_metadata_files.append(local_path)  # Use LOCAL path!
+                            else:
+                                logger.debug(f"    ⚠️ Local metadata not found: {os.path.basename(local_path)}")
+
+        except Exception as e:
+            logger.warning(f"  ⚠️ Error reading audio_paths.txt for {item}: {e}")
+            continue
+
+        if bird_metadata_files:
+            metadata_file_paths[item] = bird_metadata_files
+            logger.info(f"  📄 Found {len(bird_metadata_files)} local cached files for {item}")
+
+    total_birds = len(metadata_file_paths)
+    total_files = sum(len(files) for files in metadata_file_paths.values())
+
+    logger.info(f"🎯 Local cache discovery complete:")
+    logger.info(f"  🐦 Found {total_birds} birds")
+    logger.info(f"  📄 Found {total_files} total LOCAL files")
+
+    return metadata_file_paths
+
 def process_single_metadata_file(metadata_file_path: str, save_path: str, params: SpectrogramParams,
                                  read_songpath_from_metadata: bool, verbose: bool,
                                  prefer_local: bool = True) -> Dict[str, str]:
@@ -1050,7 +1194,8 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 batch_file_naming=settings['batch_file_naming'],
                 bird_subset=settings['bird_subset'],
                 copy_locally=settings['copy_locally'],
-                preferred_subdirs = ['labeled_song_final']
+                prefer_local=settings['prefer_local'],
+                preferred_subdirs = settings['preferred_subdirs']
             )
 
             # Process spectrograms
@@ -1059,7 +1204,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 save_path=settings['save_dir'],
                 songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
-                prefer_local=settings['copy_locally']
+                prefer_local = settings['prefer_local'],
             )
 
         elif pipeline_name == 'wseg':
@@ -1069,7 +1214,9 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 save_path=settings['save_dir'],
                 song_or_call='song',
                 bird_subset=settings['bird_subset'],
-                copy_locally=settings['copy_locally']
+                copy_locally=settings['copy_locally'],
+                prefer_local=settings['prefer_local'],
+                #preferred_subdirs=settings['preferred_subdirs']
             )
 
             # Process spectrograms - songs_per_bird comes from params now
@@ -1078,7 +1225,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 save_path=settings['save_dir'],
                 songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
-                prefer_local=settings['copy_locally']
+                prefer_local=settings['prefer_local'],
             )
 
         logger.info(f"✅ {pipeline_name.capitalize()} processing complete!")
@@ -1101,10 +1248,12 @@ def main():
         'evsonganaly': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
-            'save_dir': os.path.join('..', 'ssharma_RNA_seq'),
+            'save_dir': os.path.join('Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
             'batch_file_naming': 'batch.txt.labeled',
-            'bird_subset': None,
-            'copy_locally': True,
+            'bird_subset': ['pk26pk92'],
+            'copy_locally': False,  # to write/overwrite audio and metadata files to
+            'prefer_local': True,
+            'preferred_subdirs': ['labeled_song_final'],
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
@@ -1120,7 +1269,8 @@ def main():
         #     'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
         #     'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         #     'bird_subset': ['bu85bu97'],
-        #     'copy_locally': True,
+        #     'copy_locally': False,
+        #     'prefer_local': True,
         #     'params': SpectrogramParams(
         #         nfft=1024,
         #         hop=1,

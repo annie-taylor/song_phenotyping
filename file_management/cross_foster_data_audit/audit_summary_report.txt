@@ -1,0 +1,27 @@
+CROSS-FOSTER DATA AUDIT SUMMARY REPORT
+==================================================
+Generated: 2026-02-25 16:23:37
+
+DATABASE BIRDS SUMMARY
+-------------------------
+Cross-foster birds: 344
+Home-reared birds: 1413
+Total database birds: 1757
+
+Male cross-foster birds: 344
+Male home-reared birds: 1413
+Total male birds: 1757
+
+SONG DATA SUMMARY
+-----------------
+Cross-foster birds with songs: 33/344
+Home-reared birds with songs: 9/1413
+Total songs in cross-foster birds: 598102
+Total songs in home-reared birds: 341864
+Average songs per cross-foster bird (with songs): 18124.3
+Average songs per home-reared bird (with songs): 37984.9
+
+FAMILY ANALYSIS SUMMARY
+-----------------------
+Total families identified: 112
+Families suitable for within-family analysis: 57
