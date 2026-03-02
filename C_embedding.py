@@ -73,16 +73,16 @@ def phase_aware_spectrogram_distance(spec1, spec2):
     # Combine (higher weight on magnitude typically)
     return 1 - (0.8 * mag_sim + 0.2 * phase_coherence)
 
-
-def polar_distance(spec1, spec2):
-    mag1, phase1 = np.abs(spec1), np.angle(spec1)
-    mag2, phase2 = np.abs(spec2), np.angle(spec2)
-
-    # Weighted combination
-    mag_dist = np.linalg.norm(mag1 - mag2)
-    phase_dist = np.mean(np.abs(np.angle(np.exp(1j * (phase1 - phase2)))))
-
-    return alpha * mag_dist + beta * phase_dist
+#
+# def polar_distance(spec1, spec2):
+#     mag1, phase1 = np.abs(spec1), np.angle(spec1)
+#     mag2, phase2 = np.abs(spec2), np.angle(spec2)
+#
+#     # Weighted combination
+#     mag_dist = np.linalg.norm(mag1 - mag2)
+#     phase_dist = np.mean(np.abs(np.angle(np.exp(1j * (phase1 - phase2)))))
+#
+#     return alpha * mag_dist + beta * phase_dist
 
 def group_delay_distance(spec1, spec2):
     # Group delay = -d(phase)/d(frequency)
@@ -441,7 +441,9 @@ def explore_embedding_parameters(save_path: str, bird: str,
 
         # Setup paths
         bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'data')
+        # TODO will need to add alternative logic for slicing, or...
+        #  ...decide that slicing needs a seperate project folder altogether?
+        data_path = os.path.join(bird_path, 'syllable_data')
 
         paths = {
             'specs': os.path.join(data_path, 'flattened'),
@@ -562,7 +564,7 @@ def main():
     optimize_pytables_for_network()
 
     # EVSong processing
-    evsong_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    evsong_test_directory = os.path.join('..', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
     birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
@@ -584,28 +586,28 @@ def main():
         else:
             logging.error(f"❌ Failed to process EVSong bird: {bird}")
 
-    # WSeg processing
-    wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    logging.info(f"Processing WSeg directory: {wseg_test_directory}")
-
-    birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
-             os.path.isdir(os.path.join(wseg_test_directory, b))]
-    logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
-
-    for bird in birds:
-        logging.info(f"Processing WSeg bird: {bird}")
-        success = explore_embedding_parameters(
-            save_path=wseg_test_directory,
-            bird=bird,
-            min_dists=[0.01, 0.1, 0.5],
-            n_neighbors_list=[5, 10, 50, 100],
-            use_parallel=True,
-            overwrite=False
-        )
-        if success:
-            logging.info(f"✅ Successfully processed WSeg bird: {bird}")
-        else:
-            logging.error(f"❌ Failed to process WSeg bird: {bird}")
+    # # WSeg processing
+    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    # logging.info(f"Processing WSeg directory: {wseg_test_directory}")
+    #
+    # birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
+    #          os.path.isdir(os.path.join(wseg_test_directory, b))]
+    # logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+    #
+    # for bird in birds:
+    #     logging.info(f"Processing WSeg bird: {bird}")
+    #     success = explore_embedding_parameters(
+    #         save_path=wseg_test_directory,
+    #         bird=bird,
+    #         min_dists=[0.01, 0.1, 0.5],
+    #         n_neighbors_list=[5, 10, 50, 100],
+    #         use_parallel=True,
+    #         overwrite=False
+    #     )
+    #     if success:
+    #         logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+    #     else:
+    #         logging.error(f"❌ Failed to process WSeg bird: {bird}")
 
     logging.info("UMAP embeddings pipeline completed")
 

@@ -1890,7 +1890,7 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
             bird_path = os.path.join(save_path, bird_name)
 
             # Labelling directory (contains all cluster labels)
-            labelling_path = os.path.join(bird_path, 'data', 'labelling')
+            labelling_path = os.path.join(bird_path, 'syllable_data', 'labelling')
             if os.path.exists(labelling_path):
                 paths_to_remove.append(('labelling', labelling_path))
                 # Count files for reporting
@@ -1979,10 +1979,11 @@ if __name__ == '__main__':
     # Setup paths and parameters
     #path_to_macaw = check_sys_for_macaw_root()
 
-    save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    #save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    save_path = os.path.join('..', 'ssharma_RNA_seq')
     #clear_clustering_outputs(save_path=save_path)
     main(save_path=save_path)
-    save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    #clear_clustering_outputs(save_path=save_path)
-    main(save_path=save_path)
+    # save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    # #clear_clustering_outputs(save_path=save_path)
+    # main(save_path=save_path)
 
