@@ -614,13 +614,27 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
         variations = generate_bird_name_variations(bird_name)
         return file_parts[0].lower() in {var.lower() for var in variations}
 
+    screening_directories = ['/Volumes/users/public/screening/', '/Volumes/users/public/adult_screening/',
+                             '/Volumes/users/public/from_egret/egret/screening/',
+                             '/Volumes/users/public/from_stork/stork/screening/']
+
     try:
         for i, bird_name in enumerate(birds_to_process):
-            file_paths = bird_file_locations[bird_name]
-            logging.info(f"Processing {bird_name} ({i + 1}/{len(birds_to_process)})...")
 
             # Find unique directories that contain the files
             bird_directories = set()
+
+            logging.info(f"Searching {bird_name} in screening files...")
+
+            for dir in screening_directories:
+                sub_dirs = os.listdir(dir)
+                for sub_dir in sub_dirs:
+                    if bird_name in sub_dir:
+                        bird_directories.append(sub_dir)
+
+            file_paths = bird_file_locations[bird_name]
+            logging.info(f"Processing {bird_name} ({i + 1}/{len(birds_to_process)})...")
+
             for file_path in file_paths:
                 try:
                     # Join with root directory and get the directory containing the file
@@ -635,6 +649,8 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
             all_audio_files = []
             wav_files = []
             cbin_files = []
+            batch_files = []
+            audio_from_batch_files = []
 
             for bird_dir in bird_directories:
                 try:
@@ -653,6 +669,15 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
                                     elif file.lower().endswith('.cbin'):
                                         cbin_files.append(full_path)
                                         all_audio_files.append(full_path)
+
+                                    if file.lower().endswith('.keep'):
+                                        batch_files.append(file)  # keep track of batch files
+                                        with open(file, 'r') as f:
+                                            lines = f.readlines()
+                                            for line in lines:
+                                                audio_from_batch_files.append(line)  # seperately track audio in batch files
+                                            f.close()
+
                             except Exception as e:
                                 logging.error(f"    Error processing file {file}: {e}")
                                 continue
@@ -666,6 +691,8 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
             all_audio_files = sorted(list(set(all_audio_files)))
             wav_files = sorted(list(set(wav_files)))
             cbin_files = sorted(list(set(cbin_files)))
+            batch_files = sorted(list(set(batch_files)))
+            audio_from_batch_files = sorted(list(set(audio_from_batch_files)))
 
             # Store results for this bird
             bird_audio_files[bird_name] = {
@@ -673,14 +700,19 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
                 'audio_files': all_audio_files,
                 'wav_files': wav_files,
                 'cbin_files': cbin_files,
+                'batch_files': batch_files,
+                'audio_from_batch': audio_from_batch_files,
                 'wav_count': len(wav_files),
                 'cbin_count': len(cbin_files),
-                'total_count': len(all_audio_files)
+                'wav_and_cbin_count': len(all_audio_files),
+                'batch_file_count': len(batch_files),
+                'batch_audio_count': len(audio_from_batch_files),
             }
 
             logging.info(f"  Found {len(all_audio_files)} audio files:")
             logging.info(f"    {len(wav_files)} .wav files (including date files)")
             logging.info(f"    {len(cbin_files)} .cbin files")
+            logging.info(f"    {len(batch_files)} batch file, listing {len(audio_from_batch_files)} song files")
 
             # Save progress after each bird
             try:
