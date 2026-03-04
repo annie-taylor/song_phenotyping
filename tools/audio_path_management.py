@@ -34,7 +34,7 @@ def extract_base_name(filepath: str) -> str:
         logging.warning(f"Could not extract base name from {filepath}: {e}")
         return None
 
-def load_audio_paths_mapping(bird_folder: str) -> Dict[str, Dict[str, str]]:
+def load_paths_mapping(bird_folder: str) -> Dict[str, Dict[str, str]]:
     """
     Load the audio paths mapping from bird's audio_paths.txt file.
 
@@ -66,15 +66,15 @@ def load_audio_paths_mapping(bird_folder: str) -> Dict[str, Dict[str, str]]:
     return mapping
 
 
-def update_audio_paths_file(bird_folder: str, filename: str,
-                            local_path: str = None, server_path: str = None):
+def update_paths_file(bird_folder: str, filename: str,
+                      local_path: str = None, server_path: str = None):
     """
     Add or update entry in bird's audio_paths.txt file.
     """
     audio_paths_file = os.path.join(bird_folder, 'audio_paths.txt')
 
     # Load existing mapping
-    mapping = load_audio_paths_mapping(bird_folder)
+    mapping = load_paths_mapping(bird_folder)
 
     # Update or add entry
     if filename not in mapping:
@@ -115,7 +115,7 @@ def get_audio_path(bird_folder: str, filepath_or_filename: str, prefer_local: bo
     filename = base_name + '.wav'
 
     # Load mapping
-    mapping = load_audio_paths_mapping(bird_folder)
+    mapping = load_paths_mapping(bird_folder)
 
     # Get paths for this file
     if filename not in mapping:

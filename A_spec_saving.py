@@ -32,6 +32,85 @@ from tools.audio_path_management import *
 from tools.filerecords import *
 
 
+def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[str | None, str | None]:
+    """
+    Copy the audio file to `copied_data_dir` (if not already copied) and also try to
+    find & copy the matching .rec file (same recording base). Returns (local_audio_path, local_rec_path).
+    If the .rec file is not found, local_rec_path is None.
+    """
+    p = Path(audio_path)
+    copied_data_dir = Path(copied_data_dir)
+    copied_data_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = p.name
+    local_audio_path = str(copied_data_dir / filename)
+
+    # Copy audio if not already present
+    if not Path(local_audio_path).exists():
+        try:
+            shutil.copy2(str(p), local_audio_path)
+            logger.debug("  📋 Copied audio: %s -> %s", p, local_audio_path)
+        except Exception as e:
+            logger.error("  ❌ Failed to copy audio %s: %s", p, e)
+            return None, None
+
+    # Only attempt to find/copy .rec if the audio extension looks like .cbin (or similar)
+    # We allow .cbin, .Cbin, or other case variants.
+    if p.suffix.lower() != ".cbin":
+        return local_audio_path, None
+
+    # Candidate .rec file search:
+    parent = p.parent
+
+    candidates = [
+        parent / (p.with_suffix(".rec").name),                # replace final suffix -> name.rec
+        parent / (str(p).rsplit(".", 1)[0] + ".rec"),         # rsplit on full path (fallback)
+        parent / (p.name.split(".", 1)[0] + ".rec"),         # first-dot prefix.rec
+        parent / (p.stem + ".rec"),                          # Path.stem + .rec (handles name.21.cbin -> name.21.rec)
+    ]
+
+    # If file has at least two dots, also try removing the penultimate numeric suffix:
+    parts = p.name.split(".")
+    if len(parts) >= 3:
+        base_no_last_two = ".".join(parts[:-2])  # e.g. name.21.cbin -> name
+        candidates.append(parent / (base_no_last_two + ".rec"))
+
+    # Check explicit candidates first
+    tried = []
+    for cand in candidates:
+        tried.append(str(cand))
+        if cand.exists():
+            try:
+                local_rec_path = str(copied_data_dir / cand.name)
+                if not Path(local_rec_path).exists():
+                    shutil.copy2(str(cand), local_rec_path)
+                    logger.debug("  📋 Copied rec: %s -> %s", cand, local_rec_path)
+                return local_audio_path, local_rec_path
+            except Exception as e:
+                logger.error("  ❌ Failed to copy rec %s: %s", cand, e)
+                return local_audio_path, None
+
+    # Fallback: glob for any *.rec in same directory that starts with the same prefix before first dot or stem
+    glob_prefixes = [p.name.split(".", 1)[0], p.stem, ".".join(parts[:-1])]
+    for prefix in dict.fromkeys(glob_prefixes):  # preserve order, avoid duplicates
+        if not prefix:
+            continue
+        for g in parent.glob(f"{prefix}*.rec"):
+            tried.append(str(g))
+            if g.exists():
+                try:
+                    local_rec_path = str(copied_data_dir / g.name)
+                    if not Path(local_rec_path).exists():
+                        shutil.copy2(str(g), local_rec_path)
+                        logger.debug("  📋 Copied rec by glob: %s -> %s", g, local_rec_path)
+                    return local_audio_path, local_rec_path
+                except Exception as e:
+                    logger.error("  ❌ Failed to copy rec %s: %s", g, e)
+                    return local_audio_path, None
+
+    logger.debug("No .rec found for %s. Tried: %s", p, tried)
+    return local_audio_path, None
+
 def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         song_or_call: str = 'song',
                         file_ext: str = '.wav.not.mat',
@@ -108,14 +187,10 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                             os.makedirs(copied_data_dir, exist_ok=True)
                             local_audio_path = os.path.join(copied_data_dir, filename)
 
-                            if not os.path.exists(local_audio_path):
-                                try:
-                                    shutil.copy2(audio_path, local_audio_path)
-                                    logger.debug(f"  📋 Copied audio: {filename}")
-                                except Exception as e:
-                                    logger.error(f"  ❌ Failed to copy audio {audio_path}: {e}")
-                                    local_audio_path = None
+                            # copy audio and attempt to copy partner .rec if audio is .cbin
+                            local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path, copied_data_dir)
 
+                            # audio_file_paths[bird] should append the local_audio_path
                             audio_file_paths[bird].append(local_audio_path)
                             # ALSO COPY THE METADATA FILE
                             metadata_filename = os.path.basename(file_path)
@@ -129,14 +204,14 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                                     logger.error(f"  ❌ Failed to copy metadata {file_path}: {e}")
 
                             # Update mapping with both paths
-                            update_audio_paths_file(bird_folder, filename,
-                                                    local_path=local_audio_path,
-                                                    server_path=audio_path)
+                            update_paths_file(bird_folder, filename,
+                                              local_path=local_audio_path,
+                                              server_path=audio_path)
 
                             # Also update metadata mapping
-                            update_audio_paths_file(bird_folder, metadata_filename,
-                                                    local_path=local_metadata_path,
-                                                    server_path=file_path)
+                            update_paths_file(bird_folder, metadata_filename,
+                                              local_path=local_metadata_path,
+                                              server_path=file_path)
                         else:
                             logger.warning(f"  ⚠️ Could not resolve audio path for {file_path}")
 
@@ -195,15 +270,11 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     if prefer_local and save_path and os.path.exists(save_path):
         logger.info("🔄 prefer_local=True, using local cache (no server access)")
 
-        metadata_file_paths = filepaths_from_local_cache(save_path, bird_subset)
+        metadata_file_paths, audio_file_paths = filepaths_from_local_cache(save_path, bird_subset)
 
         if metadata_file_paths:
             logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
             # For evsonganaly, derive audio_file_paths from metadata paths
-            audio_file_paths = {}
-            for bird, metadata_paths in metadata_file_paths.items():
-                audio_file_paths[bird] = [path.replace('.wav.not.mat', '.wav') for path in metadata_paths]
-
             return metadata_file_paths, audio_file_paths
         else:
             logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
@@ -328,13 +399,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                     os.makedirs(copied_data_dir, exist_ok=True)
                                     local_audio_path = os.path.join(copied_data_dir, filename)
 
-                                    if not os.path.exists(local_audio_path):
-                                        try:
-                                            shutil.copy2(audio_path, local_audio_path)
-                                            logger.debug(f"      📋 Copied audio: {filename}")
-                                        except Exception as e:
-                                            logger.error(f"      ❌ Failed to copy audio {audio_path}: {e}")
-                                            local_audio_path = None
+                                    local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path, copied_data_dir)
 
                                     # ALSO COPY THE METADATA FILE
                                     metadata_filename = os.path.basename(song_metadata_path)
@@ -348,22 +413,22 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                             logger.error(f"      ❌ Failed to copy metadata {song_metadata_path}: {e}")
 
                                     # Update mapping with both paths (audio and metadata)
-                                    update_audio_paths_file(bird_folder, filename,
-                                                            local_path=local_audio_path,
-                                                            server_path=audio_path)
+                                    update_paths_file(bird_folder, filename,
+                                                      local_path=local_audio_path,
+                                                      server_path=audio_path)
 
                                     # Also update metadata mapping
-                                    update_audio_paths_file(bird_folder, metadata_filename,
-                                                            local_path=local_metadata_path,
-                                                            server_path=song_metadata_path)
+                                    update_paths_file(bird_folder, metadata_filename,
+                                                      local_path=local_metadata_path,
+                                                      server_path=song_metadata_path)
                                 else:
                                     # Just update with server path
-                                    update_audio_paths_file(bird_folder, filename,
-                                                            server_path=audio_path)
+                                    update_paths_file(bird_folder, filename,
+                                                      server_path=audio_path)
                                     # Also update metadata mapping
-                                    update_audio_paths_file(bird_folder, metadata_filename,
-                                                            local_path=local_metadata_path,
-                                                            server_path=song_metadata_path)
+                                    update_paths_file(bird_folder, metadata_filename,
+                                                      local_path=local_metadata_path,
+                                                      server_path=song_metadata_path)
 
                             processed_files += 1
                         else:
@@ -418,8 +483,66 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
 
     return metadata_file_paths, audio_file_paths
 
+def _file_base_remove_after_first_dot(path: str) -> str:
+    """
+    Return the filename without directories and without anything after the FIRST dot.
+    Examples:
+      '/a/b/foo.bar.wav'   -> 'foo'
+      '/a/b/foo.bar.json'  -> 'foo'
+      'recording.mp3.md'   -> 'recording'
+      '/path/.env'         -> '.env'   # keep whole name for single-leading-dot files
+      '/path/.hidden.txt'  -> ''       # leading '.' then another dot -> base is '' (left of first dot)
+    """
+    name = Path(path).name
+    # If it's a single leading-dot file like ".env" (no other dots), keep the full name
+    if name.startswith('.') and '.' not in name[1:]:
+        return name
+    # Otherwise split on the first dot and keep the left side
+    return name.split('.', 1)[0]
 
-def select_new_files(available_files: list[str], already_saved_files: list[str], needed_count: int) -> list[str]:
+def select_new_file_pairs(available_metadata_files: list[str], available_audio_files: list[str],
+                          already_saved_files: list[str], needed_count: int,) -> list[tuple[str, str]]:
+    """
+    Return up to `needed_count` (metadata_path, audio_path) pairs whose base names
+    are not present in `already_saved_files`. Matching is done by filename stem
+    (filename without extension). If a metadata file has no matching audio file,
+    it is skipped and a warning is logged.
+    """
+    if needed_count <= 0:
+        return []
+
+    processed_bases = {_file_base_remove_after_first_dot(p) for p in already_saved_files}
+
+    # Index available files by base (prefix before first dot)
+    meta_by_base = {}
+    for p in available_metadata_files:
+        base = _file_base_remove_after_first_dot(p)
+        meta_by_base[base] = p
+
+    audio_by_base = {}
+    for p in available_audio_files:
+        base = _file_base_remove_after_first_dot(p)
+        audio_by_base[base] = p
+
+    # Build candidate pairs
+    candidates: List[Tuple[str, str]] = []
+    for base, meta_path in meta_by_base.items():
+        if base in processed_bases:
+            continue
+        audio_path = audio_by_base.get(base)
+        if audio_path:
+            candidates.append((meta_path, audio_path))
+        else:
+            logger.warning("No audio file found for metadata '%s' (base=%s)", meta_path, base)
+
+    # If fewer candidates than needed_count, return all. Otherwise sample.
+    if len(candidates) <= needed_count:
+        return candidates
+    return sample(candidates, needed_count)
+
+
+def select_new_files(available_metadata_files: list[str],
+                     already_saved_files: list[str], needed_count: int) -> list[str]:
     """
     Select files that haven't been processed yet.
     """
@@ -437,14 +560,14 @@ def select_new_files(available_files: list[str], already_saved_files: list[str],
 
     # Find unprocessed files
     unprocessed_files = []
-    for file_path in available_files:
-        file_info = parse_audio_filename(file_path)
+    for metadata_file_path in available_metadata_files:
+        file_info = parse_audio_filename(metadata_file_path)
         if file_info['success']:
             base_name = f"{file_info['bird']}_{file_info['day']}_{file_info['time']}"
             if base_name not in processed_bases:
-                unprocessed_files.append(file_path)
+                unprocessed_files.append(metadata_file_path)
         else:
-            logger.warning(f"Skipping file with unparseable name: {file_path}")
+            logger.warning(f"Skipping file with unparseable name: {metadata_file_path}")
 
     # Return up to needed_count files
     if len(unprocessed_files) <= needed_count:
@@ -874,9 +997,9 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
 
     return metadata_file_paths, audio_file_paths
 
-def process_single_metadata_file(metadata_file_path: str, save_path: str, params: SpectrogramParams,
-                                 read_songpath_from_metadata: bool, verbose: bool,
-                                 prefer_local: bool = True) -> Dict[str, str]:
+def process_single_file(metadata_file_path: str, audio_file_path: str, save_path: str, params: SpectrogramParams,
+                        read_songpath_from_metadata: bool, verbose: bool,
+                        prefer_local: bool = True) -> Dict[str, str]:
     """
     Process a single metadata file and save spectrograms if conditions are met.
 
@@ -887,8 +1010,8 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
     if not os.path.exists(metadata_file_path):
         return {'status': 'failed', 'reason': 'Metadata file not found'}
 
-    # Load and validate metadata
-    metadata_matfile = loadmat(metadata_file_path, squeeze_me=True)
+    ## Load and validate metadata
+    #metadata_matfile = loadmat(metadata_file_path, squeeze_me=True)
 
     # Determine bird folder for path mapping
     filename_info = parse_audio_filename(metadata_file_path)
@@ -896,13 +1019,13 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
     if filename_info['success']:
         bird_folder = os.path.join(save_path, filename_info['bird'])
 
-    # Resolve audio file path
-    audio_file_path, wseg_offset = resolve_audio_file_path(
-        metadata_file_path, metadata_matfile, read_songpath_from_metadata,
-        bird_folder, prefer_local
-    )
-    del metadata_matfile
-    gc.collect()
+    # # Resolve audio file path
+    # audio_file_path, wseg_offset = resolve_audio_file_path(
+    #     metadata_file_path, metadata_matfile, read_songpath_from_metadata,
+    #     bird_folder, prefer_local
+    # )
+    #del metadata_matfile
+    #gc.collect()
 
     if audio_file_path is None:
         return {'status': 'failed', 'reason': 'Audio file not found'}
@@ -911,11 +1034,12 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
     if bird_folder and not prefer_local:
         try:
             filename = os.path.basename(audio_file_path)
-            update_audio_paths_file(bird_folder, filename, server_path=audio_file_path)
+            update_paths_file(bird_folder, filename, server_path=audio_file_path)
         except Exception as e:
             logger.debug(f"Could not update audio paths file: {e}")
 
     # Load and validate metadata arrays
+    wseg_offset = 0.0
     metadata = load_and_validate_metadata(metadata_file_path, wseg_offset)
     if metadata['error']:
         return {'status': 'failed', 'reason': metadata['error']}
@@ -964,8 +1088,8 @@ def process_single_metadata_file(metadata_file_path: str, save_path: str, params
         return {'status': 'failed', 'reason': f'Processing error: {str(e)}'}
 
 
-def save_data_specs(metadata_file_paths: List[str], save_path: str, params: SpectrogramParams,
-                    verbose: bool = False, read_songpath_from_metadata: bool = True,
+def save_data_specs(candidate_files: List[str], save_path: str,
+                    params: SpectrogramParams, verbose: bool = False, read_songpath_from_metadata: bool = True,
                     prefer_local: bool = True) -> Dict[str, List[str]]:
     """
     Process metadata files and save spectrograms to HDF5 files with detailed progress tracking.
@@ -976,16 +1100,16 @@ def save_data_specs(metadata_file_paths: List[str], save_path: str, params: Spec
         'failed': []
     }
 
-    logger.info(f"🎵 Starting spectrogram processing for {len(metadata_file_paths)} files")
+    logger.info(f"🎵 Starting spectrogram processing for {len(candidate_files)} files")
     logger.info(f"📊 Memory usage at start: {get_memory_usage():.1f} MB")
 
-    for idx, metadata_file_path in enumerate(tqdm(metadata_file_paths, desc="Processing audio files"), 1):
+    for idx, (metadata_file_path, audio_file_path) in enumerate(tqdm(candidate_files, desc="Processing audio files"), 1):
         try:
             logger.debug(
-                f"  🔄 Processing file {idx}/{len(metadata_file_paths)}: {os.path.basename(metadata_file_path)}")
+                f"  🔄 Processing file {idx}/{len(candidate_files)}: {os.path.basename(metadata_file_path)}")
 
-            result = process_single_metadata_file(
-                metadata_file_path, save_path, params,
+            result = process_single_file(
+                metadata_file_path, audio_file_path, save_path, params,
                 read_songpath_from_metadata, verbose, prefer_local
             )
 
@@ -1001,7 +1125,7 @@ def save_data_specs(metadata_file_paths: List[str], save_path: str, params: Spec
 
             # Periodic memory reporting
             if idx % 10 == 0:
-                logger.info(f"  📊 Progress {idx}/{len(metadata_file_paths)}, "
+                logger.info(f"  📊 Progress {idx}/{len(candidate_files)}, "
                              f"memory: {get_memory_usage():.1f} MB")
                 gc.collect()  # Periodic cleanup
 
@@ -1059,17 +1183,18 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                 continue
 
             logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
-            candidate_file_paths = select_new_files(
+            candidate_files = select_new_file_pairs(
                 metadata_file_paths[bird],
+                audio_file_paths[bird],
                 already_saved_files,
                 needed_count
             )
 
-            if candidate_file_paths:
-                logger.info(f"  🎵 Processing {len(candidate_file_paths)} audio files for {bird}")
+            if candidate_files:
+                logger.info(f"  🎵 Processing {len(candidate_files)} audio files for {bird}")
 
                 results = save_data_specs(
-                    metadata_file_paths=candidate_file_paths,
+                    candidate_files=candidate_files,
                     save_path=save_path,
                     params=params,
                     verbose=verbose,
@@ -1107,6 +1232,7 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
 
 
 def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
+                              audio_file_paths: Dict[str, List[str]],
                               save_path: str,
                               songs_per_bird: int = 20,
                               params: SpectrogramParams = None,
@@ -1148,17 +1274,19 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                 continue
 
             logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
-            candidate_file_paths = select_new_files(
+            candidate_metadata_file_paths, candidate_audio_file_paths = select_new_files(
                 metadata_file_paths[bird],
+                audio_file_paths[bird],
                 already_saved_files,
                 needed_count
             )
 
-            if candidate_file_paths:
-                logger.info(f"  🎵 Processing {len(candidate_file_paths)} wseg files for {bird}")
+            if candidate_metadata_file_paths:
+                logger.info(f"  🎵 Processing {len(candidate_metadata_file_paths)} wseg files for {bird}")
 
                 results = save_data_specs(
-                    metadata_file_paths=candidate_file_paths,
+                    metadata_file_paths=candidate_metadata_file_paths,
+                    audio_file_paths=candidate_audio_file_paths,
                     save_path=save_path,
                     params=params,
                     verbose=verbose,
@@ -1266,11 +1394,12 @@ def main():
         'evsonganaly': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
-            'save_dir': os.path.join('Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
             'batch_file_naming': 'batch.txt.labeled',
             'bird_subset': ['pk26pk92'],
-            'copy_locally': False,  # to write/overwrite audio and metadata files to
-            'prefer_local': True,
+            'copy_locally': True,  # to write/overwrite audio and metadata files to
+            'prefer_local': False,  # to use local file where audio/metadata files are saved
+                                    # (TODO double check whether this and bool above are mutually exclusive)
             'preferred_subdirs': ['labeled_song_final'],
             'params': SpectrogramParams(
                 nfft=1024,
