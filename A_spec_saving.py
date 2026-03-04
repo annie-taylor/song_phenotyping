@@ -6,11 +6,12 @@ import time
 from scipy.io import loadmat
 import numpy as np
 import hashlib
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from random import sample
 import gc
 import shutil
 from tqdm import tqdm
+
 
 # Import consolidated functions from song_io
 from tools.song_io import (
@@ -28,6 +29,7 @@ from tools.song_io import (
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_path_management import *
+from tools.filerecords import *
 
 
 def filepaths_from_wseg(seg_directory: str, save_path: str = None,
@@ -35,7 +37,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         file_ext: str = '.wav.not.mat',
                         bird_subset: None | list = None,
                         copy_locally: bool = False,
-                        prefer_local: bool = False) -> Dict[str, List[str]]:
+                        prefer_local: bool = False) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """
     Extract WhisperSeg metadata file paths organized by bird and optionally copy audio files.
     If prefer_local=True, will try to use local cache first (no server access needed).
@@ -45,11 +47,11 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     if prefer_local and save_path and os.path.exists(save_path):
         logger.info("🔄 prefer_local=True, using local cache (no server access)")
 
-        metadata_file_paths = filepaths_from_local_cache(save_path, bird_subset)
+        metadata_file_paths, audio_file_paths = filepaths_from_local_cache(save_path, bird_subset)
 
         if metadata_file_paths:
             logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
-            return metadata_file_paths
+            return metadata_file_paths, audio_file_paths
         else:
             logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
             return {}
@@ -58,6 +60,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
     metadata_file_paths = {}
+    audio_file_paths = {}
     processed_files = 0
     failed_files = 0
 
@@ -113,6 +116,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                                     logger.error(f"  ❌ Failed to copy audio {audio_path}: {e}")
                                     local_audio_path = None
 
+                            audio_file_paths[bird].append(local_audio_path)
                             # ALSO COPY THE METADATA FILE
                             metadata_filename = os.path.basename(file_path)
                             local_metadata_path = os.path.join(copied_data_dir, metadata_filename)
@@ -173,7 +177,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     for bird, files in metadata_file_paths.items():
         logger.info(f"  {bird}: {len(files)} files")
 
-    return metadata_file_paths
+    return metadata_file_paths, audio_file_paths
 
 
 def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
@@ -195,12 +199,12 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
 
         if metadata_file_paths:
             logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
-            # For evsonganaly, derive wav_file_paths from metadata paths
-            wav_file_paths = {}
+            # For evsonganaly, derive audio_file_paths from metadata paths
+            audio_file_paths = {}
             for bird, metadata_paths in metadata_file_paths.items():
-                wav_file_paths[bird] = [path.replace('.wav.not.mat', '.wav') for path in metadata_paths]
+                audio_file_paths[bird] = [path.replace('.wav.not.mat', '.wav') for path in metadata_paths]
 
-            return metadata_file_paths, wav_file_paths
+            return metadata_file_paths, audio_file_paths
         else:
             logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
             return {}, {}
@@ -272,7 +276,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
 
     birds = []
     metadata_file_paths = {}
-    wav_file_paths = {}
+    audio_file_paths = {}
     processed_files = 0
     failed_files = 0
 
@@ -381,12 +385,12 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                 if bird not in birds:
                     birds.append(bird)
                     metadata_file_paths[bird] = []
-                    wav_file_paths[bird] = []
+                    audio_file_paths[bird] = []
                     logger.info(f"    🐦 Started processing bird: {bird}")
 
                 # Add all files from this batch to the bird's collection
                 metadata_file_paths[bird].extend(song_metadata)
-                wav_file_paths[bird].extend(song_audio)
+                audio_file_paths[bird].extend(song_audio)
 
             logger.info(f"  ✅ Completed batch file {batch_info['file']}: {len(song_metadata)} valid entries")
 
@@ -398,7 +402,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     # Final summary
     total_birds = len(metadata_file_paths)
     total_metadata_files = sum(len(files) for files in metadata_file_paths.values())
-    total_wav_files = sum(len(files) for files in wav_file_paths.values())
+    total_wav_files = sum(len(files) for files in audio_file_paths.values())
 
     logger.info(f"🎯 Evsonganaly scanning complete:")
     logger.info(f"  📄 Found {batch_files_found} batch files")
@@ -412,8 +416,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     for bird in metadata_file_paths:
         logger.info(f"  {bird}: {len(metadata_file_paths[bird])} files")
 
-    return metadata_file_paths, wav_file_paths
-
+    return metadata_file_paths, audio_file_paths
 
 
 def select_new_files(available_files: list[str], already_saved_files: list[str], needed_count: int) -> list[str]:
@@ -790,7 +793,7 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
         return False
 
 
-def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict[str, List[str]]:
+def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """
     Discover metadata file paths from local cache by reading audio_paths.txt files.
     Returns LOCAL metadata paths for truly offline operation.
@@ -798,6 +801,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
     logger.info(f"🔍 Discovering files from local cache: {save_path}")
 
     metadata_file_paths = {}
+    audio_file_paths = {}
 
     if not os.path.exists(save_path):
         logger.warning(f"Save path does not exist: {save_path}")
@@ -825,6 +829,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
 
         # Read audio_paths.txt to get LOCAL metadata paths
         bird_metadata_files = []
+        bird_audio_files = []
         try:
             with open(audio_paths_file, 'r') as f:
                 for line in f:
@@ -834,6 +839,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
 
                     parts = line.split('|')
                     if len(parts) >= 3:
+                        # TODO potential issue here with assuming directory structure in filepath!!!
                         bird_id, local_path, server_path = parts[0], parts[1], parts[2]
 
                         # Look for metadata files (not audio files)
@@ -843,6 +849,12 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
                                 bird_metadata_files.append(local_path)  # Use LOCAL path!
                             else:
                                 logger.debug(f"    ⚠️ Local metadata not found: {os.path.basename(local_path)}")
+                        elif local_path.endswith(('.wav', '.cbin')):
+                            if os.path.exists(local_path):
+                                bird_audio_files.append(local_path)
+                            else:
+                                logger.debug(f"    ⚠️ Local audio data not found: {os.path.basename(local_path)}")
+
 
         except Exception as e:
             logger.warning(f"  ⚠️ Error reading audio_paths.txt for {item}: {e}")
@@ -850,6 +862,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
 
         if bird_metadata_files:
             metadata_file_paths[item] = bird_metadata_files
+            audio_file_paths[item] = bird_audio_files
             logger.info(f"  📄 Found {len(bird_metadata_files)} local cached files for {item}")
 
     total_birds = len(metadata_file_paths)
@@ -859,7 +872,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Dict
     logger.info(f"  🐦 Found {total_birds} birds")
     logger.info(f"  📄 Found {total_files} total LOCAL files")
 
-    return metadata_file_paths
+    return metadata_file_paths, audio_file_paths
 
 def process_single_metadata_file(metadata_file_path: str, save_path: str, params: SpectrogramParams,
                                  read_songpath_from_metadata: bool, verbose: bool,
@@ -1006,7 +1019,7 @@ def save_data_specs(metadata_file_paths: List[str], save_path: str, params: Spec
     return results
 
 
-def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, save_path: str = None,
+def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths: dict | None, save_path: str = None,
                                      songs_per_bird: int = 5, params: 'SpectrogramParams' = None,
                                      verbose: bool = False, prefer_local: bool = True):
     if params is None:
@@ -1191,7 +1204,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
     try:
         if pipeline_name == 'evsonganaly':
             # Get file paths and copy locally
-            metadata_file_paths, wav_file_paths = filepaths_from_evsonganaly(
+            metadata_file_paths, audio_file_paths = filepaths_from_evsonganaly(
                 wav_directory=settings['source_dir'],
                 save_path=settings['save_dir'],
                 batch_file_naming=settings['batch_file_naming'],
@@ -1204,6 +1217,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
             # Process spectrograms
             save_specs_for_evsonganaly_birds(
                 metadata_file_paths=metadata_file_paths,
+                audio_file_paths=audio_file_paths,
                 save_path=settings['save_dir'],
                 songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
@@ -1212,7 +1226,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
 
         elif pipeline_name == 'wseg':
             # Get wseg paths and copy locally
-            wseg_metadata_paths = filepaths_from_wseg(
+            metadata_file_paths, audio_file_paths = filepaths_from_wseg(
                 seg_directory=settings['source_dir'],
                 save_path=settings['save_dir'],
                 song_or_call='song',
@@ -1224,7 +1238,8 @@ def process_pipeline(pipeline_name: str, settings: dict):
 
             # Process spectrograms - songs_per_bird comes from params now
             save_specs_for_wseg_birds(
-                metadata_file_paths=wseg_metadata_paths,
+                metadata_file_paths=metadata_file_paths,
+                audio_file_paths=audio_file_paths,
                 save_path=settings['save_dir'],
                 songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
