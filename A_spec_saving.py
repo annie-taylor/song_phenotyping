@@ -163,6 +163,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
 
                 if bird not in metadata_file_paths:
                     metadata_file_paths[bird] = []
+                    audio_file_paths[bird] = []
                     logger.info(f"  🐦 Started processing bird: {bird}")
 
                 metadata_file_paths[bird].append(file_path)
@@ -1274,19 +1275,17 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                 continue
 
             logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
-            candidate_metadata_file_paths, candidate_audio_file_paths = select_new_files(
+            candidate_files = select_new_file_pairs(
                 metadata_file_paths[bird],
                 audio_file_paths[bird],
                 already_saved_files,
                 needed_count
             )
 
-            if candidate_metadata_file_paths:
-                logger.info(f"  🎵 Processing {len(candidate_metadata_file_paths)} wseg files for {bird}")
+            if candidate_files:
+                logger.info(f"  🎵 Processing {len(candidate_files)} wseg files for {bird}")
 
-                results = save_data_specs(
-                    metadata_file_paths=candidate_metadata_file_paths,
-                    audio_file_paths=candidate_audio_file_paths,
+                results = save_data_specs(candidate_files=candidate_files,
                     save_path=save_path,
                     params=params,
                     verbose=verbose,
@@ -1391,41 +1390,41 @@ def main():
     optimize_pytables_for_network()
 
     config = {
-        'evsonganaly': {
-            'enabled': True,
-            'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
-            'save_dir': os.path.join('E:', 'ssharma_RNA_seq'),
-            'batch_file_naming': 'batch.txt.labeled',
-            'bird_subset': None,
-            'copy_locally': True,  # to write/overwrite audio and metadata files to
-            'prefer_local': False,  # to use local file where audio/metadata files are saved
-                                    # (TODO double check whether this and bool above are mutually exclusive)
-            'preferred_subdirs': ['labeled_song_final'],
-            'params': SpectrogramParams(
-                nfft=1024,
-                hop=1,
-                max_dur=0.150,
-                songs_per_bird=30,
-                overwrite_existing=True,
-                use_warping=True,
-                downsample=True
-            )
-        },
-        # 'wseg': {
+        # 'evsonganaly': {
         #     'enabled': True,
-        #     'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
-        #     'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        #     'bird_subset': ['bu85bu97'],
-        #     'copy_locally': False,
-        #     'prefer_local': True,
+        #     'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
+        #     'save_dir': os.path.join('E:', 'ssharma_RNA_seq'),
+        #     'batch_file_naming': 'batch.txt.labeled',
+        #     'bird_subset': None,
+        #     'copy_locally': True,  # to write/overwrite audio and metadata files to
+        #     'prefer_local': False,  # to use local file where audio/metadata files are saved
+        #                             # (TODO double check whether this and bool above are mutually exclusive)
+        #     'preferred_subdirs': ['labeled_song_final'],
         #     'params': SpectrogramParams(
         #         nfft=1024,
         #         hop=1,
         #         max_dur=0.150,
-        #         songs_per_bird=5,
-        #         overwrite_existing=True
+        #         songs_per_bird=30,
+        #         overwrite_existing=True,
+        #         use_warping=True,
+        #         downsample=True
         #     )
-        # }
+        # },
+        'wseg': {
+            'enabled': True,
+            'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test new'),
+            'bird_subset': ['bu85bu97'],
+            'copy_locally': True,
+            'prefer_local': False,
+            'params': SpectrogramParams(
+                nfft=1024,
+                hop=1,
+                max_dur=0.150,
+                songs_per_bird=2,
+                overwrite_existing=True
+            )
+        }
     }
 
     # Process each pipeline
