@@ -100,6 +100,118 @@ def instantaneous_freq_distance(spec1, spec2):
 
     return np.linalg.norm(if1 - if2)
 
+
+def generate_embedding_paths(paths: dict, params: UMAPParams, n_samples: int,
+                             was_subsampled: bool, subsample_seed: int = None) -> Tuple[str, str]:
+    """Generate paths that include sample size information"""
+
+    # Base filename
+    base_name = f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist'
+
+    # Add sample info
+    if was_subsampled:
+        base_name += f'_subsample{n_samples}_seed{subsample_seed}'
+    else:
+        base_name += f'_full{n_samples}'
+
+    model_path = os.path.join(paths['model'], f'{base_name}.pkl')
+    embedding_path = os.path.join(paths['embeddings'], f'{base_name}.h5')
+
+    return model_path, embedding_path
+
+
+def check_embedding_compatibility(embedding_path: str, current_n_samples: int,
+                                  current_hashes: list, overwrite: bool = False) -> bool:
+    """
+    Check if existing embedding is compatible with current data.
+
+    Returns:
+        True if compatible or should proceed, False if should skip
+    """
+    if not os.path.exists(embedding_path):
+        return True  # No existing file, proceed
+
+    if overwrite:
+        logging.info(f"🔄 Overwrite=True, will replace: {os.path.basename(embedding_path)}")
+        return True
+
+    try:
+        with tables.open_file(embedding_path, mode='r') as f:
+            existing_hashes = [h.decode('utf-8') for h in f.root.hashes[:]]
+
+            # Check if processing metadata exists
+            if hasattr(f.root, 'processing_metadata'):
+                metadata_str = f.root.processing_metadata[0].decode('utf-8')
+                metadata = eval(metadata_str)  # Convert string back to dict
+                logging.info(f"📋 Existing embedding metadata: {metadata}")
+
+            # Compare sample sizes
+            if len(existing_hashes) != current_n_samples:
+                logging.warning(
+                    f"⚠️ Sample size mismatch: existing={len(existing_hashes)}, current={current_n_samples}")
+                logging.warning(f"   Use overwrite=True to replace with current data")
+                return False
+
+            # Check hash overlap (sample)
+            overlap = len(set(existing_hashes[:100]) & set(current_hashes[:100]))
+            if overlap < 50:  # Less than 50% overlap in first 100 samples
+                logging.warning(f"⚠️ Low data overlap detected: {overlap}/100 hashes match")
+                logging.warning(f"   This suggests different underlying data")
+                return False
+
+        logging.info(f"✅ Compatible embedding found: {os.path.basename(embedding_path)}")
+        return False  # Compatible but exists, so skip
+
+    except Exception as e:
+        logging.warning(f"⚠️ Could not verify compatibility for {embedding_path}: {e}")
+        return overwrite  # If can't check, depend on overwrite flag
+
+
+def inspect_existing_embeddings(bird_path: str) -> None:
+    """Utility to inspect what embeddings already exist and their metadata"""
+
+    embeddings_path = os.path.join(bird_path, 'syllable_data', 'embeddings')
+
+    if not os.path.exists(embeddings_path):
+        logging.info(f"📁 No embeddings directory found at {embeddings_path}")
+        return
+
+    embedding_files = [f for f in os.listdir(embeddings_path) if f.endswith('.h5')]
+
+    if not embedding_files:
+        logging.info(f"📁 No embedding files found in {embeddings_path}")
+        return
+
+    logging.info(f"🔍 Found {len(embedding_files)} existing embeddings:")
+
+    for filename in embedding_files:
+        filepath = os.path.join(embeddings_path, filename)
+        try:
+            with tables.open_file(filepath, mode='r') as f:
+                n_samples = len(f.root.hashes[:])
+
+                metadata_info = "No metadata"
+                if hasattr(f.root, 'processing_metadata'):
+                    metadata_str = f.root.processing_metadata[0].decode('utf-8')
+                    metadata = eval(metadata_str)
+                    metadata_info = f"Original: {metadata.get('original_samples', 'unknown')}, " \
+                                    f"Final: {metadata.get('final_samples', 'unknown')}, " \
+                                    f"Subsampled: {metadata.get('was_subsampled', 'unknown')}"
+
+                logging.info(f"  📄 {filename}: {n_samples} samples, {metadata_info}")
+
+        except Exception as e:
+            logging.warning(f"  ❌ Could not read {filename}: {e}")
+
+def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
+    """Load embeddings from HDF5 file"""
+    try:
+        with tables.open_file(embedding_path, mode='r') as f:
+            return f.root.embeddings[:]
+    except Exception as e:
+        logging.warning(f"Could not load embedding from {embedding_path}: {e}")
+        return None
+
 def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load all flattened spectrogram files from a directory.
@@ -170,25 +282,29 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
     return flattened_specs, labels, position_idxs, hashes
 
 
-def save_umap_embeddings(embedding_path: str, embeddings: np.ndarray, hashes: list, labels: Optional[list] = None) -> bool:
+def save_umap_embeddings(embedding_path: str, embeddings: np.ndarray, hashes: list,
+                         labels: Optional[list] = None, metadata: Optional[dict] = None) -> bool:
+    """"""
     try:
-        # Open the file in write mode
         with tables.open_file(embedding_path, mode='w') as f:
-            # Save embeddings
+            # Save embeddings and existing data
             f.create_array(f.root, 'embeddings', obj=np.array(embeddings))
-            # Save hashes
-            hash_atom = tables.StringAtom(itemsize=max(len(h) for h in hashes))  # Define max string length
+
+            hash_atom = tables.StringAtom(itemsize=max(len(h) for h in hashes))
             hash_array = f.create_earray(f.root, 'hashes', atom=hash_atom, shape=(0,))
-            hash_array.append(np.array([str(h) for h in hashes], dtype='S'))  # Convert to byte strings
-            # Save labels if provided
+            hash_array.append(np.array([str(h) for h in hashes], dtype='S'))
+
             if labels is not None:
-                label_atom = tables.StringAtom(itemsize=1)  # Define max string length
+                label_atom = tables.StringAtom(itemsize=1)
                 label_array = f.create_earray(f.root, 'labels', atom=label_atom, shape=(0,))
-                label_array.append(np.array([str(l) for l in labels], dtype='S'))  # Convert to byte strings
+                label_array.append(np.array([str(l) for l in labels], dtype='S'))
+
+            if metadata is not None:
+                f.create_array(f.root, 'processing_metadata', obj=np.array([str(metadata)], dtype='S'))
+
         return True
     except Exception as e:
         logging.error(f"Error saving embeddings to {embedding_path}: {e}")
-        logging.error(traceback.format_exc())
         return False
 
 
@@ -323,7 +439,7 @@ def calculate_adaptive_workers(n_samples: int, memory_per_worker_gb: float = Non
 
 def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParams,
                           model_path: str, embedding_path: str, save_model: bool = False,
-                          overwrite: bool = False) -> Tuple[Optional[np.ndarray], Optional[umap.UMAP], bool]:
+                          overwrite: bool = False, processing_metadata: dict = None) -> Tuple[Optional[np.ndarray], Optional[umap.UMAP], bool]:
     """
     Core function: Create UMAP embeddings, save results, and return objects
 
@@ -340,14 +456,9 @@ def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParam
     Returns:
         Tuple of (embeddings, umap_model, success) where success is True if file exists or was created
     """
-    # Check if files already exist
-    if not overwrite and os.path.exists(embedding_path):
-        logging.debug(f"⏭️ Skipped existing embedding: {os.path.basename(embedding_path)}")
-        return None, None, True  # File exists = success
-
-    if not overwrite and save_model and os.path.exists(model_path):
-        logging.debug(f"⏭️ Skipped existing model: {os.path.basename(model_path)}")
-        return None, None, True  # File exists = success
+    # Check compatibility first
+    if not check_embedding_compatibility(embedding_path, len(labels), hashes, overwrite):
+        return None, None, True  # Skip but report success
 
     try:
         # Create UMAP model
@@ -366,34 +477,34 @@ def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParam
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
 
-        # Save results
+        # Save results with metadata
         if save_model:
             save_umap_model(model_path, umap_model, params)
-        save_umap_embeddings(embedding_path, embeddings, hashes, labels)
+        save_umap_embeddings(embedding_path, embeddings, hashes, labels, processing_metadata)
 
-        logging.info(f"✅ Computed new embedding: n_neighbors={params.n_neighbors}, min_dist={params.min_dist}")
-        return embeddings, umap_model, True  # Successfully created
+        logging.info(f"✅ Computed new embedding: {os.path.basename(embedding_path)}")
+        return embeddings, umap_model, True
 
     except Exception as e:
         logging.error(f"Error creating UMAP embeddings: {e}")
-        logging.error(traceback.format_exc())
-        return None, None, False  # Failed to create
+        return None, None, False
 
 
 def compute_single_umap_worker(args):
     """Single UMAP computation for parallel execution"""
-    samples, labels, hashes, n_neighbors, min_dist, paths, overwrite = args
+    samples, labels, hashes, n_neighbors, min_dist, paths, overwrite, processing_metadata = args
 
     try:
         params = UMAPParams(n_neighbors=n_neighbors, metric='euclidean', min_dist=min_dist)
 
-        # Generate file paths
-        model_path = os.path.join(paths['model'],
-                                  f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
-        embedding_path = os.path.join(paths['embeddings'],
-                                      f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
+        # Generate paths with sample info
+        model_path, embedding_path = generate_embedding_paths(
+            paths, params, len(labels),
+            processing_metadata['was_subsampled'],
+            processing_metadata.get('subsample_seed')
+        )
 
-        embeddings, model, success = compute_and_save_umap(  # Added the third value here
+        embeddings, model, success = compute_and_save_umap(
             samples=samples,
             labels=labels,
             hashes=hashes,
@@ -401,7 +512,8 @@ def compute_single_umap_worker(args):
             model_path=model_path,
             embedding_path=embedding_path,
             save_model=False,
-            overwrite=overwrite
+            overwrite=overwrite,
+            processing_metadata=processing_metadata  # Pass metadata
         )
 
         return (n_neighbors, min_dist, success)
@@ -412,8 +524,8 @@ def compute_single_umap_worker(args):
 
 
 def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighbors, paths,
-                                    plot: bool = True, bird: str = '', max_workers: int = None,
-                                    overwrite: bool = False):
+                                   plot: bool = True, bird: str = '', max_workers: int = None,
+                                   overwrite: bool = False, processing_metadata: dict = None):
     """
     Parallel version of compute_embedding_grid function with worker control.
 
@@ -428,7 +540,7 @@ def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighb
     args_list = []
     for n in n_neighbors:
         for dist in min_dists:
-            args_list.append((samples, labels, hashes, n, dist, paths, overwrite))
+            args_list.append((samples, labels, hashes, n, dist, paths, overwrite, processing_metadata))
 
     print(f"    🚀 Computing {len(args_list)} UMAPs in parallel...")
 
@@ -464,15 +576,18 @@ def compute_embedding_grid_parallel(samples, labels, hashes, min_dists, n_neighb
         fig_savepath = paths['figures']
         if not os.path.isdir(fig_savepath):
             os.makedirs(fig_savepath)
-        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird)
+        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird,
+                                     processing_metadata)
 
     return successful_params
 
 
 def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, paths,
-                           plot: bool = True, bird: str = '', overwrite: bool = False):
+                           plot: bool = True, bird: str = '', overwrite: bool = False,
+                           processing_metadata: dict = None):  # ADD this parameter
     """
     Non-parallel version of embedding grid computation.
+    Updated to include processing_metadata parameter.
 
     Returns:
         List of successful (n_neighbors, min_dist) tuples
@@ -488,11 +603,19 @@ def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, path
             try:
                 params = UMAPParams(n_neighbors=n, metric='euclidean', min_dist=dist)
 
-                # Generate file paths
-                model_path = os.path.join(paths['model'],
-                                          f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
-                embedding_path = os.path.join(paths['embeddings'],
-                                              f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
+                # Generate paths with sample info (if metadata available)
+                if processing_metadata:
+                    model_path, embedding_path = generate_embedding_paths(
+                        paths, params, len(labels),
+                        processing_metadata['was_subsampled'],
+                        processing_metadata.get('subsample_seed')
+                    )
+                else:
+                    # Fallback to old naming convention
+                    model_path = os.path.join(paths['model'],
+                                              f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.pkl')
+                    embedding_path = os.path.join(paths['embeddings'],
+                                                  f'{params.metric}_{params.n_neighbors}neighbors_{params.min_dist}dist.h5')
 
                 embeddings, model, success = compute_and_save_umap(
                     samples=samples,
@@ -502,7 +625,8 @@ def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, path
                     model_path=model_path,
                     embedding_path=embedding_path,
                     save_model=False,
-                    overwrite=overwrite
+                    overwrite=overwrite,
+                    processing_metadata=processing_metadata  # Pass metadata
                 )
 
                 if success:
@@ -526,7 +650,7 @@ def compute_embedding_grid(samples, labels, hashes, min_dists, n_neighbors, path
         fig_savepath = paths['figures']
         if not os.path.isdir(fig_savepath):
             os.makedirs(fig_savepath)
-        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird)
+        compare_umap_embeddings_plot(successful_params, min_dists, n_neighbors, paths, fig_savepath, bird, processing_metadata)  # Pass metadata
 
     return successful_params
 
@@ -537,8 +661,9 @@ def explore_embedding_parameters(save_path: str, bird: str,
                                  use_parallel: bool = True,
                                  overwrite: bool = False,
                                  max_samples: Optional[int] = None,
-                                 memory_per_worker_gb: Optional[float] = None,  # Now optional
-                                 auto_memory_management: bool = True) -> bool:  # New flag
+                                 memory_per_worker_gb: Optional[float] = None,
+                                 auto_memory_management: bool = True,
+                                 subsample_seed: int = 42) -> bool:
     """
     Explore different UMAP parameters for a bird and create comparison plots.
 
@@ -591,48 +716,68 @@ def explore_embedding_parameters(save_path: str, bird: str,
             max_samples = min(100000, max(10000, suggested_max))  # Between 10k-100k
             logging.info(f"🎯 Auto-determined max_samples: {max_samples}")
 
-        # Apply subsampling if needed
-        if max_samples is not None and len(labels) > max_samples:
-            specs, labels, position_idxs, hashes = subsample_data(
-                specs, labels, position_idxs, hashes, max_samples
-            )
+            # Apply subsampling if needed
+            was_subsampled = False
+            original_n_samples = len(labels)
 
-        # Calculate adaptive worker count
-        if use_parallel:
-            adaptive_workers = calculate_adaptive_workers(
-                n_samples=len(labels),
-                memory_per_worker_gb=memory_per_worker_gb,
-                feature_estimate=specs.shape[0]  # Use actual feature count
-            )
-        else:
-            adaptive_workers = 1
+            if max_samples is not None and len(labels) > max_samples:
+                specs, labels, position_idxs, hashes = subsample_data(
+                    specs, labels, position_idxs, hashes, max_samples, subsample_seed
+                )
+                was_subsampled = True
 
-        # Compute parameter grid
-        if use_parallel:
-            successful_params = compute_embedding_grid_parallel(
-                samples=specs.T,
-                labels=labels,
-                hashes=hashes,
-                min_dists=min_dists,
-                n_neighbors=n_neighbors_list,
-                paths=paths,
-                plot=True,
-                bird=bird,
-                max_workers=adaptive_workers,  # Use adaptive worker count
-                overwrite=overwrite
-            )
-        else:
-            successful_params = compute_embedding_grid(
-                samples=specs.T,
-                labels=labels,
-                hashes=hashes,
-                min_dists=min_dists,
-                n_neighbors=n_neighbors_list,
-                paths=paths,
-                plot=True,
-                bird=bird,
-                overwrite=overwrite
-            )
+            # Create processing metadata
+            processing_metadata = {
+                'original_samples': original_n_samples,
+                'final_samples': len(labels),
+                'was_subsampled': was_subsampled,
+                'subsample_seed': subsample_seed if was_subsampled else None,
+                'max_samples_limit': max_samples,
+                'memory_per_worker_gb': memory_per_worker_gb,
+                'processing_date': datetime.now().isoformat(),
+                'bird_id': bird
+            }
+
+            logging.info(f"📋 Processing metadata: {processing_metadata}")
+
+            # Calculate adaptive worker count
+            if use_parallel:
+                adaptive_workers = calculate_adaptive_workers(
+                    n_samples=len(labels),
+                    memory_per_worker_gb=memory_per_worker_gb,
+                    feature_estimate=specs.shape[0]
+                )
+            else:
+                adaptive_workers = 1
+
+            # Compute parameter grid with updated paths and metadata
+            if use_parallel:
+                successful_params = compute_embedding_grid_parallel(
+                    samples=specs.T,
+                    labels=labels,
+                    hashes=hashes,
+                    min_dists=min_dists,
+                    n_neighbors=n_neighbors_list,
+                    paths=paths,
+                    plot=True,
+                    bird=bird,
+                    max_workers=adaptive_workers,
+                    overwrite=overwrite,
+                    processing_metadata=processing_metadata
+                )
+            else:
+                successful_params = compute_embedding_grid(
+                    samples=specs.T,
+                    labels=labels,
+                    hashes=hashes,
+                    min_dists=min_dists,
+                    n_neighbors=n_neighbors_list,
+                    paths=paths,
+                    plot=True,
+                    bird=bird,
+                    overwrite=overwrite,
+                    processing_metadata=processing_metadata
+                )
 
         logging.info(f"Successfully explored UMAP parameters for bird {bird}. "
                      f"Computed {len(successful_params)} parameter combinations.")
@@ -645,9 +790,10 @@ def explore_embedding_parameters(save_path: str, bird: str,
 
 
 def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min_dists, n_neighbors,
-                                 paths: dict, save_path: str, bird: str = ''):
+                                 paths: dict, save_path: str, bird: str = '', processing_metadata: dict = None):
     """
-    Create comparison plot by loading embeddings on-demand
+    Create comparison plot by loading embeddings on-demand.
+    Updated to handle new filename structure with sample info.
     """
 
     fig, axs = plt.subplots(len(n_neighbors), len(min_dists), figsize=(20, 20))
@@ -668,8 +814,22 @@ def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min
             ax = axs[i][j]
 
             if (n, dist) in successful_set:
-                embedding_path = os.path.join(paths['embeddings'],
-                                              f'euclidean_{n}neighbors_{dist}dist.h5')
+                # Generate the embedding path using the new naming convention
+                if processing_metadata:
+                    n_samples = processing_metadata['final_samples']
+                    was_subsampled = processing_metadata['was_subsampled']
+                    subsample_seed = processing_metadata.get('subsample_seed')
+
+                    # Create params object for path generation
+                    params = UMAPParams(n_neighbors=n, metric='euclidean', min_dist=dist)
+                    _, embedding_path = generate_embedding_paths(
+                        paths, params, n_samples, was_subsampled, subsample_seed
+                    )
+                else:
+                    # Fallback to old naming convention
+                    embedding_path = os.path.join(paths['embeddings'],
+                                                  f'euclidean_{n}neighbors_{dist}dist.h5')
+
                 embeddings = load_embedding_from_file(embedding_path)
 
                 if embeddings is not None:
@@ -710,51 +870,71 @@ def main():
     evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
-    birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
-             os.path.isdir(os.path.join(evsong_test_directory, b))]
-    logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
+    if os.path.exists(evsong_test_directory):
+        birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
+                 os.path.isdir(os.path.join(evsong_test_directory, b))]
+        logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
 
-    for bird in birds:
-        logging.info(f"Processing EVSong bird: {bird}")
-        success = explore_embedding_parameters(
-            save_path=evsong_test_directory,
-            bird=bird,
-            min_dists=[0.01, 0.1, 0.2, 0.5],
-            n_neighbors_list=[5, 10, 25, 50, 100],
-            use_parallel=True,
-            overwrite=False,
-            max_samples=50000,  # NEW: Limit to 50k samples to prevent memory issues
-            memory_per_worker_gb=3.0  # NEW: Conservative memory estimate per worker
-        )
-        if success:
-            logging.info(f"✅ Successfully processed EVSong bird: {bird}")
-        else:
-            logging.error(f"❌ Failed to process EVSong bird: {bird}")
+        for bird in birds:
+            logging.info(f"Processing EVSong bird: {bird}")
 
-    # # WSeg processing (uncommented and updated)
-    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+            # Inspect existing embeddings first
+            bird_path = os.path.join(evsong_test_directory, bird)
+            inspect_existing_embeddings(bird_path)
+
+            success = explore_embedding_parameters(
+                save_path=evsong_test_directory,
+                bird=bird,
+                min_dists=[0.01, 0.1, 0.2, 0.5],
+                n_neighbors_list=[5, 10, 25, 50, 100],
+                use_parallel=True,
+                overwrite=False,  # Set to True if you want to regenerate all
+                max_samples=50000,  # Limit to 50k samples to prevent memory issues
+                memory_per_worker_gb=None,  # Auto-detect based on system
+                auto_memory_management=True,
+                subsample_seed=42  # Fixed seed for reproducibility
+            )
+            if success:
+                logging.info(f"✅ Successfully processed EVSong bird: {bird}")
+            else:
+                logging.error(f"❌ Failed to process EVSong bird: {bird}")
+    else:
+        logging.warning(f"EVSong directory not found: {evsong_test_directory}")
+
+    # # WSeg processing
+    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test new')
     # logging.info(f"Processing WSeg directory: {wseg_test_directory}")
     #
-    # birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
-    #          os.path.isdir(os.path.join(wseg_test_directory, b))]
-    # logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+    # if os.path.exists(wseg_test_directory):
+    #     birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
+    #              os.path.isdir(os.path.join(wseg_test_directory, b))]
+    #     logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
     #
-    # for bird in birds:
-    #     logging.info(f"Processing WSeg bird: {bird}")
-    #     success = explore_embedding_parameters(
-    #         save_path=wseg_test_directory,
-    #         bird=bird,
-    #         min_dists=[0.01, 0.1, 0.5],
-    #         n_neighbors_list=[5, 10, 50, 100],
-    #         use_parallel=True,
-    #         overwrite=False,
-    #         max_samples=30000,  # NEW: Smaller limit for WSeg data
-    #         memory_per_worker_gb=2.5  # NEW: Memory estimate per worker
-    #     )
-    #     if success:
-    #         logging.info(f"✅ Successfully processed WSeg bird: {bird}")
-    #     else:
-    #         logging.error(f"❌ Failed to process WSeg bird: {bird}")
+    #     for bird in birds:
+    #         logging.info(f"Processing WSeg bird: {bird}")
+    #
+    #         # Inspect existing embeddings first
+    #         bird_path = os.path.join(wseg_test_directory, bird)
+    #         inspect_existing_embeddings(bird_path)
+    #
+    #         success = explore_embedding_parameters(
+    #             save_path=wseg_test_directory,
+    #             bird=bird,
+    #             min_dists=[0.01, 0.1, 0.5],
+    #             n_neighbors_list=[5, 10, 50, 100],
+    #             use_parallel=True,
+    #             overwrite=False,  # Set to True if you want to regenerate all
+    #             max_samples=30000,  # Smaller limit for WSeg data (often more samples)
+    #             memory_per_worker_gb=None,  # Auto-detect based on system
+    #             auto_memory_management=True,
+    #             subsample_seed=42  # Fixed seed for reproducibility
+    #         )
+    #         if success:
+    #             logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+    #         else:
+    #             logging.error(f"❌ Failed to process WSeg bird: {bird}")
+    else:
+        logging.warning(f"WSeg directory not found: {wseg_test_directory}")
 
     logging.info("UMAP embeddings pipeline completed")
 
