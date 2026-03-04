@@ -245,11 +245,11 @@ def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParam
         embeddings = umap_model.fit_transform(samples)
 
         # Create output directories
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
         os.makedirs(os.path.dirname(embedding_path), exist_ok=True)
 
         # Save results
         if save_model:
+            os.makedirs(os.path.dirname(model_path), exist_ok=True)
             save_umap_model(model_path, umap_model, params)
         save_umap_embeddings(embedding_path, embeddings, hashes, labels)
 
@@ -417,7 +417,8 @@ def explore_embedding_parameters(save_path: str, bird: str,
                                  min_dists: List[float] = None,
                                  n_neighbors_list: List[int] = None,
                                  use_parallel: bool = True,
-                                 overwrite: bool = False) -> bool:
+                                 overwrite: bool = False,
+                                 max_workers: int | None = None) -> bool:
     """
     Explore different UMAP parameters for a bird and create comparison plots.
 
@@ -466,7 +467,8 @@ def explore_embedding_parameters(save_path: str, bird: str,
                 paths=paths,
                 plot=True,
                 bird=bird,
-                overwrite=overwrite
+                overwrite=overwrite,
+                max_workers=max_workers
             )
         else:
             successful_params = compute_embedding_grid(
@@ -570,7 +572,6 @@ def main():
     birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
              os.path.isdir(os.path.join(evsong_test_directory, b))]
     logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
-
     for bird in birds:
         logging.info(f"Processing EVSong bird: {bird}")
         success = explore_embedding_parameters(
@@ -579,7 +580,8 @@ def main():
             min_dists=[0.01, 0.1, 0.2, 0.5],
             n_neighbors_list=[5, 10, 25, 50, 100],
             use_parallel=True,
-            overwrite=False
+            overwrite=False,
+            max_workers=10
         )
         if success:
             logging.info(f"✅ Successfully processed EVSong bird: {bird}")
