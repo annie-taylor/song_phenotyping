@@ -614,9 +614,10 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
         variations = generate_bird_name_variations(bird_name)
         return file_parts[0].lower() in {var.lower() for var in variations}
 
-    screening_directories = ['/Volumes/users/public/screening/', '/Volumes/users/public/adult_screening/',
-                             '/Volumes/users/public/from_egret/egret/screening/',
-                             '/Volumes/users/public/from_stork/stork/screening/']
+    screening_directories = [os.path.join(check_sys_for_macaw_root(), 'users', 'public', 'screening'),
+                             os.path.join(check_sys_for_macaw_root(), 'users', 'public', 'adult_screening'),
+                             os.path.join(check_sys_for_macaw_root(), 'users', 'public', 'from_egret', 'egret', 'screening'),
+                             os.path.join(check_sys_for_macaw_root(), 'users', 'public', 'from_stork', 'stork', 'screening'),]
 
     try:
         for i, bird_name in enumerate(birds_to_process):
