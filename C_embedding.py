@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import logging
 import tables
 import numpy as np
@@ -716,68 +717,68 @@ def explore_embedding_parameters(save_path: str, bird: str,
             max_samples = min(100000, max(10000, suggested_max))  # Between 10k-100k
             logging.info(f"🎯 Auto-determined max_samples: {max_samples}")
 
-            # Apply subsampling if needed
-            was_subsampled = False
-            original_n_samples = len(labels)
+        # Apply subsampling if needed
+        was_subsampled = False
+        original_n_samples = len(labels)
 
-            if max_samples is not None and len(labels) > max_samples:
-                specs, labels, position_idxs, hashes = subsample_data(
-                    specs, labels, position_idxs, hashes, max_samples, subsample_seed
-                )
-                was_subsampled = True
+        if max_samples is not None and len(labels) > max_samples:
+            specs, labels, position_idxs, hashes = subsample_data(
+                specs, labels, position_idxs, hashes, max_samples, subsample_seed
+            )
+            was_subsampled = True
 
-            # Create processing metadata
-            processing_metadata = {
-                'original_samples': original_n_samples,
-                'final_samples': len(labels),
-                'was_subsampled': was_subsampled,
-                'subsample_seed': subsample_seed if was_subsampled else None,
-                'max_samples_limit': max_samples,
-                'memory_per_worker_gb': memory_per_worker_gb,
-                'processing_date': datetime.now().isoformat(),
-                'bird_id': bird
-            }
+        # Create processing metadata
+        processing_metadata = {
+            'original_samples': original_n_samples,
+            'final_samples': len(labels),
+            'was_subsampled': was_subsampled,
+            'subsample_seed': subsample_seed if was_subsampled else None,
+            'max_samples_limit': max_samples,
+            'memory_per_worker_gb': memory_per_worker_gb,
+            'processing_date': datetime.now().isoformat(),
+            'bird_id': bird
+        }
 
-            logging.info(f"📋 Processing metadata: {processing_metadata}")
+        logging.info(f"📋 Processing metadata: {processing_metadata}")
 
-            # Calculate adaptive worker count
-            if use_parallel:
-                adaptive_workers = calculate_adaptive_workers(
-                    n_samples=len(labels),
-                    memory_per_worker_gb=memory_per_worker_gb,
-                    feature_estimate=specs.shape[0]
-                )
-            else:
-                adaptive_workers = 1
+        # Calculate adaptive worker count
+        if use_parallel:
+            adaptive_workers = calculate_adaptive_workers(
+                n_samples=len(labels),
+                memory_per_worker_gb=memory_per_worker_gb,
+                feature_estimate=specs.shape[0]
+            )
+        else:
+            adaptive_workers = 1
 
-            # Compute parameter grid with updated paths and metadata
-            if use_parallel:
-                successful_params = compute_embedding_grid_parallel(
-                    samples=specs.T,
-                    labels=labels,
-                    hashes=hashes,
-                    min_dists=min_dists,
-                    n_neighbors=n_neighbors_list,
-                    paths=paths,
-                    plot=True,
-                    bird=bird,
-                    max_workers=adaptive_workers,
-                    overwrite=overwrite,
-                    processing_metadata=processing_metadata
-                )
-            else:
-                successful_params = compute_embedding_grid(
-                    samples=specs.T,
-                    labels=labels,
-                    hashes=hashes,
-                    min_dists=min_dists,
-                    n_neighbors=n_neighbors_list,
-                    paths=paths,
-                    plot=True,
-                    bird=bird,
-                    overwrite=overwrite,
-                    processing_metadata=processing_metadata
-                )
+        # Compute parameter grid with updated paths and metadata
+        if use_parallel:
+            successful_params = compute_embedding_grid_parallel(
+                samples=specs.T,
+                labels=labels,
+                hashes=hashes,
+                min_dists=min_dists,
+                n_neighbors=n_neighbors_list,
+                paths=paths,
+                plot=True,
+                bird=bird,
+                max_workers=adaptive_workers,
+                overwrite=overwrite,
+                processing_metadata=processing_metadata
+            )
+        else:
+            successful_params = compute_embedding_grid(
+                samples=specs.T,
+                labels=labels,
+                hashes=hashes,
+                min_dists=min_dists,
+                n_neighbors=n_neighbors_list,
+                paths=paths,
+                plot=True,
+                bird=bird,
+                overwrite=overwrite,
+                processing_metadata=processing_metadata
+            )
 
         logging.info(f"Successfully explored UMAP parameters for bird {bird}. "
                      f"Computed {len(successful_params)} parameter combinations.")
@@ -874,7 +875,7 @@ def main():
         birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
                  os.path.isdir(os.path.join(evsong_test_directory, b))]
         logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
-
+        birds = ['rd96gr19']
         for bird in birds:
             logging.info(f"Processing EVSong bird: {bird}")
 
@@ -889,7 +890,7 @@ def main():
                 n_neighbors_list=[5, 10, 25, 50, 100],
                 use_parallel=True,
                 overwrite=False,  # Set to True if you want to regenerate all
-                max_samples=50000,  # Limit to 50k samples to prevent memory issues
+                max_samples=5000,  # Limit to 5k samples to prevent memory issues
                 memory_per_worker_gb=None,  # Auto-detect based on system
                 auto_memory_management=True,
                 subsample_seed=42  # Fixed seed for reproducibility
