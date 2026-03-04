@@ -1394,9 +1394,9 @@ def main():
         'evsonganaly': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'ssharma', 'RNA_seq', 'family_analysis_labeled'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq'),
+            'save_dir': os.path.join('E:', 'ssharma_RNA_seq'),
             'batch_file_naming': 'batch.txt.labeled',
-            'bird_subset': ['pk26pk92'],
+            'bird_subset': None,
             'copy_locally': True,  # to write/overwrite audio and metadata files to
             'prefer_local': False,  # to use local file where audio/metadata files are saved
                                     # (TODO double check whether this and bool above are mutually exclusive)

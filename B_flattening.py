@@ -169,7 +169,7 @@ def main():
     optimize_pytables_for_network()
 
     # EVSong processing
-    evsong_test_directory = os.path.join('..', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
     if not os.path.exists(evsong_test_directory):

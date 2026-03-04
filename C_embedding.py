@@ -564,7 +564,7 @@ def main():
     optimize_pytables_for_network()
 
     # EVSong processing
-    evsong_test_directory = os.path.join('..', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
     birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
@@ -576,8 +576,8 @@ def main():
         success = explore_embedding_parameters(
             save_path=evsong_test_directory,
             bird=bird,
-            min_dists=[0.01, 0.1, 0.5],
-            n_neighbors_list=[5, 10, 50, 100],
+            min_dists=[0.01, 0.1, 0.2, 0.5],
+            n_neighbors_list=[5, 10, 25, 50, 100],
             use_parallel=True,
             overwrite=False
         )
