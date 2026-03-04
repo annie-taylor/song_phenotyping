@@ -933,8 +933,8 @@ def main():
     #             logging.info(f"✅ Successfully processed WSeg bird: {bird}")
     #         else:
     #             logging.error(f"❌ Failed to process WSeg bird: {bird}")
-    else:
-        logging.warning(f"WSeg directory not found: {wseg_test_directory}")
+    # else:
+    #     logging.warning(f"WSeg directory not found: {wseg_test_directory}")
 
     logging.info("UMAP embeddings pipeline completed")
 
