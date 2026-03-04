@@ -573,7 +573,10 @@ def resolve_audio_file_path(metadata_file_path: str, metadata_matfile: dict,
     """
     if not read_songpath_from_metadata:
         # Simple case: same path as metadata but with .wav extension
-        audio_file_path = metadata_file_path.replace('.wav.not.mat', '.wav')
+        if '.wav' in metadata_file_path:
+            audio_file_path = metadata_file_path.replace('.wav.not.mat', '.wav')
+        elif '.cbin' in metadata_file_path:
+            audio_file_path = metadata_file_path.replace('.cbin.not.mat', '.cbin')
         wseg_offset = 0.0
 
         # Try to use path mapping if available
