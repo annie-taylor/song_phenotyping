@@ -243,7 +243,7 @@ def example_usage():
     test_paths = [
         #os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         #os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test warp')
+        os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq')
     ]
 
     for project_dir in test_paths:
