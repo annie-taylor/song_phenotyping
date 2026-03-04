@@ -676,7 +676,7 @@ def get_all_audio_files_for_birds(bird_file_locations, root_directory, save_file
                                         with open(batch_file, 'r') as f:
                                             lines = f.readlines()
                                             for line in lines:
-                                                audio_from_batch_files.append(str(Path(line)))  # seperately track audio in batch files
+                                                audio_from_batch_files.append(str(Path(os.path.join(bird_dir, line))))  # seperately track audio in batch files
                                             f.close()
 
                             except Exception as e:
