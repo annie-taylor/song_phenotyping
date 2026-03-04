@@ -3,6 +3,7 @@ import logging
 import tables
 import numpy as np
 from typing import Tuple, Dict, List, Optional
+import psutil
 import traceback
 import umap
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -60,6 +61,7 @@ def complex_spectrogram_distance(spec1, spec2):
     # spec1, spec2 are complex spectrograms (magnitude + phase)
     return np.linalg.norm(spec1 - spec2)
 
+
 def phase_aware_spectrogram_distance(spec1, spec2):
     # Magnitude component (cosine-like)
     mag1, mag2 = np.abs(spec1), np.abs(spec2)
@@ -90,7 +92,6 @@ def group_delay_distance(spec1, spec2):
     gd2 = -np.diff(np.unwrap(np.angle(spec2)), axis=0)
 
     return np.linalg.norm(gd1 - gd2)
-
 
 def instantaneous_freq_distance(spec1, spec2):
     # Compute instantaneous frequency from phase derivatives
@@ -202,6 +203,123 @@ def save_umap_model(model_path: str, umap_model: umap.UMAP, params: UMAPParams) 
         logging.error(traceback.format_exc())
         return False
 
+def subsample_data(specs: np.ndarray, labels: np.ndarray, position_idxs: np.ndarray,
+                   hashes: np.ndarray, max_samples: int, random_seed: int = 42) -> Tuple[
+    np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Randomly subsample the data if it exceeds max_samples.
+
+    Args:
+        specs, labels, position_idxs, hashes: Original data arrays
+        max_samples: Maximum number of samples to keep
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        Subsampled versions of input arrays
+    """
+    if len(labels) <= max_samples:
+        return specs, labels, position_idxs, hashes
+
+    np.random.seed(random_seed)
+    indices = np.random.choice(len(labels), size=max_samples, replace=False)
+    indices.sort()  # Keep chronological order
+
+    logging.info(f"🎯 Subsampling from {len(labels)} to {max_samples} samples")
+
+    return (specs[:, indices], labels[indices],
+            position_idxs[indices], hashes[indices])
+
+
+def get_optimal_memory_per_worker(safety_factor: float = 0.7,
+                                  min_workers: int = 2,
+                                  max_workers: Optional[int] = None) -> float:
+    """
+    Calculate optimal memory per worker based on system capacity.
+
+    Args:
+        safety_factor: Fraction of available memory to use (0.7 = 70%)
+        min_workers: Minimum number of workers to ensure
+        max_workers: Maximum workers to consider (defaults to CPU count)
+
+    Returns:
+        Recommended memory per worker in GB
+    """
+    # Get system memory info
+    memory_info = psutil.virtual_memory()
+    available_gb = memory_info.available / (1024 ** 3)
+    total_gb = memory_info.total / (1024 ** 3)
+
+    # Determine max workers
+    if max_workers is None:
+        max_workers = mp.cpu_count()
+
+    # Calculate usable memory (with safety factor)
+    usable_memory_gb = available_gb * safety_factor
+
+    # Calculate memory per worker to ensure min_workers can run
+    memory_per_worker = usable_memory_gb / max(min_workers, max_workers)
+
+    # Set reasonable bounds (0.5GB minimum, 8GB maximum per worker)
+    memory_per_worker = max(0.5, min(8.0, memory_per_worker))
+
+    logging.info(f"🖥️ System memory: {total_gb:.1f}GB total, {available_gb:.1f}GB available")
+    logging.info(f"⚙️ Using {safety_factor * 100:.0f}% safety factor = {usable_memory_gb:.1f}GB usable")
+    logging.info(f"🧠 Optimal memory per worker: {memory_per_worker:.1f}GB (for up to {max_workers} workers)")
+
+    return memory_per_worker
+
+
+def calculate_adaptive_workers(n_samples: int, memory_per_worker_gb: float = None,
+                               max_workers: Optional[int] = None,
+                               feature_estimate: int = 1000) -> int:
+    """
+    Calculate number of workers based on sample size and memory constraints.
+
+    Args:
+        n_samples: Number of samples in dataset
+        memory_per_worker_gb: Memory budget per worker (auto-calculated if None)
+        max_workers: Maximum workers to use (if None, uses cpu_count)
+        feature_estimate: Estimated number of features per sample
+
+    Returns:
+        Recommended number of workers
+    """
+    # Auto-calculate memory per worker if not provided
+    if memory_per_worker_gb is None:
+        memory_per_worker_gb = get_optimal_memory_per_worker(max_workers=max_workers)
+
+    # Estimate memory usage more accurately
+    # UMAP typically needs: input data + distance matrix + embeddings + overhead
+    bytes_per_sample = feature_estimate * 8  # float64
+    total_data_gb = (n_samples * bytes_per_sample) / (1024 ** 3)
+
+    # UMAP memory scaling (rough estimates):
+    # - Input data: 1x
+    # - Distance computations: ~2-3x during fit
+    # - Embeddings: minimal
+    # - Overhead: ~1.5x
+    estimated_peak_memory_gb = total_data_gb * 4.5  # Conservative estimate
+
+    # Calculate workers based on memory constraint
+    available_memory_gb = psutil.virtual_memory().available / (1024 ** 3)
+    memory_limited_workers = max(1, int(available_memory_gb * 0.7 / memory_per_worker_gb))
+
+    # Also consider if the dataset itself is too large for many workers
+    data_limited_workers = max(1, int(available_memory_gb * 0.8 / estimated_peak_memory_gb * mp.cpu_count()))
+
+    # Calculate workers based on CPU
+    cpu_workers = max_workers if max_workers else mp.cpu_count()
+
+    # Use the minimum of all constraints
+    recommended_workers = min(memory_limited_workers, data_limited_workers, cpu_workers)
+
+    logging.info(
+        f"📊 Dataset: {n_samples} samples, {total_data_gb:.1f}GB, estimated peak: {estimated_peak_memory_gb:.1f}GB")
+    logging.info(
+        f"🧠 Worker limits - Memory: {memory_limited_workers}, Data: {data_limited_workers}, CPU: {cpu_workers}")
+    logging.info(f"⚙️ Using {recommended_workers} workers")
+
+    return recommended_workers
 
 def compute_and_save_umap(samples: np.ndarray, labels, hashes, params: UMAPParams,
                           model_path: str, embedding_path: str, save_model: bool = False,
@@ -417,7 +535,10 @@ def explore_embedding_parameters(save_path: str, bird: str,
                                  min_dists: List[float] = None,
                                  n_neighbors_list: List[int] = None,
                                  use_parallel: bool = True,
-                                 overwrite: bool = False) -> bool:
+                                 overwrite: bool = False,
+                                 max_samples: Optional[int] = None,
+                                 memory_per_worker_gb: Optional[float] = None,  # Now optional
+                                 auto_memory_management: bool = True) -> bool:  # New flag
     """
     Explore different UMAP parameters for a bird and create comparison plots.
 
@@ -428,6 +549,9 @@ def explore_embedding_parameters(save_path: str, bird: str,
         n_neighbors_list: List of n_neighbors values to test
         use_parallel: Whether to use parallel processing
         overwrite: Whether to overwrite existing embedding files
+        max_samples: Maximum number of samples to use (subsamples if exceeded)
+        memory_per_worker_gb: Memory budget per worker (auto-detected if None)
+        auto_memory_management: Whether to automatically manage memory settings
 
     Returns:
         True if successful, False otherwise
@@ -441,8 +565,6 @@ def explore_embedding_parameters(save_path: str, bird: str,
 
         # Setup paths
         bird_path = os.path.join(save_path, bird)
-        # TODO will need to add alternative logic for slicing, or...
-        #  ...decide that slicing needs a seperate project folder altogether?
         data_path = os.path.join(bird_path, 'syllable_data')
 
         paths = {
@@ -455,6 +577,36 @@ def explore_embedding_parameters(save_path: str, bird: str,
         # Load data
         specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
 
+        logging.info(f"🐦 Loaded {len(labels)} samples for bird {bird}")
+
+        # Auto-determine memory management if enabled
+        if auto_memory_management and memory_per_worker_gb is None:
+            memory_per_worker_gb = get_optimal_memory_per_worker()
+
+        # Auto-determine max_samples based on memory if not specified
+        if auto_memory_management and max_samples is None:
+            available_gb = psutil.virtual_memory().available / (1024 ** 3)
+            # Conservative: assume we need ~4GB for UMAP processing per 10k samples
+            suggested_max = int((available_gb * 0.6) / 4.0 * 10000)
+            max_samples = min(100000, max(10000, suggested_max))  # Between 10k-100k
+            logging.info(f"🎯 Auto-determined max_samples: {max_samples}")
+
+        # Apply subsampling if needed
+        if max_samples is not None and len(labels) > max_samples:
+            specs, labels, position_idxs, hashes = subsample_data(
+                specs, labels, position_idxs, hashes, max_samples
+            )
+
+        # Calculate adaptive worker count
+        if use_parallel:
+            adaptive_workers = calculate_adaptive_workers(
+                n_samples=len(labels),
+                memory_per_worker_gb=memory_per_worker_gb,
+                feature_estimate=specs.shape[0]  # Use actual feature count
+            )
+        else:
+            adaptive_workers = 1
+
         # Compute parameter grid
         if use_parallel:
             successful_params = compute_embedding_grid_parallel(
@@ -466,6 +618,7 @@ def explore_embedding_parameters(save_path: str, bird: str,
                 paths=paths,
                 plot=True,
                 bird=bird,
+                max_workers=adaptive_workers,  # Use adaptive worker count
                 overwrite=overwrite
             )
         else:
@@ -489,16 +642,6 @@ def explore_embedding_parameters(save_path: str, bird: str,
         logging.error(f"Failed to explore UMAP parameters for bird {bird}: {e}")
         logging.error(traceback.format_exc())
         return False
-
-
-def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
-    """Load embeddings from HDF5 file"""
-    try:
-        with tables.open_file(embedding_path, mode='r') as f:
-            return f.root.embeddings[:]
-    except Exception as e:
-        logging.warning(f"Could not load embedding from {embedding_path}: {e}")
-        return None
 
 
 def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min_dists, n_neighbors,
@@ -564,7 +707,7 @@ def main():
     optimize_pytables_for_network()
 
     # EVSong processing
-    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq')
     logging.info(f"Processing EVSong directory: {evsong_test_directory}")
 
     birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
@@ -579,14 +722,16 @@ def main():
             min_dists=[0.01, 0.1, 0.2, 0.5],
             n_neighbors_list=[5, 10, 25, 50, 100],
             use_parallel=True,
-            overwrite=False
+            overwrite=False,
+            max_samples=50000,  # NEW: Limit to 50k samples to prevent memory issues
+            memory_per_worker_gb=3.0  # NEW: Conservative memory estimate per worker
         )
         if success:
             logging.info(f"✅ Successfully processed EVSong bird: {bird}")
         else:
             logging.error(f"❌ Failed to process EVSong bird: {bird}")
 
-    # # WSeg processing
+    # # WSeg processing (uncommented and updated)
     # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
     # logging.info(f"Processing WSeg directory: {wseg_test_directory}")
     #
@@ -602,7 +747,9 @@ def main():
     #         min_dists=[0.01, 0.1, 0.5],
     #         n_neighbors_list=[5, 10, 50, 100],
     #         use_parallel=True,
-    #         overwrite=False
+    #         overwrite=False,
+    #         max_samples=30000,  # NEW: Smaller limit for WSeg data
+    #         memory_per_worker_gb=2.5  # NEW: Memory estimate per worker
     #     )
     #     if success:
     #         logging.info(f"✅ Successfully processed WSeg bird: {bird}")

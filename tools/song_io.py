@@ -484,12 +484,12 @@ def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
     return ProcessingResult(specs, audio_segs, spec_t, valid_inds, tempos)
 
 
-def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: SpectrogramParams,
+def save_spec_slices(candidate_files: List[Tuple[str, str]], save_path: str, params: SpectrogramParams,
                      slice_length: Optional[float] = None, read_songpath_from_metadata: bool = True,
-                     verbose: bool = False) -> None:
+                     verbose: bool = False, prefer_local: bool = True) -> None:
     """
     Process fixed-length slice spectrograms from metadata files.
-    Updated with emoji logging and consolidated utilities.
+    Updated to handle file pairs and prefer_local parameter.
     """
     # Set slice_length in params if provided
     if slice_length is not None:
@@ -498,24 +498,40 @@ def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: Spe
     if not hasattr(params, 'slice_length') or params.slice_length is None:
         raise ValueError("slice_length must be specified either in params or as argument")
 
-    logger.info(f"🔪 Starting slice processing for {len(metadata_file_paths)} files "
+    logger.info(f"🔪 Starting slice processing for {len(candidate_files)} files "
                 f"with slice_length={params.slice_length}ms")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
 
     problem_files = []
     processed_count = 0
 
-    for idx, metadata_file_path in enumerate(tqdm(metadata_file_paths, '🔄 Processing slice spectrograms...'), 1):
+    for idx, (metadata_file_path, audio_file_path) in enumerate(tqdm(candidate_files, '🔄 Processing slice spectrograms...'), 1):
         try:
             if not os.path.exists(metadata_file_path):
-                logger.warning(f"📁 File not found: {metadata_file_path}")
+                logger.warning(f"📁 Metadata file not found: {metadata_file_path}")
                 problem_files.append(metadata_file_path)
                 continue
 
-            # Get song file path and metadata
-            song_file_path, fs, syl_onsets, syl_offsets, labels = read_metadata(
-                metadata_file_path, read_songpath_from_metadata
-            )
+            # Handle audio file path resolution
+            if read_songpath_from_metadata:
+                # For wseg files, read from metadata but prefer provided audio_file_path
+                song_file_path, fs, syl_onsets, syl_offsets, labels = read_metadata(
+                    metadata_file_path, read_songpath_from_metadata
+                )
+                # Override with provided audio_file_path if it exists and prefer_local is True
+                if audio_file_path and os.path.exists(audio_file_path) and prefer_local:
+                    song_file_path = audio_file_path
+            else:
+                # For evsonganaly files, use provided audio_file_path directly
+                song_file_path = audio_file_path
+                # Still need to read metadata for onsets/offsets/labels
+                metadata_matfile = loadmat(metadata_file_path, squeeze_me=True)
+                fs = metadata_matfile.get('Fs', 32000.0)
+                syl_onsets = metadata_matfile['onsets']
+                syl_offsets = metadata_matfile['offsets']
+                labels = metadata_matfile['labels']
+                del metadata_matfile
+                gc.collect()
 
             if not os.path.exists(song_file_path):
                 logger.warning(f"🎵 Audio file not found: {song_file_path}")
@@ -547,8 +563,8 @@ def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: Spe
             # Create output path
             paths = create_output_paths(save_path, file_info['bird'])
             h5file_save_path = os.path.join(
-                paths['slice_specs_dir'],  # Use slices_dir for slice files
-                f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"  # Change filename prefix
+                paths['slice_specs_dir'],
+                f"slices_{file_info['bird']}_{file_info['day']}_{file_info['time']}.h5"
             )
 
             # Skip if file already exists
@@ -590,7 +606,7 @@ def save_spec_slices(metadata_file_paths: List[str], save_path: str, params: Spe
 
             # Periodic memory reporting
             if idx % 10 == 0:
-                logger.info(f"📊 Progress {idx}/{len(metadata_file_paths)}, "
+                logger.info(f"📊 Progress {idx}/{len(candidate_files)}, "
                             f"memory: {get_memory_usage():.1f} MB")
 
         except Exception as e:
