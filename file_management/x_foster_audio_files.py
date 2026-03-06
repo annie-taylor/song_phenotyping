@@ -7,6 +7,34 @@ from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects."""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def save_bird_audio_data_with_datetime(data: Dict[str, Any], save_file: str) -> None:
+    """Save bird audio data to JSON file with datetime handling."""
+    try:
+        # Save to temporary file first
+        temp_file = save_file + ".tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, cls=DateTimeEncoder)
+
+        # If successful, rename to final file
+        import shutil
+        shutil.move(temp_file, save_file)
+        logging.info(f"Saved data to {save_file}")
+
+    except Exception as e:
+        logging.error(f"Error saving data to {save_file}: {e}")
+        # Clean up temp file if it exists
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
 # You'll also need the load_bird_audio_data function from earlier:
 def load_bird_audio_data(save_file):
     """Load previously saved bird audio data from JSON file"""
@@ -28,7 +56,7 @@ def save_bird_audio_data(data: Dict[str, Any], save_file: str) -> None:
     """Save bird audio data to JSON file"""
     try:
         with open(save_file, 'w') as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, cls=DateTimeEncoder)  # ← ADDED cls=DateTimeEncoder
         logging.info(f"Saved data to {save_file}")
     except Exception as e:
         logging.error(f"Error saving data to {save_file}: {e}")

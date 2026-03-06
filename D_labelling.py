@@ -1691,7 +1691,7 @@ def main(save_path: str) -> None:
     """Main function to run the clustering pipeline."""
     try:
         # Define evaluation metrics
-        metrics = ['nmi', 'silhouette', 'dbi', 'aic']
+        metrics = ['nmi', 'silhouette', 'dbi']
 
         # Get available birds
         birds = _get_available_birds(save_path)
