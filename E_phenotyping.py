@@ -118,35 +118,53 @@ def has_manual_labels(syllable_data: Dict[str, Any]) -> bool:
 def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
     """
     Load syllable data from bird directory.
-    Only manual labels are stored in syllable files.
-
-    Returns:
-        Dict containing syllable sequences and metadata
+    Manual labels are stored in spec files under syllable_data/specs/.
     """
-    syllables_dir = os.path.join(bird_path, 'syllable_data', 'syllables')
+    bird_name = os.path.basename(bird_path)
 
-    if not os.path.exists(syllables_dir):
-        raise FileNotFoundError(f"Syllables directory not found: {syllables_dir}")
+    # Look for spec files in syllable_data/specs directory
+    specs_dir = os.path.join(bird_path, 'syllable_data', 'specs')
 
-    syllable_files = [f for f in os.listdir(syllables_dir) if f.endswith('.h5')]
-    if not syllable_files:
-        raise FileNotFoundError(f"No syllable files found in {syllables_dir}")
+    if not os.path.exists(specs_dir):
+        logging.warning(f"No specs directory found at {specs_dir} for {bird_name}")
+        return {
+            'manual_syllables': [],
+            'song_paths': [],
+            'bird_name': bird_name,
+            'syllables_dir': specs_dir  # Keep for consistency with other functions
+        }
+
+    # Look for syllable spec files (should start with 'syllables_')
+    spec_files = [f for f in os.listdir(specs_dir) if f.endswith('.h5') and f.startswith('syllables_')]
+
+    if not spec_files:
+        logging.warning(f"No syllable spec files found in {specs_dir} for {bird_name}")
+        return {
+            'manual_syllables': [],
+            'song_paths': [],
+            'bird_name': bird_name,
+            'syllables_dir': specs_dir
+        }
+
+    logging.info(f"Found {len(spec_files)} syllable spec files for {bird_name}")
 
     # Initialize data containers
     all_manual_syllables = []
     song_paths = []
 
-    # Load data from each file
-    for filename in syllable_files:
-        file_path = os.path.join(syllables_dir, filename)
+    # Load data from each spec file
+    for filename in spec_files:
+        file_path = os.path.join(specs_dir, filename)
         song_paths.append(filename)
 
         try:
             with tables.open_file(file_path, 'r') as f:
                 available_nodes = [node._v_name for node in f.list_nodes(f.root)]
+                logging.debug(f"Available nodes in {filename}: {available_nodes}")
 
                 if 'manual' in available_nodes:
                     raw_labels = f.root._f_get_child('manual').read()
+                    logging.debug(f"Found {len(raw_labels)} manual labels in {filename}")
 
                     if len(raw_labels) > 0:
                         # Create handler for manual labels
@@ -158,16 +176,23 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
 
                         # Add to collection
                         all_manual_syllables.extend(song_with_tokens)
+                else:
+                    logging.debug(f"No 'manual' node found in {filename}")
 
         except Exception as e:
             logging.error(f'Error processing {file_path}: {e}')
             continue
 
+    if all_manual_syllables:
+        logging.info(f"Loaded {len(all_manual_syllables)} manual syllable labels for {bird_name}")
+    else:
+        logging.info(f"No manual labels found in spec files for {bird_name}")
+
     return {
         'manual_syllables': all_manual_syllables,
         'song_paths': song_paths,
-        'bird_name': os.path.basename(bird_path),
-        'syllables_dir': syllables_dir  # Keep this for clustering label mapping
+        'bird_name': bird_name,
+        'syllables_dir': specs_dir  # Point to specs directory instead
     }
 
 
@@ -253,34 +278,45 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
         # Map labels to syllable sequences
         mapped_labels = []
         song_paths = syllable_data['song_paths']
-        syllables_dir = syllable_data['syllables_dir']
+        specs_dir = syllable_data['syllables_dir']  # This now points to specs directory
 
-        # Load syllable hashes and map to clustering labels
+        # Load syllable hashes from spec files and map to clustering labels
         for song_path in song_paths:
-            full_song_path = os.path.join(syllables_dir, song_path)
+            full_song_path = os.path.join(specs_dir, song_path)
             try:
                 with tables.open_file(full_song_path, mode='r') as f:
-                    song_hashes = f.root.hashes.read()
-                    song_hashes = [
-                        h.decode('utf-8') if isinstance(h, (bytes, np.bytes_)) else str(h)
-                        for h in song_hashes
-                    ]
+                    # Check if hashes exist in the spec file
+                    available_nodes = [node._v_name for node in f.list_nodes(f.root)]
 
-                    # Map each syllable hash to its cluster label
-                    for hash_id in song_hashes:
-                        mapped_labels.append(hash_to_label.get(hash_id, -1))  # -1 for missing
+                    if 'hashes' in available_nodes:
+                        song_hashes = f.root.hashes.read()
+                        song_hashes = [
+                            h.decode('utf-8') if isinstance(h, (bytes, np.bytes_)) else str(h)
+                            for h in song_hashes
+                        ]
+
+                        # Map each syllable hash to its cluster label
+                        for hash_id in song_hashes:
+                            mapped_labels.append(hash_to_label.get(hash_id, -1))  # -1 for missing
+                    else:
+                        logging.warning(f"No 'hashes' node found in {full_song_path}")
 
             except Exception as e:
                 logging.error(f"Error loading hashes from {full_song_path}: {e}")
                 continue
 
-        # Add sequence tokens
-        handler = LabelHandler(LabelType.AUTO)
-        return handler.add_sequence_tokens(mapped_labels)
+        if mapped_labels:
+            # Add sequence tokens
+            handler = LabelHandler(LabelType.AUTO)
+            return handler.add_sequence_tokens(mapped_labels)
+        else:
+            logging.warning("No clustering labels could be mapped to syllables")
+            return []
 
     except Exception as e:
         logging.error(f"Error loading clustering labels: {e}")
         return []
+
 
 
 def _resolve_file_path(file_path: str) -> str:
@@ -1772,12 +1808,7 @@ def _format_transition_annotations(matrix: pd.DataFrame) -> np.ndarray:
 def _get_available_birds(save_path: str) -> List[str]:
     """
     Get list of available birds for processing.
-
-    Args:
-        save_path: Root directory containing bird data
-
-    Returns:
-        List of bird identifiers
+    Updated to work with the actual directory structure (syllable_data/specs/ and master_summary.csv).
     """
     try:
         birds = []
@@ -1785,27 +1816,50 @@ def _get_available_birds(save_path: str) -> List[str]:
             logging.error(f"Save path does not exist: {save_path}")
             return birds
 
+        logging.info(f"Scanning directory: {save_path}")
+
         for item in os.listdir(save_path):
             item_path = os.path.join(save_path, item)
-            if os.path.isdir(item_path) and not item.startswith('.'):
-                # Check if it's a valid bird directory (has data folder)
-                syllable_data_folder = os.path.join(item_path, 'syllable_data')
-                syllables_folder = os.path.join(syllable_data_folder, 'syllables')
 
-                if os.path.exists(syllable_data_folder) and os.path.exists(syllables_folder):
-                    # Check if syllables folder has HDF5 files
-                    syllable_files = [f for f in os.listdir(syllables_folder) if f.endswith('.h5')]
-                    if syllable_files:
-                        birds.append(item)
-                    else:
-                        logging.debug(f"Skipping {item}: no syllable HDF5 files found")
-                else:
-                    logging.debug(f"Skipping {item}: missing syllable_data or syllables folder")
+            # Skip files and hidden directories
+            if not os.path.isdir(item_path) or item.startswith('.'):
+                continue
 
+            logging.info(f"Checking potential bird: {item}")
+
+            # Check if this looks like a bird directory
+            # Look for either:
+            # 1. syllable_data/specs/ with .h5 files (for manual labels)
+            # 2. master_summary.csv (for clustering results)
+
+            is_valid_bird = False
+
+            # Method 1: Check for syllable spec files
+            specs_dir = os.path.join(item_path, 'syllable_data', 'specs')
+            if os.path.exists(specs_dir):
+                spec_files = [f for f in os.listdir(specs_dir) if f.endswith('.h5') and f.startswith('syllables_')]
+                if spec_files:
+                    logging.info(f"  Found {len(spec_files)} syllable spec files for {item}")
+                    is_valid_bird = True
+
+            # Method 2: Check for master_summary.csv (clustering results)
+            master_summary_path = os.path.join(item_path, 'master_summary.csv')
+            if os.path.exists(master_summary_path):
+                logging.info(f"  Found master_summary.csv for {item}")
+                is_valid_bird = True
+
+            if is_valid_bird:
+                birds.append(item)
+                logging.info(f"  ✅ Added {item} as valid bird")
+            else:
+                logging.info(f"  ❌ Skipping {item}: no syllable specs or master_summary.csv found")
+
+        logging.info(f"Found {len(birds)} valid birds: {birds}")
         return sorted(birds)
 
     except Exception as e:
         logging.error(f"Error getting available birds from {save_path}: {e}")
+        logging.error(traceback.format_exc())
         return []
 
 
@@ -1853,7 +1907,6 @@ def main(save_path: str) -> None:
         logging.error(traceback.format_exc())
         raise
 
-
 if __name__ == '__main__':
     # Setup logging
     logs_dir = 'logs'
@@ -1872,8 +1925,8 @@ if __name__ == '__main__':
 
     # Process test datasets
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+        os.path.join('E:', 'ssharma_RNA_seq'),  # Updated to your actual path
+        # Add other paths as needed
     ]
 
     for save_path in test_paths:
