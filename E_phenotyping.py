@@ -123,7 +123,7 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
     Returns:
         Dict containing syllable sequences and metadata
     """
-    syllables_dir = os.path.join(bird_path, 'data', 'syllables')
+    syllables_dir = os.path.join(bird_path, 'syllable_data', 'syllables')
 
     if not os.path.exists(syllables_dir):
         raise FileNotFoundError(f"Syllables directory not found: {syllables_dir}")
@@ -302,13 +302,14 @@ def _resolve_file_path(file_path: str) -> str:
         from tools.system_utils import check_sys_for_macaw_root
         path_to_macaw = check_sys_for_macaw_root()
 
-        # Extract relative path (last 9 components as in original)
         path_parts = file_path.replace('\\', '/').split('/')
-        if len(path_parts) >= 9:
-            relative_path = '/'.join(path_parts[-9:])
-            resolved_path = os.path.join(path_to_macaw, relative_path)
-            if os.path.exists(resolved_path):
-                return resolved_path
+        # Try different relative path lengths to handle various structures
+        for path_length in [9, 7, 5]:  # Try different path component counts
+            if len(path_parts) >= path_length:
+                relative_path = '/'.join(path_parts[-path_length:])
+                resolved_path = os.path.join(path_to_macaw, relative_path)
+                if os.path.exists(resolved_path):
+                    return resolved_path
 
         # If all else fails, return original path
         return file_path
@@ -322,8 +323,8 @@ def calculate_phenotypes_for_label_type(
         syllables: List[Union[str, int]],
         label_type: str,
         bird_name: str,
-        config: PhenotypingConfig
-) -> Dict[str, Any]:
+        config: PhenotypingConfig,
+        clustering_metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]: # Add metadata from clustering results
     """
     Calculate all phenotype metrics for one label type.
 
@@ -347,10 +348,10 @@ def calculate_phenotypes_for_label_type(
         # Calculate vocabulary and basic stats
         vocab_results = analyze_vocabulary_and_entropy(syllables, handler, config)
 
-        # Calculate transition patterns - NOW FOR BOTH MANUAL AND AUTO
+        # Calculate transition patterns
         transition_results = analyze_transitions(syllables, handler)
 
-        # Calculate repeat patterns - NOW FOR BOTH MANUAL AND AUTO
+        # Calculate repeat patterns
         repeat_results = analyze_repeats(syllables, handler, config)
 
         # Combine all results
@@ -363,6 +364,10 @@ def calculate_phenotypes_for_label_type(
             'n_songs': _count_songs_in_sequence(syllables, handler),
             'n_syllables_total': _count_total_syllables(syllables, handler)
         }
+
+        # Include clustering metadata if available
+        if clustering_metadata:
+            phenotype_results.update(clustering_metadata)
 
         return phenotype_results
 
@@ -1282,7 +1287,7 @@ def save_detailed_phenotype_data(bird_path: str,
     """
     try:
         # Create detailed data directory
-        detailed_data_dir = os.path.join(bird_path, 'data', 'phenotype_detailed')
+        detailed_data_dir = os.path.join(bird_path, 'syllable_data', 'phenotype_detailed')
         os.makedirs(detailed_data_dir, exist_ok=True)
 
         # Save manual results if available
@@ -1388,7 +1393,7 @@ def generate_manual_umap_plot(
         from sklearn.preprocessing import StandardScaler
 
         # Load syllable features for UMAP
-        syllable_db_path = os.path.join(bird_path, 'data', 'syllable_database', 'syllable_features.csv')
+        syllable_db_path = os.path.join(bird_path, 'syllable_data', 'syllable_database', 'syllable_features.csv')
         if not os.path.exists(syllable_db_path):
             logging.warning(f"No syllable database found for manual UMAP plot: {syllable_db_path}")
             return ""
@@ -1784,10 +1789,10 @@ def _get_available_birds(save_path: str) -> List[str]:
             item_path = os.path.join(save_path, item)
             if os.path.isdir(item_path) and not item.startswith('.'):
                 # Check if it's a valid bird directory (has data folder)
-                data_folder = os.path.join(item_path, 'data')
-                syllables_folder = os.path.join(data_folder, 'syllables')
+                syllable_data_folder = os.path.join(item_path, 'syllable_data')
+                syllables_folder = os.path.join(syllable_data_folder, 'syllables')
 
-                if os.path.exists(data_folder) and os.path.exists(syllables_folder):
+                if os.path.exists(syllable_data_folder) and os.path.exists(syllables_folder):
                     # Check if syllables folder has HDF5 files
                     syllable_files = [f for f in os.listdir(syllables_folder) if f.endswith('.h5')]
                     if syllable_files:
@@ -1795,7 +1800,7 @@ def _get_available_birds(save_path: str) -> List[str]:
                     else:
                         logging.debug(f"Skipping {item}: no syllable HDF5 files found")
                 else:
-                    logging.debug(f"Skipping {item}: missing data or syllables folder")
+                    logging.debug(f"Skipping {item}: missing syllable_data or syllables folder")
 
         return sorted(birds)
 
@@ -1868,7 +1873,7 @@ if __name__ == '__main__':
     # Process test datasets
     test_paths = [
         os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+        os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
     ]
 
     for save_path in test_paths:
