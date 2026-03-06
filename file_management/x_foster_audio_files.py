@@ -243,19 +243,52 @@ def main_deduplication():
 
 def extract_datetime_from_filename(filename: str) -> Optional[datetime]:
     """
-    Extract datetime from various common birdsong filename formats.
+    Extract datetime from birdsong filename formats.
 
-    Common formats:
-    - YYYYMMDD_HHMMSS
-    - YYYY-MM-DD_HH-MM-SS
-    - YYYYMMDDHHMMSS
-    - bird_YYYYMMDD_HHMMSS.wav
-    - etc.
+    Common birdsong formats:
+    - bird_id_DDMMYY_HHMMSS.wav (e.g., w26pk33_170114_103345.wav)
+    - bird_id_DDMMYY_HHMMSS (without extension)
     """
     # Remove file extension
     name_without_ext = os.path.splitext(filename)[0]
 
-    # Common datetime patterns in birdsong files
+    # Split by underscore to get components
+    parts = name_without_ext.split('_')
+
+    # Try the common birdsong format: bird_id_DDMMYY_HHMMSS
+    if len(parts) >= 3:
+        try:
+            # Get the last two parts (should be date and time)
+            date_part = parts[-2]  # DDMMYY
+            time_part = parts[-1]  # HHMMSS
+
+            # Check if they have the right length
+            if len(date_part) == 6 and len(time_part) == 6:
+                # Parse DDMMYY format
+                day = int(date_part[:2])
+                month = int(date_part[2:4])
+                year = int(date_part[4:6])
+
+                # Convert 2-digit year to 4-digit (assume 2000s for 00-30, 1900s for 31-99)
+                if year <= 30:
+                    year += 2000
+                else:
+                    year += 1900
+
+                # Parse HHMMSS format
+                hour = int(time_part[:2])
+                minute = int(time_part[2:4])
+                second = int(time_part[4:6])
+
+                # Validate ranges
+                if (1 <= month <= 12 and 1 <= day <= 31 and 1900 <= year <= 2030 and
+                        0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+                    return datetime(year, month, day, hour, minute, second)
+
+        except (ValueError, IndexError):
+            pass
+
+    # Fallback to original regex patterns for other formats
     patterns = [
         # YYYYMMDD_HHMMSS or YYYYMMDDHHMMSS
         r'(\d{4})(\d{2})(\d{2})_?(\d{2})(\d{2})(\d{2})',
@@ -263,12 +296,8 @@ def extract_datetime_from_filename(filename: str) -> Optional[datetime]:
         r'(\d{4})-(\d{2})-(\d{2})[_T](\d{2})-(\d{2})-(\d{2})',
         # YYYY_MM_DD_HH_MM_SS
         r'(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})',
-        # MM-DD-YYYY_HH-MM-SS (US format)
-        r'(\d{2})-(\d{2})-(\d{4})[_T](\d{2})-(\d{2})-(\d{2})',
         # YYYYMMDD (date only, assume midnight)
         r'(\d{4})(\d{2})(\d{2})(?![\d])',
-        # DD-MM-YYYY (European format, date only)
-        r'(\d{2})-(\d{2})-(\d{4})(?![_\d])',
     ]
 
     for i, pattern in enumerate(patterns):
@@ -287,16 +316,8 @@ def extract_datetime_from_filename(filename: str) -> Optional[datetime]:
                     year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
                     hour, minute, second = int(groups[3]), int(groups[4]), int(groups[5])
 
-                elif i == 3:  # MM-DD-YYYY_HH-MM-SS (US format)
-                    month, day, year = int(groups[0]), int(groups[1]), int(groups[2])
-                    hour, minute, second = int(groups[3]), int(groups[4]), int(groups[5])
-
-                elif i == 4:  # YYYYMMDD (date only)
+                elif i == 3:  # YYYYMMDD (date only)
                     year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
-                    hour = minute = second = 0
-
-                elif i == 5:  # DD-MM-YYYY (European format)
-                    day, month, year = int(groups[0]), int(groups[1]), int(groups[2])
                     hour = minute = second = 0
 
                 # Validate date components
@@ -310,7 +331,6 @@ def extract_datetime_from_filename(filename: str) -> Optional[datetime]:
     # If no pattern matches, log it for debugging
     logging.debug(f"Could not extract datetime from filename: {filename}")
     return None
-
 
 def get_filename_from_path(filepath: str) -> str:
     """Extract just the filename from a full path"""
@@ -676,13 +696,36 @@ def main_enhanced_deduplication():
     logging.info("Starting enhanced deduplication with datetime analysis...")
     deduplicated_data, comprehensive_stats = deduplicate_bird_audio_data_enhanced(bird_audio_data)
 
-    # Save deduplicated data
+    # Save with better error handling
     output_file = "cross_fostered_bird_audio_data_deduplicated_enhanced.json"
-    save_bird_audio_data(deduplicated_data, output_file)
 
-    # Save comprehensive statistics
+    try:
+        # Save to temporary file first
+        temp_file = output_file + ".tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(deduplicated_data, f, indent=2)
+
+        # If successful, rename to final file
+        import shutil
+        shutil.move(temp_file, output_file)
+        logging.info(f"Successfully saved deduplicated data to {output_file}")
+
+    except Exception as e:
+        logging.error(f"Error saving deduplicated data: {e}")
+        return
+
+    # Save comprehensive statistics with error handling
     stats_file = "comprehensive_deduplication_stats.json"
-    save_bird_audio_data(comprehensive_stats, stats_file)
+    try:
+        temp_stats_file = stats_file + ".tmp"
+        with open(temp_stats_file, 'w', encoding='utf-8') as f:
+            json.dump(comprehensive_stats, f, indent=2)
+
+        shutil.move(temp_stats_file, stats_file)
+        logging.info(f"Successfully saved stats to {stats_file}")
+
+    except Exception as e:
+        logging.error(f"Error saving stats: {e}")
 
     # Create human-readable report
     report_file = "datetime_analysis_report.txt"
@@ -735,5 +778,4 @@ def main_enhanced_deduplication():
 
 if __name__ == "__main__":
     main_enhanced_deduplication()
-
 
