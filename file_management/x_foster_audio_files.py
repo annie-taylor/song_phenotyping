@@ -340,7 +340,7 @@ def analyze_file_info(filepath: str) -> Dict[str, Any]:
     }
 
 
-def deduplicate_file_list_with_datetime(file_list: List[str]) -> Tuple[List[str], List[Dict], int]:
+def deduplicate_file_list_with_datetime(file_list: List[str]) -> Tuple[List[str], List[Dict], int, List[Dict]]:
     """
     Remove duplicate files and extract datetime info.
 
@@ -348,10 +348,10 @@ def deduplicate_file_list_with_datetime(file_list: List[str]) -> Tuple[List[str]
         file_list: List of file paths
 
     Returns:
-        Tuple of (deduplicated_list, file_info_list, number_of_duplicates_removed)
+        Tuple of (deduplicated_list, file_info_list, duplicates_removed, duplicate_details)
     """
     if not file_list:
-        return [], [], 0
+        return [], [], 0, []  # Return 4 values including empty duplicate_details
 
     # Group files by filename and analyze each
     filename_groups = defaultdict(list)
@@ -366,7 +366,7 @@ def deduplicate_file_list_with_datetime(file_list: List[str]) -> Tuple[List[str]
     deduplicated_files = []
     file_info_list = []
     duplicates_removed = 0
-    duplicate_details = []
+    duplicate_details = []  # Make sure this is initialized
 
     for filename, paths in filename_groups.items():
         if len(paths) == 1:
