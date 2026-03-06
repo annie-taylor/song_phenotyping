@@ -3,7 +3,6 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import os
-import logging
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, normalized_mutual_info_score
 from scipy.spatial.distance import euclidean, cdist
@@ -20,6 +19,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 
 from tools.system_utils import check_sys_for_macaw_root
+from tools.logging_utils import setup_logger
+
+logger = setup_logger(__name__, 'labeling.log')
 
 
 # ============================================================================
@@ -102,7 +104,7 @@ def _compute_nmi(true_labels, predicted_labels):
         else:
             return normalized_mutual_info_score(true_labels, predicted_labels)
     except Exception as e:
-        logging.error(f"Error computing NMI: {e}")
+        logger.error(f"Error computing NMI: {e}")
         return np.nan
 
 
@@ -257,7 +259,7 @@ def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path
             results.append(result_row)
 
         except Exception as e:
-            logging.error(f"Error processing parameters {params}: {e}")
+            logger.error(f"Error processing parameters {params}: {e}")
             # Add failed result with NaN scores
             result_row = {
                 'sample_size': sample_size,
@@ -324,7 +326,7 @@ def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path
                 candidate_params, true_labels, metrics, sample_size, max_workers
             )
         except Exception as e:
-            logging.warning(f"Parallel processing failed, falling back to sequential: {e}")
+            logger.warning(f"Parallel processing failed, falling back to sequential: {e}")
             return _search_cluster_params_sequential(
                 embeddings, hashes, algorithm, umap_id, algorithm_path, figure_path,
                 candidate_params, true_labels, metrics, sample_size
@@ -347,7 +349,7 @@ def _search_cluster_params_parallel(embeddings, hashes, algorithm, umap_id, algo
     else:
         max_workers = min(max_workers, len(candidate_params))
 
-    logging.info(f"Using {max_workers} parallel workers for parameter search")
+    logger.info(f"Using {max_workers} parallel workers for parameter search")
 
     # Prepare arguments for parallel processing
     args_list = []
@@ -373,9 +375,9 @@ def _search_cluster_params_parallel(embeddings, hashes, algorithm, umap_id, algo
                 results.append(result)
                 # Log success/failure
                 if not pd.isna(result.get('n_syls', np.nan)):
-                    logging.debug(f"✅ {completed}/{len(args_list)}: Completed parameter combination")
+                    logger.debug(f"✅ {completed}/{len(args_list)}: Completed parameter combination")
                 else:
-                    logging.debug(f"❌ {completed}/{len(args_list)}: Failed parameter combination")
+                    logger.debug(f"❌ {completed}/{len(args_list)}: Failed parameter combination")
 
     # Clear embeddings from memory
     del embeddings
@@ -387,7 +389,7 @@ def _search_cluster_params_sequential(embeddings, hashes, algorithm, umap_id, al
                                       figure_path, candidate_params, true_labels, metrics, sample_size):
     """Sequential implementation of parameter search (original logic)."""
 
-    logging.info("Using sequential processing for parameter search")
+    logger.info("Using sequential processing for parameter search")
 
     results = []
 
@@ -424,7 +426,7 @@ def _search_cluster_params_sequential(embeddings, hashes, algorithm, umap_id, al
             results.append(result_row)
 
         except Exception as e:
-            logging.error(f"Error processing parameters {params}: {e}")
+            logger.error(f"Error processing parameters {params}: {e}")
             # Add failed result with NaN scores
             result_row = {
                 'sample_size': sample_size,
@@ -479,7 +481,7 @@ def _cluster_single_params(args):
         return result_row
 
     except Exception as e:
-        logging.error(f"Error processing parameters {params}: {e}")
+        logger.error(f"Error processing parameters {params}: {e}")
         # Return failed result with NaN scores
         result_row = {
             'sample_size': sample_size,
@@ -535,7 +537,7 @@ def information_criterion(embeddings, labels, type=['aic', 'bic', 'log-likelihoo
         return log_likelihood, aic, bic
 
     except Exception as e:
-        logging.error(f"Error computing information criteria: {e}")
+        logger.error(f"Error computing information criteria: {e}")
         return np.nan, np.nan, np.nan
 
 
@@ -587,7 +589,7 @@ def dunn_index(embeddings, labels):
         return min(min_inter_distances) / max(max_intra_distances)
 
     except Exception as e:
-        logging.error(f"Error calculating Dunn index: {e}")
+        logger.error(f"Error calculating Dunn index: {e}")
         return np.nan
 
 
@@ -612,7 +614,7 @@ def load_umap_embeddings(embedding_path: str):
             labels = [label.decode('utf-8') for label in f.root.labels.read()]
         return embeddings, hashes, labels
     except Exception as e:
-        logging.error(f"Error loading embeddings from {embedding_path}: {e}")
+        logger.error(f"Error loading embeddings from {embedding_path}: {e}")
         return None, None, None
 
 
@@ -645,7 +647,7 @@ def save_labels(label_save_path: str, labels, hashes, scores):
         return True
 
     except Exception as e:
-        logging.error(f"Error saving labels to {label_save_path}: {e}")
+        logger.error(f"Error saving labels to {label_save_path}: {e}")
         return False
 
 
@@ -682,7 +684,7 @@ def load_labels(label_save_path: str):
         return labels, hashes, scores
 
     except Exception as e:
-        logging.error(f"Error loading labels from {label_save_path}: {e}")
+        logger.error(f"Error loading labels from {label_save_path}: {e}")
         return None, None, None
 
 
@@ -716,7 +718,7 @@ def _resolve_file_path(file_path: str) -> str:
         return file_path
 
     except Exception as e:
-        logging.warning(f"Error resolving path {file_path}: {e}")
+        logger.warning(f"Error resolving path {file_path}: {e}")
         return file_path
 
 
@@ -746,7 +748,7 @@ def parse_embedding_filename(filename: str):
         return metric, n_neighbors, min_dist, base_name
 
     except Exception as e:
-        logging.error(f"Error parsing embedding filename {filename}: {e}")
+        logger.error(f"Error parsing embedding filename {filename}: {e}")
         return None
 
 
@@ -788,7 +790,7 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
     normalized_scores = []
     for metric in metrics:
         if metric not in df.columns:
-            logging.warning(f"Metric {metric} not found in DataFrame, skipping")
+            logger.warning(f"Metric {metric} not found in DataFrame, skipping")
             continue
 
         metric_values = df[metric]
@@ -807,7 +809,7 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
             # Lower is better
             norm_metric = _normalize_lower_better(metric_values)
         else:
-            logging.warning(f"Unknown metric {metric}, treating as higher-is-better")
+            logger.warning(f"Unknown metric {metric}, treating as higher-is-better")
             norm_metric = _normalize_higher_better(metric_values)
 
         df[f'normalized_{metric}'] = norm_metric
@@ -822,7 +824,7 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
         if use_cluster_penalty:
             cluster_penalties = [score_cluster_penalty(n, target_clusters, penalty_decay) for n in n_syls]
             df['composite_score'] = composite_base * cluster_penalties
-            logging.info("Applied cluster count penalty to composite scores")
+            logger.info("Applied cluster count penalty to composite scores")
         else:
             df['composite_score'] = composite_base
 
@@ -990,7 +992,7 @@ def plot_umap(embeddings, labels, save: str = None, figsize=(12, 10), title=None
             plt.show()
 
     except Exception as e:
-        logging.error(f"Error creating UMAP plot: {e}")
+        logger.error(f"Error creating UMAP plot: {e}")
         if 'fig' in locals():
             plt.close(fig)
 
@@ -1015,7 +1017,7 @@ def plot_summary_matrix(summary_df, save_path: str, metrics: list, figsize=(12, 
             plot_columns.append('composite_score')
 
         if not plot_columns:
-            logging.warning("No normalized metrics found for plotting")
+            logger.warning("No normalized metrics found for plotting")
             return
 
         plot_data = summary_df[plot_columns]
@@ -1034,7 +1036,7 @@ def plot_summary_matrix(summary_df, save_path: str, metrics: list, figsize=(12, 
         plt.close()
 
     except Exception as e:
-        logging.error(f"Error creating summary matrix plot: {e}")
+        logger.error(f"Error creating summary matrix plot: {e}")
 
 
 def create_cluster_summary_pdf(master_summary_df, bird: str, save_path: str, top_n: int = None):
@@ -1065,7 +1067,7 @@ def create_cluster_summary_pdf(master_summary_df, bird: str, save_path: str, top
                 png_path = _resolve_plot_path(row['png_path'])
 
                 if not os.path.exists(png_path):
-                    logging.warning(f"PNG file not found: {png_path}")
+                    logger.warning(f"PNG file not found: {png_path}")
                     continue
 
                 try:
@@ -1075,14 +1077,14 @@ def create_cluster_summary_pdf(master_summary_df, bird: str, save_path: str, top
                     plt.close(fig)
 
                 except Exception as e:
-                    logging.error(f"Error processing page {index}: {e}")
+                    logger.error(f"Error processing page {index}: {e}")
                     continue
 
-        logging.info(f"Created PDF summary: {pdf_path}")
+        logger.info(f"Created PDF summary: {pdf_path}")
         return True
 
     except Exception as e:
-        logging.error(f"Error creating PDF summary: {e}")
+        logger.error(f"Error creating PDF summary: {e}")
         return False
 
 
@@ -1224,7 +1226,7 @@ def save_master_summary(master_summary_df, save_path: str):
         master_summary_df.to_csv(master_summary_path, index=False)
         return True
     except Exception as e:
-        logging.error(f"Error saving master summary: {e}")
+        logger.error(f"Error saving master summary: {e}")
         return False
 
 
@@ -1245,7 +1247,7 @@ def load_master_summary(save_path: str):
         else:
             return pd.DataFrame()
     except Exception as e:
-        logging.error(f"Error loading master summary: {e}")
+        logger.error(f"Error loading master summary: {e}")
         return pd.DataFrame()
 
 
@@ -1277,7 +1279,7 @@ def aggregate_raw_scores_across_birds(save_path: str, birds: list = None, top_n:
             # Load bird's master summary
             master_summary = load_master_summary(bird_path)
             if master_summary.empty:
-                logging.warning(f"No master summary found for bird {bird}")
+                logger.warning(f"No master summary found for bird {bird}")
                 continue
 
             # Select top N parameter combinations for this bird
@@ -1293,11 +1295,11 @@ def aggregate_raw_scores_across_birds(save_path: str, birds: list = None, top_n:
             aggregated_results.append(top_results)
 
         except Exception as e:
-            logging.error(f"Error processing bird {bird}: {e}")
+            logger.error(f"Error processing bird {bird}: {e}")
             continue
 
     if not aggregated_results:
-        logging.warning("No valid results found for cross-bird analysis")
+        logger.warning("No valid results found for cross-bird analysis")
         return pd.DataFrame()
 
     # Combine all results
@@ -1344,7 +1346,7 @@ def analyze_parameter_performance_by_sample_size(aggregated_df, sample_size_bins
     available_param_cols = [col for col in param_cols if col in aggregated_df.columns]
 
     if not available_param_cols:
-        logging.error("No parameter columns found for analysis")
+        logger.error("No parameter columns found for analysis")
         return pd.DataFrame()
 
     # Analyze performance by sample size bin
@@ -1424,7 +1426,7 @@ def _get_available_birds(save_path: str):
         return sorted(birds)
 
     except Exception as e:
-        logging.error(f"Error getting available birds: {e}")
+        logger.error(f"Error getting available birds: {e}")
         return []
 
 
@@ -1447,14 +1449,14 @@ def _estimate_sample_size_from_paths(results_df):
                         sample_sizes.append(len(labels))
                         continue
                 except Exception as e:
-                    logging.debug(f"Could not load labels from {row['label_path']}: {e}")
+                    logger.debug(f"Could not load labels from {row['label_path']}: {e}")
 
             # Fallback: use a default estimate or NaN
-            logging.warning(f"Could not determine sample size for row, using NaN")
+            logger.warning(f"Could not determine sample size for row, using NaN")
             sample_sizes.append(np.nan)
 
         except Exception as e:
-            logging.error(f"Error estimating sample size: {e}")
+            logger.error(f"Error estimating sample size: {e}")
             sample_sizes.append(np.nan)
 
     return sample_sizes
@@ -1512,11 +1514,11 @@ def save_cross_bird_analysis(aggregated_df, analysis_by_size, save_path: str, fi
             analysis_by_size.to_csv(analysis_path, index=False)
             saved_files['sample_size_analysis'] = analysis_path
 
-        logging.info(f"Saved cross-bird analysis files: {list(saved_files.keys())}")
+        logger.info(f"Saved cross-bird analysis files: {list(saved_files.keys())}")
         return saved_files
 
     except Exception as e:
-        logging.error(f"Error saving cross-bird analysis: {e}")
+        logger.error(f"Error saving cross-bird analysis: {e}")
         return {}
 
 
@@ -1587,13 +1589,13 @@ def remove_directory(path: str):
     try:
         if os.path.exists(path):
             shutil.rmtree(path)
-            logging.info(f"Successfully removed {path}")
+            logger.info(f"Successfully removed {path}")
             return True
         else:
-            logging.info(f"Directory {path} does not exist")
+            logger.info(f"Directory {path} does not exist")
             return True
     except Exception as e:
-        logging.error(f"Error removing directory {path}: {e}")
+        logger.error(f"Error removing directory {path}: {e}")
         return False
 
 
@@ -1614,7 +1616,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         bool: True if successful, False otherwise
     """
     try:
-        logging.info(f"Starting labeling pipeline for bird {bird}")
+        logger.info(f"Starting labeling pipeline for bird {bird}")
 
         # Setup paths
         bird_path = os.path.join(save_path, bird)
@@ -1630,7 +1632,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         # Handle replacement of existing labels
         if replace_labels and os.path.exists(labelling_path):
             if not remove_directory(labelling_path):
-                logging.error(f"Failed to remove existing labelling directory for {bird}")
+                logger.error(f"Failed to remove existing labelling directory for {bird}")
                 return False
             os.makedirs(labelling_path, exist_ok=True)
 
@@ -1641,12 +1643,12 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         # Check for embeddings
         if not os.path.exists(embedding_path):
-            logging.error(f"No embeddings directory found for bird {bird}")
+            logger.error(f"No embeddings directory found for bird {bird}")
             return False
 
         embeddings_files = [f for f in os.listdir(embedding_path) if f.endswith('.h5')]
         if not embeddings_files:
-            logging.error(f"No embedding files found for bird {bird}")
+            logger.error(f"No embedding files found for bird {bird}")
             return False
 
         # Default HDBSCAN parameters if not provided
@@ -1665,7 +1667,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 # Parse UMAP parameters from filename
                 parsed_params = parse_embedding_filename(embedding_file)
                 if parsed_params is None:
-                    logging.warning(f"Could not parse filename {embedding_file}, skipping")
+                    logger.warning(f"Could not parse filename {embedding_file}, skipping")
                     continue
 
                 metric, n_neighbors, min_dist, umap_id = parsed_params
@@ -1676,7 +1678,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 )
 
                 if embeddings is None:
-                    logging.warning(f"Could not load embeddings from {embedding_file}, skipping")
+                    logger.warning(f"Could not load embeddings from {embedding_file}, skipping")
                     continue
 
                 # Calculate sample size
@@ -1711,11 +1713,11 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 del embeddings
 
             except Exception as e:
-                logging.error(f"Error processing {embedding_file} for bird {bird}: {e}")
+                logger.error(f"Error processing {embedding_file} for bird {bird}: {e}")
                 continue
 
         if not all_summaries:
-            logging.error(f"No valid embeddings processed for bird {bird}")
+            logger.error(f"No valid embeddings processed for bird {bird}")
             return False
 
         # Combine all summaries
@@ -1742,7 +1744,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         # Save master summary
         if not save_master_summary(master_summary_df, bird_path):
-            logging.error(f"Failed to save master summary for bird {bird}")
+            logger.error(f"Failed to save master summary for bird {bird}")
             return False
 
         # Create PDF report
@@ -1754,13 +1756,13 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         )
 
         if not pdf_success:
-            logging.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
+            logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
 
-        logging.info(f"Successfully completed labeling pipeline for bird {bird}")
+        logger.info(f"Successfully completed labeling pipeline for bird {bird}")
         return True
 
     except Exception as e:
-        logging.error(f"Error in labeling pipeline for bird {bird}: {e}")
+        logger.error(f"Error in labeling pipeline for bird {bird}: {e}")
         return False
 
 
@@ -1773,10 +1775,10 @@ def main(save_path: str) -> None:
         # Get available birds
         birds = _get_available_birds(save_path)
         if not birds:
-            logging.error("No birds found for processing")
+            logger.error("No birds found for processing")
             return
 
-        logging.info(f"Found {len(birds)} birds for processing: {birds}")
+        logger.info(f"Found {len(birds)} birds for processing: {birds}")
 
         # Process each bird
         successful_birds = []
@@ -1796,13 +1798,13 @@ def main(save_path: str) -> None:
                 failed_birds.append(bird)
 
         # Report results
-        logging.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+        logger.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
         if failed_birds:
-            logging.warning(f"Failed birds: {failed_birds}")
+            logger.warning(f"Failed birds: {failed_birds}")
 
         # Perform cross-bird analysis if we have successful results
         if len(successful_birds) >= 2:
-            logging.info("Starting cross-bird analysis...")
+            logger.info("Starting cross-bird analysis...")
 
             try:
                 # Aggregate raw scores across birds
@@ -1838,24 +1840,24 @@ def main(save_path: str) -> None:
                         recommendations = identify_optimal_parameters_by_sample_size(analysis_by_size)
 
                         # Log key recommendations
-                        logging.info("Parameter recommendations by sample size:")
+                        logger.info("Parameter recommendations by sample size:")
                         for bin_name, rec in recommendations.items():
-                            logging.info(f"  {bin_name}: {rec['recommended_parameters']}")
+                            logger.info(f"  {bin_name}: {rec['recommended_parameters']}")
 
-                    logging.info(f"Cross-bird analysis complete. Files saved: {list(saved_files.keys())}")
+                    logger.info(f"Cross-bird analysis complete. Files saved: {list(saved_files.keys())}")
                 else:
-                    logging.warning("No data available for cross-bird analysis")
+                    logger.warning("No data available for cross-bird analysis")
 
             except Exception as e:
-                logging.error(f"Error in cross-bird analysis: {e}")
+                logger.error(f"Error in cross-bird analysis: {e}")
 
         else:
-            logging.info("Insufficient successful birds for cross-bird analysis (need at least 2)")
+            logger.info("Insufficient successful birds for cross-bird analysis (need at least 2)")
 
-        logging.info("Pipeline execution complete!")
+        logger.info("Pipeline execution complete!")
 
     except Exception as e:
-        logging.error(f"Error in main pipeline: {e}")
+        logger.error(f"Error in main pipeline: {e}")
         raise
 
 
@@ -1879,7 +1881,7 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
             birds_to_clear = _get_available_birds(save_path)
 
         if not birds_to_clear:
-            logging.info("No birds found to clear")
+            logger.info("No birds found to clear")
             return True
 
         # Calculate what will be removed
@@ -1918,21 +1920,21 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
                 total_items += 1
 
         if not paths_to_remove:
-            logging.info("No clustering outputs found to clear")
+            logger.info("No clustering outputs found to clear")
             return True
 
         # Show what will be removed
-        logging.info(f"Found {total_items} items to remove across {len(birds_to_clear)} bird(s):")
+        logger.info(f"Found {total_items} items to remove across {len(birds_to_clear)} bird(s):")
         for bird_name in birds_to_clear:
             bird_items = [path for path_type, path in paths_to_remove if bird_name in path]
             if bird_items:
-                logging.info(f"  {bird_name}: {len(bird_items)} directories/files")
+                logger.info(f"  {bird_name}: {len(bird_items)} directories/files")
 
         # Confirmation
         if confirm:
             response = input(f"\nAre you sure you want to delete {total_items} clustering output items? (y/N): ")
             if response.lower() not in ['y', 'yes']:
-                logging.info("Deletion cancelled")
+                logger.info("Deletion cancelled")
                 return False
 
         # Remove items
@@ -1943,37 +1945,37 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
             try:
                 if os.path.isdir(path):
                     shutil.rmtree(path)
-                    logging.debug(f"Removed directory: {path}")
+                    logger.debug(f"Removed directory: {path}")
                 else:
                     os.remove(path)
-                    logging.debug(f"Removed file: {path}")
+                    logger.debug(f"Removed file: {path}")
                 removed_count += 1
             except Exception as e:
-                logging.error(f"Failed to remove {path}: {e}")
+                logger.error(f"Failed to remove {path}: {e}")
                 failed_count += 1
 
         # Report results
         if failed_count == 0:
-            logging.info(f"✅ Successfully removed all {removed_count} items")
+            logger.info(f"✅ Successfully removed all {removed_count} items")
         else:
-            logging.warning(f"⚠️ Removed {removed_count} items, failed to remove {failed_count} items")
+            logger.warning(f"⚠️ Removed {removed_count} items, failed to remove {failed_count} items")
 
         return failed_count == 0
 
     except Exception as e:
-        logging.error(f"Error clearing clustering outputs: {e}")
+        logger.error(f"Error clearing clustering outputs: {e}")
         return False
 
 if __name__ == '__main__':
-    # Setup logging
+    # Setup logger
     logs_dir = 'logs'
     os.makedirs(logs_dir, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
+    logger.basicConfig(
+        level=logger.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join(logs_dir, 'clustering_pipeline.log')),
-            logging.StreamHandler()
+            logger.FileHandler(os.path.join(logs_dir, 'clustering_pipeline.log')),
+            logger.StreamHandler()
         ]
     )
     # Setup paths and parameters

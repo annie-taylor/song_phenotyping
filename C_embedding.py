@@ -1,6 +1,8 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import os
 from datetime import datetime
-import logging
 import tables
 import numpy as np
 from typing import Tuple, Dict, List, Optional
@@ -15,6 +17,10 @@ import matplotlib.pyplot as plt
 
 
 from tools.system_utils import optimize_pytables_for_network
+from tools.logging_utils import setup_logger
+
+logger = setup_logger(__name__, 'umap_embeddings.log')
+
 
 @dataclass
 class UMAPParams:
@@ -133,7 +139,7 @@ def check_embedding_compatibility(embedding_path: str, current_n_samples: int,
         return True  # No existing file, proceed
 
     if overwrite:
-        logging.info(f"🔄 Overwrite=True, will replace: {os.path.basename(embedding_path)}")
+        logger.info(f"🔄 Overwrite=True, will replace: {os.path.basename(embedding_path)}")
         return True
 
     try:
@@ -144,27 +150,27 @@ def check_embedding_compatibility(embedding_path: str, current_n_samples: int,
             if hasattr(f.root, 'processing_metadata'):
                 metadata_str = f.root.processing_metadata[0].decode('utf-8')
                 metadata = eval(metadata_str)  # Convert string back to dict
-                logging.info(f"📋 Existing embedding metadata: {metadata}")
+                logger.info(f"📋 Existing embedding metadata: {metadata}")
 
             # Compare sample sizes
             if len(existing_hashes) != current_n_samples:
-                logging.warning(
+                logger.warning(
                     f"⚠️ Sample size mismatch: existing={len(existing_hashes)}, current={current_n_samples}")
-                logging.warning(f"   Use overwrite=True to replace with current data")
+                logger.warning(f"   Use overwrite=True to replace with current data")
                 return False
 
             # Check hash overlap (sample)
             overlap = len(set(existing_hashes[:100]) & set(current_hashes[:100]))
             if overlap < 50:  # Less than 50% overlap in first 100 samples
-                logging.warning(f"⚠️ Low data overlap detected: {overlap}/100 hashes match")
-                logging.warning(f"   This suggests different underlying data")
+                logger.warning(f"⚠️ Low data overlap detected: {overlap}/100 hashes match")
+                logger.warning(f"   This suggests different underlying data")
                 return False
 
-        logging.info(f"✅ Compatible embedding found: {os.path.basename(embedding_path)}")
+        logger.info(f"✅ Compatible embedding found: {os.path.basename(embedding_path)}")
         return False  # Compatible but exists, so skip
 
     except Exception as e:
-        logging.warning(f"⚠️ Could not verify compatibility for {embedding_path}: {e}")
+        logger.warning(f"⚠️ Could not verify compatibility for {embedding_path}: {e}")
         return overwrite  # If can't check, depend on overwrite flag
 
 
@@ -174,16 +180,16 @@ def inspect_existing_embeddings(bird_path: str) -> None:
     embeddings_path = os.path.join(bird_path, 'syllable_data', 'embeddings')
 
     if not os.path.exists(embeddings_path):
-        logging.info(f"📁 No embeddings directory found at {embeddings_path}")
+        logger.info(f"📁 No embeddings directory found at {embeddings_path}")
         return
 
     embedding_files = [f for f in os.listdir(embeddings_path) if f.endswith('.h5')]
 
     if not embedding_files:
-        logging.info(f"📁 No embedding files found in {embeddings_path}")
+        logger.info(f"📁 No embedding files found in {embeddings_path}")
         return
 
-    logging.info(f"🔍 Found {len(embedding_files)} existing embeddings:")
+    logger.info(f"🔍 Found {len(embedding_files)} existing embeddings:")
 
     for filename in embedding_files:
         filepath = os.path.join(embeddings_path, filename)
@@ -199,10 +205,10 @@ def inspect_existing_embeddings(bird_path: str) -> None:
                                     f"Final: {metadata.get('final_samples', 'unknown')}, " \
                                     f"Subsampled: {metadata.get('was_subsampled', 'unknown')}"
 
-                logging.info(f"  📄 {filename}: {n_samples} samples, {metadata_info}")
+                logger.info(f"  📄 {filename}: {n_samples} samples, {metadata_info}")
 
         except Exception as e:
-            logging.warning(f"  ❌ Could not read {filename}: {e}")
+            logger.warning(f"  ❌ Could not read {filename}: {e}")
 
 def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
     """Load embeddings from HDF5 file"""
@@ -210,7 +216,7 @@ def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
         with tables.open_file(embedding_path, mode='r') as f:
             return f.root.embeddings[:]
     except Exception as e:
-        logging.warning(f"Could not load embedding from {embedding_path}: {e}")
+        logger.warning(f"Could not load embedding from {embedding_path}: {e}")
         return None
 
 def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -237,7 +243,7 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
             with tables.open_file(file_path, mode='r') as f:
                 total_syllables += f.root.flattened_specs.shape[1]
         except Exception as e:
-            logging.warning(f"Could not read {file_path} for size calculation: {e}")
+            logger.warning(f"Could not read {file_path} for size calculation: {e}")
             continue
 
     if total_syllables == 0:
@@ -270,7 +276,7 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
                 current_idx = end_idx
 
         except Exception as e:
-            logging.warning(f"Failed to load flattened spec data from {filename}: {e}")
+            logger.warning(f"Failed to load flattened spec data from {filename}: {e}")
             continue
 
     # Trim arrays if some files failed to load
@@ -305,7 +311,7 @@ def save_umap_embeddings(embedding_path: str, embeddings: np.ndarray, hashes: li
 
         return True
     except Exception as e:
-        logging.error(f"Error saving embeddings to {embedding_path}: {e}")
+        logger.error(f"Error saving embeddings to {embedding_path}: {e}")
         return False
 
 
@@ -316,8 +322,8 @@ def save_umap_model(model_path: str, umap_model: umap.UMAP, params: UMAPParams) 
             pkl.dump(data, f)
         return True
     except Exception as e:
-        logging.error(f"Error saving UMAP model to {model_path}: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error saving UMAP model to {model_path}: {e}")
+        logger.error(traceback.format_exc())
         return False
 
 def subsample_data(specs: np.ndarray, labels: np.ndarray, position_idxs: np.ndarray,
@@ -341,7 +347,7 @@ def subsample_data(specs: np.ndarray, labels: np.ndarray, position_idxs: np.ndar
     indices = np.random.choice(len(labels), size=max_samples, replace=False)
     indices.sort()  # Keep chronological order
 
-    logging.info(f"🎯 Subsampling from {len(labels)} to {max_samples} samples")
+    logger.info(f"🎯 Subsampling from {len(labels)} to {max_samples} samples")
 
     return (specs[:, indices], labels[indices],
             position_idxs[indices], hashes[indices])
@@ -418,7 +424,7 @@ def calculate_adaptive_workers_improved(n_samples: int, n_features: int,
         usable_memory_gb = available_gb * 0.7  # 70% safety factor
         memory_per_worker_gb = max(0.5, min(8.0, usable_memory_gb / max(2, max_workers)))
 
-        logging.info(f"[MEMORY] Auto-calculated memory per worker: {memory_per_worker_gb:.1f}GB")
+        logger.info(f"[MEMORY] Auto-calculated memory per worker: {memory_per_worker_gb:.1f}GB")
 
     # Estimate memory for worst-case UMAP (highest n_neighbors)
     estimated_memory_per_job = estimate_umap_memory_usage(n_samples, n_features, max_n_neighbors)
@@ -440,9 +446,9 @@ def calculate_adaptive_workers_improved(n_samples: int, n_features: int,
 
     recommended_workers = min(memory_limited_workers, cpu_workers)
 
-    logging.info(f"[ANALYSIS] Estimated UMAP memory per job: {estimated_memory_per_job:.2f}GB")
-    logging.info(f"[WORKERS] Memory-limited workers: {memory_limited_workers}")
-    logging.info(f"[FINAL] Final worker count: {recommended_workers}")
+    logger.info(f"[ANALYSIS] Estimated UMAP memory per job: {estimated_memory_per_job:.2f}GB")
+    logger.info(f"[WORKERS] Memory-limited workers: {memory_limited_workers}")
+    logger.info(f"[FINAL] Final worker count: {recommended_workers}")
 
     return recommended_workers
 
@@ -463,7 +469,7 @@ def compute_single_umap_worker_safe(args):
         # Check memory before starting
         memory_info = monitor_memory_usage()
         if memory_info['percent_used'] > 85:
-            logging.warning(f"High memory usage ({memory_info['percent_used']:.1f}%) before UMAP computation")
+            logger.warning(f"High memory usage ({memory_info['percent_used']:.1f}%) before UMAP computation")
             # Could implement waiting or skipping logic here
 
         params = UMAPParams(n_neighbors=n_neighbors, metric='euclidean', min_dist=min_dist)
@@ -491,10 +497,10 @@ def compute_single_umap_worker_safe(args):
         return (n_neighbors, min_dist, success)
 
     except MemoryError as e:
-        logging.error(f"Memory error in UMAP n={n_neighbors}, dist={min_dist}: {e}")
+        logger.error(f"Memory error in UMAP n={n_neighbors}, dist={min_dist}: {e}")
         return (n_neighbors, min_dist, False)
     except Exception as e:
-        logging.error(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
+        logger.error(f"Failed UMAP n={n_neighbors}, dist={min_dist}: {e}")
         return (n_neighbors, min_dist, False)
 
 def compute_and_save_umap_memory_aware(samples: np.ndarray, labels, hashes, params: UMAPParams,
@@ -516,9 +522,9 @@ def compute_and_save_umap_memory_aware(samples: np.ndarray, labels, hashes, para
         )
 
         if estimated_memory > memory_info['available_gb'] * 0.8:
-            logging.warning(
+            logger.warning(
                 f"⚠️ Estimated memory ({estimated_memory:.2f}GB) exceeds available ({memory_info['available_gb']:.2f}GB)")
-            logging.warning(f"   Attempting with reduced precision and optimized settings")
+            logger.warning(f"   Attempting with reduced precision and optimized settings")
 
             # Fallback strategy 1: Use float32 and optimize UMAP settings
             if samples.dtype != np.float32:
@@ -548,12 +554,12 @@ def compute_and_save_umap_memory_aware(samples: np.ndarray, labels, hashes, para
             )
 
         # Monitor memory during fit_transform
-        logging.info(f"🧠 Pre-UMAP memory: {monitor_memory_usage()['percent_used']:.1f}% used")
+        logger.info(f"🧠 Pre-UMAP memory: {monitor_memory_usage()['percent_used']:.1f}% used")
 
         # Fit and transform with error handling
         embeddings = umap_model.fit_transform(samples)
 
-        logging.info(f"🧠 Post-UMAP memory: {monitor_memory_usage()['percent_used']:.1f}% used")
+        logger.info(f"🧠 Post-UMAP memory: {monitor_memory_usage()['percent_used']:.1f}% used")
 
         # Create output directories
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
@@ -564,15 +570,15 @@ def compute_and_save_umap_memory_aware(samples: np.ndarray, labels, hashes, para
             save_umap_model(model_path, umap_model, params)
         save_umap_embeddings(embedding_path, embeddings, hashes, labels, processing_metadata)
 
-        logging.info(f"✅ Computed new embedding: {os.path.basename(embedding_path)}")
+        logger.info(f"✅ Computed new embedding: {os.path.basename(embedding_path)}")
         return embeddings, umap_model, True
 
     except MemoryError as e:
-        logging.error(f"💥 Memory error during UMAP computation: {e}")
-        logging.error(f"   Consider reducing max_samples or using fewer workers")
+        logger.error(f"💥 Memory error during UMAP computation: {e}")
+        logger.error(f"   Consider reducing max_samples or using fewer workers")
         return None, None, False
     except Exception as e:
-        logging.error(f"❌ Error creating UMAP embeddings: {e}")
+        logger.error(f"❌ Error creating UMAP embeddings: {e}")
         return None, None, False
 
 def explore_embedding_parameters_robust(save_path: str, bird: str,
@@ -607,7 +613,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
 
         # Load data
         specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
-        logging.info(f"🐦 Loaded {len(labels)} samples for bird {bird}")
+        logger.info(f"🐦 Loaded {len(labels)} samples for bird {bird}")
 
         # Dynamic memory management
         if auto_memory_management:
@@ -624,7 +630,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
             else:
                 max_samples = min(max_samples, safe_batch_size)
 
-            logging.info(f"🎯 Safe batch size: {safe_batch_size}, using max_samples: {max_samples}")
+            logger.info(f"🎯 Safe batch size: {safe_batch_size}, using max_samples: {max_samples}")
 
         # Apply subsampling if needed
         was_subsampled = False
@@ -635,7 +641,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
                 specs, labels, position_idxs, hashes, max_samples, subsample_seed
             )
             was_subsampled = True
-            logging.info(f"📉 Subsampled from {original_n_samples} to {len(labels)} samples")
+            logger.info(f"📉 Subsampled from {original_n_samples} to {len(labels)} samples")
 
         # Create processing metadata
         processing_metadata = {
@@ -660,7 +666,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
 
             # Additional safety check: if we have very few workers, consider sequential processing
             if adaptive_workers < 2:
-                logging.warning(
+                logger.warning(
                     f"[WARNING] Only {adaptive_workers} workers recommended, switching to sequential processing")
                 use_parallel = False
                 adaptive_workers = 1
@@ -682,13 +688,13 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
             processing_metadata=processing_metadata
         )
 
-        logging.info(f"Successfully explored UMAP parameters for bird {bird}. "
+        logger.info(f"Successfully explored UMAP parameters for bird {bird}. "
                      f"Computed {len(successful_params)} parameter combinations.")
         return True
 
     except Exception as e:
-        logging.error(f"Failed to explore UMAP parameters for bird {bird}: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Failed to explore UMAP parameters for bird {bird}: {e}")
+        logger.error(traceback.format_exc())
         return False
 
 
@@ -719,7 +725,7 @@ def compute_embedding_grid_parallel_robust(samples, labels, hashes, min_dists, n
 
     # Monitor system memory before starting
     initial_memory = monitor_memory_usage()
-    logging.info(f"🧠 Starting parallel processing with {initial_memory['percent_used']:.1f}% memory used")
+    logger.info(f"🧠 Starting parallel processing with {initial_memory['percent_used']:.1f}% memory used")
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all jobs
@@ -734,11 +740,11 @@ def compute_embedding_grid_parallel_robust(samples, labels, hashes, min_dists, n
             # Monitor memory usage periodically
             if completed % 5 == 0:
                 current_memory = monitor_memory_usage()
-                logging.info(f"🧠 Progress: {completed}/{len(args_list)}, Memory: {current_memory['percent_used']:.1f}%")
+                logger.info(f"🧠 Progress: {completed}/{len(args_list)}, Memory: {current_memory['percent_used']:.1f}%")
 
                 # If memory usage is getting high, warn but continue
                 if current_memory['percent_used'] > 90:
-                    logging.warning(f"⚠️ High memory usage detected: {current_memory['percent_used']:.1f}%")
+                    logger.warning(f"⚠️ High memory usage detected: {current_memory['percent_used']:.1f}%")
 
             if success:
                 successful_params.append((n_neighbors_val, min_dist_val))
@@ -750,13 +756,13 @@ def compute_embedding_grid_parallel_robust(samples, labels, hashes, min_dists, n
 
     # Final memory check
     final_memory = monitor_memory_usage()
-    logging.info(f"🧠 Completed parallel processing. Final memory usage: {final_memory['percent_used']:.1f}%")
+    logger.info(f"🧠 Completed parallel processing. Final memory usage: {final_memory['percent_used']:.1f}%")
 
     # Report results
     if failed_params:
-        logging.warning(f"⚠️ {len(failed_params)} parameter combinations failed:")
+        logger.warning(f"⚠️ {len(failed_params)} parameter combinations failed:")
         for n, d in failed_params:
-            logging.warning(f"   - n_neighbors={n}, min_dist={d}")
+            logger.warning(f"   - n_neighbors={n}, min_dist={d}")
 
     # Create plot if requested
     if plot:
@@ -914,20 +920,20 @@ def compare_umap_embeddings_plot(successful_params: List[Tuple[int, float]], min
 
 
 def main():
-    logging.info("Optimizing PyTables for network access")
+    logger.info("Optimizing PyTables for network access")
     optimize_pytables_for_network()
 
     # EVSong processing
     evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq')
-    logging.info(f"Processing EVSong directory: {evsong_test_directory}")
+    logger.info(f"Processing EVSong directory: {evsong_test_directory}")
 
     if os.path.exists(evsong_test_directory):
         birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
                  os.path.isdir(os.path.join(evsong_test_directory, b))]
-        logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
+        logger.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
 
         for bird in birds:
-            logging.info(f"Processing EVSong bird: {bird}")
+            logger.info(f"Processing EVSong bird: {bird}")
 
             # Inspect existing embeddings first
             bird_path = os.path.join(evsong_test_directory, bird)
@@ -947,25 +953,25 @@ def main():
             )
 
             if success:
-                logging.info(f"✅ Successfully processed EVSong bird: {bird}")
+                logger.info(f"✅ Successfully processed EVSong bird: {bird}")
             else:
-                logging.error(f"❌ Failed to process EVSong bird: {bird}")
+                logger.error(f"❌ Failed to process EVSong bird: {bird}")
     else:
-        logging.warning(f"EVSong directory not found: {evsong_test_directory}")
+        logger.warning(f"EVSong directory not found: {evsong_test_directory}")
 
-    logging.info("UMAP embeddings pipeline completed")
+    logger.info("UMAP embeddings pipeline completed")
 
     # # WSeg processing
     # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test new')
-    # logging.info(f"Processing WSeg directory: {wseg_test_directory}")
+    # logger.info(f"Processing WSeg directory: {wseg_test_directory}")
     #
     # if os.path.exists(wseg_test_directory):
     #     birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
     #              os.path.isdir(os.path.join(wseg_test_directory, b))]
-    #     logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+    #     logger.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
     #
     #     for bird in birds:
-    #         logging.info(f"Processing WSeg bird: {bird}")
+    #         logger.info(f"Processing WSeg bird: {bird}")
     #
     #         # Inspect existing embeddings first
     #         bird_path = os.path.join(wseg_test_directory, bird)
@@ -984,13 +990,13 @@ def main():
     #             subsample_seed=42  # Fixed seed for reproducibility
     #         )
     #         if success:
-    #             logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+    #             logger.info(f"✅ Successfully processed WSeg bird: {bird}")
     #         else:
-    #             logging.error(f"❌ Failed to process WSeg bird: {bird}")
+    #             logger.error(f"❌ Failed to process WSeg bird: {bird}")
     # else:
-    #     logging.warning(f"WSeg directory not found: {wseg_test_directory}")
+    #     logger.warning(f"WSeg directory not found: {wseg_test_directory}")
     #
-    #logging.info("UMAP embeddings pipeline completed")
+    #logger.info("UMAP embeddings pipeline completed")
 
 
 if __name__ == "__main__":
@@ -998,15 +1004,15 @@ if __name__ == "__main__":
     logs_dir = 'logs'
     os.makedirs(logs_dir, exist_ok=True)
 
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
+    # Setup logger
+    logger.basicConfig(
+        level=logger.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join(logs_dir, 'umap_embeddings.log')),
-            logging.StreamHandler()
+            logger.FileHandler(os.path.join(logs_dir, 'umap_embeddings.log')),
+            logger.StreamHandler()
         ]
     )
 
-    logging.info("Starting UMAP embeddings pipeline")
+    logger.info("Starting UMAP embeddings pipeline")
     main()
