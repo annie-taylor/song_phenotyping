@@ -1,10 +1,12 @@
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import numpy as np
 import os
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, normalized_mutual_info_score
+from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, \
+    normalized_mutual_info_score
 from scipy.spatial.distance import euclidean, cdist
 import hdbscan
 import matplotlib.pyplot as plt
@@ -186,98 +188,6 @@ def _perform_clustering(embeddings, method, cluster_params):
         return clusterer.fit_predict(embeddings)
     else:
         raise ValueError(f"Unknown clustering method: {method}")
-
-
-def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path, figure_path,
-                          candidate_params: dict = None, true_labels: np.ndarray = None,
-                          metrics: list = None, sample_size: int = None):
-    """
-    Search through candidate clustering parameters and evaluate performance.
-
-    Args:
-        embeddings: UMAP embeddings array
-        hashes: Sample hash identifiers
-        algorithm: Clustering algorithm name
-        umap_id: UMAP parameter identifier
-        directory_path: Base directory for saving results
-        figure_path: Directory for saving plots
-        candidate_params: List of parameter dictionaries to test
-        true_labels: Ground truth labels for evaluation
-        metrics: List of evaluation metrics to compute
-        sample_size: Total number of samples (for efficiency, pass if known)
-
-    Returns:
-        pd.DataFrame: Summary of results for all parameter combinations
-    """
-    if candidate_params is None:
-        candidate_params = []
-
-    if metrics is None:
-        metrics = ['silhouette', 'dbi', 'ch']
-
-    # Calculate sample size if not provided
-    if sample_size is None:
-        sample_size = len(embeddings)
-
-    # Create algorithm-specific directory
-    algorithm_path = os.path.join(directory_path, algorithm)
-    os.makedirs(algorithm_path, exist_ok=True)
-
-    # Initialize result containers
-    results = []
-
-    # Process each parameter combination
-    for params in tqdm(candidate_params, desc="Searching cluster parameters..."):
-        try:
-            labels, hashes_returned, scores, label_path, fig_path = cluster_embeddings(
-                embeddings=embeddings,
-                hashes=hashes,
-                method=algorithm,
-                cluster_params=params,
-                return_scores=True,
-                path_to_clusters=algorithm_path,
-                path_to_imgs=figure_path,
-                true_labels=true_labels,
-                umap_id=umap_id,
-                metrics=metrics
-            )
-
-            # Build result row
-            result_row = {
-                'sample_size': sample_size,
-                'n_syls': len(np.unique(labels)),
-                'png_path': Path(fig_path) if fig_path else None,
-                'label_path': Path(label_path) if label_path else None,
-            }
-
-            # Add parameter values
-            result_row.update(params)
-
-            # Add metric scores (raw values for cross-bird comparison)
-            result_row.update(scores)
-
-            results.append(result_row)
-
-        except Exception as e:
-            logger.error(f"Error processing parameters {params}: {e}")
-            # Add failed result with NaN scores
-            result_row = {
-                'sample_size': sample_size,
-                'n_syls': np.nan,
-                'png_path': None,
-                'label_path': None,
-            }
-            result_row.update(params)
-            result_row.update({metric: np.nan for metric in metrics})
-            results.append(result_row)
-
-    # Clear embeddings from memory since we're done with clustering
-    del embeddings
-
-    # Create summary DataFrame
-    summary_df = pd.DataFrame(results)
-
-    return summary_df
 
 
 def search_cluster_params(embeddings, hashes, algorithm, umap_id, directory_path, figure_path,
@@ -725,9 +635,10 @@ def _resolve_file_path(file_path: str) -> str:
 def parse_embedding_filename(filename: str):
     """
     Parse UMAP parameters from embedding filename.
+    Updated to handle new filename format with sample info.
 
     Args:
-        filename: Embedding filename (e.g., 'euclidean_10neighbors_0.1dist.h5')
+        filename: Embedding filename (e.g., 'euclidean_10neighbors_0.1dist_full3301.h5')
 
     Returns:
         tuple: (metric, n_neighbors, min_dist, umap_id) or None on error
@@ -736,8 +647,20 @@ def parse_embedding_filename(filename: str):
         # Remove file extension
         base_name = filename.replace('.h5', '')
 
+        # Handle both old and new filename formats
+        if '_full' in base_name or '_subsample' in base_name:
+            # New format: euclidean_10neighbors_0.1dist_full3301
+            # Split at the sample info part
+            if '_full' in base_name:
+                main_part = base_name.split('_full')[0]
+            else:  # _subsample
+                main_part = base_name.split('_subsample')[0]
+        else:
+            # Old format: euclidean_10neighbors_0.1dist
+            main_part = base_name
+
         # Split into components
-        parts = base_name.split('_')
+        parts = main_part.split('_')
         if len(parts) != 3:
             raise ValueError(f"Unexpected filename format: {filename}")
 
@@ -745,12 +668,11 @@ def parse_embedding_filename(filename: str):
         n_neighbors = int(parts[1].replace('neighbors', ''))
         min_dist = float(parts[2].replace('dist', ''))
 
-        return metric, n_neighbors, min_dist, base_name
+        return metric, n_neighbors, min_dist, main_part
 
     except Exception as e:
         logger.error(f"Error parsing embedding filename {filename}: {e}")
         return None
-
 
 # ============================================================================
 # EVALUATION & RANKING
@@ -937,7 +859,6 @@ def compute_metric_ranking(summary_df, metrics):
         df['aggregate_rank'] = df[rank_columns].sum(axis=1)
 
     return df
-
 
 # ============================================================================
 # VISUALIZATION & REPORTING
@@ -1418,9 +1339,9 @@ def _get_available_birds(save_path: str):
             item_path = os.path.join(save_path, item)
             # Check if it's a directory and has expected structure
             if os.path.isdir(item_path) and not item.startswith('.'):
-                # Check for master_summary.csv or data directory
+                # Check for master_summary.csv or syllable_data directory
                 if (os.path.exists(os.path.join(item_path, 'master_summary.csv')) or
-                        os.path.exists(os.path.join(item_path, 'data'))):
+                        os.path.exists(os.path.join(item_path, 'syllable_data'))):
                     birds.append(item)
 
         return sorted(birds)
@@ -1603,6 +1524,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                hdbscan_params: list = None, top_n_for_pdf: int = 20):
     """
     Complete labeling pipeline for a single bird: clustering, evaluation, and reporting.
+    Updated to work with new directory structure (syllable_data instead of data).
 
     Args:
         save_path: Root directory containing bird data
@@ -1618,9 +1540,9 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
     try:
         logger.info(f"Starting labeling pipeline for bird {bird}")
 
-        # Setup paths
+        # Setup paths - UPDATED for new directory structure
         bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'data')
+        data_path = os.path.join(bird_path, 'syllable_data')  # Changed from 'data'
         labelling_path = os.path.join(data_path, 'labelling')
         embedding_path = os.path.join(data_path, 'embeddings')
         figure_path = os.path.join(bird_path, 'figures', 'clusters')
@@ -1664,7 +1586,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         for embedding_file in tqdm(embeddings_files, desc=f'Processing embeddings for {bird}'):
             try:
-                # Parse UMAP parameters from filename
+                # Parse UMAP parameters from filename - UPDATED for new format
                 parsed_params = parse_embedding_filename(embedding_file)
                 if parsed_params is None:
                     logger.warning(f"Could not parse filename {embedding_file}, skipping")
@@ -1716,55 +1638,54 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 logger.error(f"Error processing {embedding_file} for bird {bird}: {e}")
                 continue
 
-        if not all_summaries:
-            logger.error(f"No valid embeddings processed for bird {bird}")
-            return False
+            if not all_summaries:
+                logger.error(f"No valid embeddings processed for bird {bird}")
+                return False
 
-        # Combine all summaries
-        master_summary_df = pd.concat(all_summaries, ignore_index=True)
+                # Combine all summaries
+            master_summary_df = pd.concat(all_summaries, ignore_index=True)
 
-        # Compute composite scores across all parameter combinations
-        master_summary_df = compute_composite_score(
-            master_summary_df,
-            metrics=metrics,
-            n_syls=master_summary_df['n_syls'].tolist(),
-            use_cluster_penalty=False  # Add this parameter
-        )
+            # Compute composite scores across all parameter combinations
+            master_summary_df = compute_composite_score(
+                master_summary_df,
+                metrics=metrics,
+                n_syls=master_summary_df['n_syls'].tolist(),
+                use_cluster_penalty=False  # Add this parameter
+            )
 
-        # Reorder columns and sort by performance
-        master_summary_df = reorder_columns(master_summary_df, metrics)
+            # Reorder columns and sort by performance
+            master_summary_df = reorder_columns(master_summary_df, metrics)
 
-        # Sort by primary metric (NMI if available, otherwise composite score)
-        if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
-            master_summary_df = master_summary_df.sort_values('nmi', ascending=False)
-        else:
-            master_summary_df = master_summary_df.sort_values('composite_score', ascending=False)
+            # Sort by primary metric (NMI if available, otherwise composite score)
+            if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
+                master_summary_df = master_summary_df.sort_values('nmi', ascending=False)
+            else:
+                master_summary_df = master_summary_df.sort_values('composite_score', ascending=False)
 
-        master_summary_df = master_summary_df.reset_index(drop=True)
+            master_summary_df = master_summary_df.reset_index(drop=True)
 
-        # Save master summary
-        if not save_master_summary(master_summary_df, bird_path):
-            logger.error(f"Failed to save master summary for bird {bird}")
-            return False
+            # Save master summary
+            if not save_master_summary(master_summary_df, bird_path):
+                logger.error(f"Failed to save master summary for bird {bird}")
+                return False
 
-        # Create PDF report
-        pdf_success = create_cluster_summary_pdf(
-            master_summary_df,
-            bird=bird,
-            save_path=bird_path,
-            top_n=top_n_for_pdf
-        )
+            # Create PDF report
+            pdf_success = create_cluster_summary_pdf(
+                master_summary_df,
+                bird=bird,
+                save_path=bird_path,
+                top_n=top_n_for_pdf
+            )
 
-        if not pdf_success:
-            logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
+            if not pdf_success:
+                logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
 
-        logger.info(f"Successfully completed labeling pipeline for bird {bird}")
-        return True
+            logger.info(f"Successfully completed labeling pipeline for bird {bird}")
+            return True
 
     except Exception as e:
         logger.error(f"Error in labeling pipeline for bird {bird}: {e}")
-        return False
-
+    return False
 
 def main(save_path: str) -> None:
     """Main function to run the clustering pipeline."""
@@ -1860,10 +1781,10 @@ def main(save_path: str) -> None:
         logger.error(f"Error in main pipeline: {e}")
         raise
 
-
 def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = True):
     """
     Clear clustering label files and images to avoid clutter.
+    Updated to work with new directory structure (syllable_data instead of data).
 
     Args:
         save_path: Root directory containing bird data
@@ -1891,14 +1812,13 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
         for bird_name in birds_to_clear:
             bird_path = os.path.join(save_path, bird_name)
 
-            # Labelling directory (contains all cluster labels)
+            # Labelling directory (contains all cluster labels) - UPDATED path
             labelling_path = os.path.join(bird_path, 'syllable_data', 'labelling')
             if os.path.exists(labelling_path):
                 paths_to_remove.append(('labelling', labelling_path))
                 # Count files for reporting
                 for root, dirs, files in os.walk(labelling_path):
                     total_items += len(files)
-
             # Cluster figures directory
             cluster_figures_path = os.path.join(bird_path, 'figures', 'clusters')
             if os.path.exists(cluster_figures_path):
@@ -1966,26 +1886,14 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
         logger.error(f"Error clearing clustering outputs: {e}")
         return False
 
+
 if __name__ == '__main__':
-    # Setup logger
-    logs_dir = 'logs'
-    os.makedirs(logs_dir, exist_ok=True)
-    logger.basicConfig(
-        level=logger.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logger.FileHandler(os.path.join(logs_dir, 'clustering_pipeline.log')),
-            logger.StreamHandler()
-        ]
-    )
     # Setup paths and parameters
-    #path_to_macaw = check_sys_for_macaw_root()
+    # Updated to use new directory structure
+    save_path = os.path.join('E:', 'ssharma_RNA_seq')
 
-    #save_path = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    save_path = os.path.join('..', 'ssharma_RNA_seq')
-    #clear_clustering_outputs(save_path=save_path)
+    # Optional: Clear existing clustering outputs
+    # clear_clustering_outputs(save_path=save_path)
+
+    # Run main pipeline
     main(save_path=save_path)
-    # save_path = os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    # #clear_clustering_outputs(save_path=save_path)
-    # main(save_path=save_path)
-
