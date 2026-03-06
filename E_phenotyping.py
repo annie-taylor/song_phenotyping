@@ -1927,6 +1927,9 @@ if __name__ == '__main__':
     test_paths = [
         os.path.join('E:', 'ssharma_RNA_seq'),  # Updated to your actual path
         # Add other paths as needed
+        # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        # os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+        os.path.join('E:', 'ssharma_RNA_seq')
     ]
 
     for save_path in test_paths:
