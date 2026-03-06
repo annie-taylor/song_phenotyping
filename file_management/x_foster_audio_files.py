@@ -194,17 +194,6 @@ def deduplicate_bird_audio_data(bird_audio_data: Dict[str, Any]) -> Tuple[Dict[s
 
     return deduplicated_data, duplicate_stats
 
-
-def save_bird_audio_data(data: Dict[str, Any], save_file: str) -> None:
-    """Save bird audio data to JSON file"""
-    try:
-        with open(save_file, 'w') as f:
-            json.dump(data, f, indent=2)
-        logging.info(f"Saved deduplicated data to {save_file}")
-    except Exception as e:
-        logging.error(f"Error saving data to {save_file}: {e}")
-
-
 def main_deduplication():
     """Main function to run the deduplication process"""
 
@@ -731,7 +720,7 @@ def main_enhanced_deduplication():
         # Save to temporary file first
         temp_file = output_file + ".tmp"
         with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(deduplicated_data, f, indent=2)
+            json.dump(deduplicated_data, f, indent=2, cls=DateTimeEncoder)
 
         # If successful, rename to final file
         import shutil
@@ -746,8 +735,8 @@ def main_enhanced_deduplication():
     stats_file = "comprehensive_deduplication_stats.json"
     try:
         temp_stats_file = stats_file + ".tmp"
-        with open(temp_stats_file, 'w', encoding='utf-8') as f:
-            json.dump(comprehensive_stats, f, indent=2)
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(deduplicated_data, f, indent=2, cls=DateTimeEncoder)
 
         shutil.move(temp_stats_file, stats_file)
         logging.info(f"Successfully saved stats to {stats_file}")
