@@ -246,25 +246,27 @@ def load_clustering_results(bird_path: str, top_n: int = 5) -> List[Dict[str, An
         return []
 
 
-def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syllable_data: Dict[str, Any]) -> List[Union[str, int]]:
+def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syllable_data: Dict[str, Any]) -> List[
+    Union[str, int]]:
     """
     Load clustering labels and map them to syllable sequences.
-
-    Args:
-        clustering_result: Dictionary with clustering metadata including label_path
-        syllable_data: Dictionary with syllable data and song paths
-
-    Returns:
-        List of clustering labels corresponding to syllable sequences
+    Updated to work with spec files in syllable_data/specs/.
     """
     try:
         # Load clustering labels from HDF5 file
         label_path = clustering_result['label_path']
+        logging.info(f"Loading clustering labels from: {label_path}")
         resolved_path = _resolve_file_path(label_path)
+        logging.info(f"Resolved path: {resolved_path}")
+
+        if not os.path.exists(resolved_path):
+            logging.error(f"Clustering label file does not exist: {resolved_path}")
+            return []
 
         with tables.open_file(resolved_path, mode='r') as f:
             cluster_labels = f.root.labels.read()
             cluster_hashes = f.root.hashes.read()
+            logging.info(f"Loaded {len(cluster_labels)} cluster labels and {len(cluster_hashes)} hashes")
 
         # Convert hashes to strings (fix for numpy bytes)
         cluster_hashes = [
@@ -274,13 +276,17 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
 
         # Create hash to label mapping
         hash_to_label = dict(zip(cluster_hashes, cluster_labels))
+        logging.info(f"Created hash-to-label mapping with {len(hash_to_label)} entries")
 
         # Map labels to syllable sequences
         mapped_labels = []
         song_paths = syllable_data['song_paths']
         specs_dir = syllable_data['syllables_dir']  # This now points to specs directory
 
+        logging.info(f"Processing {len(song_paths)} song files from {specs_dir}")
+
         # Load syllable hashes from spec files and map to clustering labels
+        total_syllables_processed = 0
         for song_path in song_paths:
             full_song_path = os.path.join(specs_dir, song_path)
             try:
@@ -295,29 +301,40 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
                             for h in song_hashes
                         ]
 
+                        logging.debug(f"Found {len(song_hashes)} hashes in {song_path}")
+                        total_syllables_processed += len(song_hashes)
+
                         # Map each syllable hash to its cluster label
                         for hash_id in song_hashes:
                             mapped_labels.append(hash_to_label.get(hash_id, -1))  # -1 for missing
                     else:
                         logging.warning(f"No 'hashes' node found in {full_song_path}")
+                        logging.warning(f"Available nodes: {available_nodes}")
 
             except Exception as e:
                 logging.error(f"Error loading hashes from {full_song_path}: {e}")
                 continue
 
+        logging.info(f"Processed {total_syllables_processed} syllables, mapped {len(mapped_labels)} labels")
+
+        # Count successful mappings
+        successful_mappings = sum(1 for label in mapped_labels if label != -1)
+        logging.info(f"Successfully mapped {successful_mappings}/{len(mapped_labels)} syllables to cluster labels")
+
         if mapped_labels:
             # Add sequence tokens
             handler = LabelHandler(LabelType.AUTO)
-            return handler.add_sequence_tokens(mapped_labels)
+            result = handler.add_sequence_tokens(mapped_labels)
+            logging.info(f"Final sequence length with tokens: {len(result)}")
+            return result
         else:
             logging.warning("No clustering labels could be mapped to syllables")
             return []
 
     except Exception as e:
         logging.error(f"Error loading clustering labels: {e}")
+        logging.error(traceback.format_exc())
         return []
-
-
 
 def _resolve_file_path(file_path: str) -> str:
     """
@@ -1195,13 +1212,6 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
     """
     Complete phenotyping pipeline for one bird.
     Processes manual labels (if available) and automated labels from clustering results.
-
-    Args:
-        bird_path: Path to bird directory
-        config: Configuration object (uses defaults if None)
-
-    Returns:
-        bool: Success status
     """
     if config is None:
         config = PhenotypingConfig()
@@ -1220,16 +1230,19 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
         # Load clustering results
         clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings)
         has_clustering = len(clustering_results) > 0
-        logging.info(f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
+        logging.info(
+            f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
 
         # Process manual labels if available
         manual_results = {}
         if has_manual:
             logging.info(f"Processing manual labels for {bird_name}")
             manual_syllables = syllable_data['manual_syllables']
+            logging.info(f"Manual syllables sequence length: {len(manual_syllables)}")
             manual_results = calculate_phenotypes_for_label_type(
                 manual_syllables, 'manual', bird_name, config
             )
+            logging.info(f"Manual results: repertoire_size={manual_results.get('repertoire_size', 'N/A')}")
         else:
             logging.info(f"No manual labels found for {bird_name}")
             manual_results = _create_empty_phenotype_results()
@@ -1238,24 +1251,31 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
         auto_results = []
         for i, cluster_result in enumerate(clustering_results):
             logging.info(f"Processing automated labels for {bird_name}, rank {i}")
+            logging.info(f"Cluster result metadata: {cluster_result}")
 
             # Load clustering labels mapped to syllables
             try:
                 auto_syllables = load_clustering_labels_for_syllables(cluster_result, syllable_data)
+                logging.info(f"Auto syllables sequence length for rank {i}: {len(auto_syllables)}")
+
                 if auto_syllables:
                     auto_result = calculate_phenotypes_for_label_type(
                         auto_syllables, 'hdbscan', bird_name, config
                     )
+                    logging.info(f"Auto results rank {i}: repertoire_size={auto_result.get('repertoire_size', 'N/A')}")
                 else:
+                    logging.warning(f"No auto syllables loaded for rank {i}")
                     auto_result = _create_empty_phenotype_results()
             except Exception as e:
                 logging.error(f"Error processing clustering rank {i} for {bird_name}: {e}")
+                logging.error(traceback.format_exc())
                 auto_result = _create_empty_phenotype_results()
 
             auto_results.append(auto_result)
 
         # If no clustering results, create empty auto results
         if not auto_results:
+            logging.info("No clustering results found, creating empty auto results")
             auto_results = [_create_empty_phenotype_results()]
             clustering_results = [{
                 'rank': 0,
@@ -1285,6 +1305,14 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
         results_df.to_csv(output_path, index=False)
         logging.info(f"Saved phenotype results to: {output_path}")
 
+        # Log summary of results
+        logging.info(f"Results summary for {bird_name}:")
+        for idx, row in results_df.iterrows():
+            rank = row['rank']
+            rep_size = row['repertoire_size']
+            entropy = row['entropy']
+            logging.info(f"  Rank {rank}: repertoire_size={rep_size}, entropy={entropy}")
+
         # Generate plots if requested
         if config.generate_plots:
             _generate_phenotype_plots(bird_path, syllable_data, manual_results, auto_results, clustering_results,
@@ -1292,10 +1320,13 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
 
         # Generate PDFs if requested
         if config.generate_plots:  # Use same flag for now
-            from phenotype_pdfs import integrate_with_phenotyping_pipeline
-            pdf_results = integrate_with_phenotyping_pipeline(bird_path, config)
-            if pdf_results:
-                logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
+            try:
+                from phenotype_pdfs import integrate_with_phenotyping_pipeline
+                pdf_results = integrate_with_phenotyping_pipeline(bird_path, config)
+                if pdf_results:
+                    logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
+            except ImportError:
+                logging.warning("phenotype_pdfs module not available, skipping PDF generation")
 
         logging.info(f"Successfully completed phenotyping for bird: {bird_name}")
         return True
