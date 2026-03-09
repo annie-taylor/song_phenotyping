@@ -684,7 +684,10 @@ def create_datetime_summary_report(comprehensive_stats: Dict[str, Any],
     logging.info(f"Datetime analysis report saved to: {output_file}")
 
 
-def main_enhanced_deduplication():
+def main_enhanced_deduplication(input_file = "cross_fostered_bird_audio_data.json",
+                                output_file = "cross_fostered_bird_audio_data_deduplicated_enhanced.json",
+                                report_file = "datetime_analysis_report.txt",
+                                stats_file = "comprehensive_deduplication_stats.json"):
     """Main function to run the enhanced deduplication with datetime analysis"""
 
     # Setup logging
@@ -698,7 +701,6 @@ def main_enhanced_deduplication():
     )
 
     # Load original data
-    input_file = "cross_fostered_bird_audio_data.json"
     logging.info(f"Loading data from {input_file}")
 
     bird_audio_data = load_bird_audio_data(input_file)
@@ -714,8 +716,6 @@ def main_enhanced_deduplication():
     deduplicated_data, comprehensive_stats = deduplicate_bird_audio_data_enhanced(bird_audio_data)
 
     # Save with better error handling
-    output_file = "cross_fostered_bird_audio_data_deduplicated_enhanced.json"
-
     try:
         # Save to temporary file first
         temp_file = output_file + ".tmp"
@@ -732,7 +732,6 @@ def main_enhanced_deduplication():
         return
 
     # Save comprehensive statistics with error handling
-    stats_file = "comprehensive_deduplication_stats.json"
     try:
         temp_stats_file = stats_file + ".tmp"
         with open(temp_file, 'w', encoding='utf-8') as f:
@@ -745,7 +744,6 @@ def main_enhanced_deduplication():
         logging.error(f"Error saving stats: {e}")
 
     # Create human-readable report
-    report_file = "datetime_analysis_report.txt"
     create_datetime_summary_report(comprehensive_stats, report_file)
 
     # Print summary

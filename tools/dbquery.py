@@ -104,7 +104,7 @@ def bird_dict_nest_parents(birds):
     return nest_parents
 
 
-# Haymish code start below
+# Hamish code start below
 def getAllBirdsFromDB(cur):
     QUERY="""
     WITH group1 AS (
