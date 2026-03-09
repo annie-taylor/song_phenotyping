@@ -1,3 +1,4 @@
+import csv
 import os
 import json
 import logging
@@ -10,9 +11,12 @@ from collections import defaultdict
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from functools import lru_cache
+from tools.system_utils import check_sys_for_macaw_root
+from tools.dbquery import getUUIDfromBands
+
 
 # Configuration
 MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4)
@@ -148,6 +152,87 @@ get_filename_from_path = os.path.basename
 
 def get_directory_depth(filepath: str) -> int:
     return len(os.path.dirname(filepath).split(os.sep))
+
+
+@lru_cache(maxsize=1000)
+def generate_bird_name_variations(bird_name: str) -> frozenset:
+    """Cached bird name variation generation."""
+    if not bird_name or not isinstance(bird_name, str):
+        return frozenset([bird_name])
+
+    # Color mappings
+    color_variations = {
+        'bk': ['bk', 'b', 'k', 'black'],
+        'wh': ['wh', 'w', 'white'],
+        'gr': ['gr', 'g', 'green'],
+        'ye': ['ye', 'y', 'yw', 'yellow'],
+        'rd': ['rd', 'r', 'red'],
+        'pk': ['pk', 'pink'],
+        'or': ['or', 'o', 'orange'],
+        'pu': ['pu', 'purple'],
+        'br': ['br', 'brown'],
+        'bl': ['bl', 'bu', 'blue'],
+        'nb': ['nb', 'noband']
+    }
+
+    # Reverse mapping for standardization
+    standardization_map = {}
+    for standard, variations in color_variations.items():
+        for variation in variations:
+            standardization_map[variation.lower()] = standard
+
+    def standardize_color(color_str):
+        if not color_str:
+            return ''
+        color_str = color_str.lower().strip()
+        return standardization_map.get(color_str, color_str)
+
+    # Parse the input bird name
+    parts = re.findall(r'([a-zA-Z]+)|(\d+)', bird_name.lower())
+
+    if not parts:
+        return frozenset([bird_name])
+
+    standardized_colors = []
+    numbers = []
+
+    for letter_part, digit_part in parts:
+        if letter_part:
+            standardized_colors.append(standardize_color(letter_part))
+        if digit_part:
+            numbers.append(digit_part)
+
+    variations = set()
+
+    # Generate all combinations based on structure
+    if len(standardized_colors) == 1 and len(numbers) == 1:
+        # Single band: co#
+        color_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
+        for color_var in color_vars:
+            variations.add(f"{color_var}{numbers[0]}")
+    elif len(standardized_colors) == 2 and len(numbers) == 2:
+        # Two bands: co#co#
+        color1_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
+        color2_vars = color_variations.get(standardized_colors[1], [standardized_colors[1]])
+        for color1_var in color1_vars:
+            for color2_var in color2_vars:
+                variations.add(f"{color1_var}{numbers[0]}{color2_var}{numbers[1]}")
+    elif len(standardized_colors) == 2 and len(numbers) == 1:
+        # Two colors, one number: co#co
+        color1_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
+        color2_vars = color_variations.get(standardized_colors[1], [standardized_colors[1]])
+        for color1_var in color1_vars:
+            for color2_var in color2_vars:
+                variations.add(f"{color1_var}{numbers[0]}{color2_var}")
+    elif len(standardized_colors) == 1 and len(numbers) == 2:
+        # One color, two numbers: co##
+        color_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
+        for color_var in color_vars:
+            variations.add(f"{color_var}{numbers[0]}{numbers[1]}")
+
+    # Add original input
+    variations.add(bird_name.lower())
+    return frozenset(variations)
 
 
 def process_file_batch(file_batch: List[str]) -> List[Dict[str, Any]]:
@@ -402,157 +487,6 @@ def deduplicate_bird_audio_data_enhanced(bird_audio_data: Dict[str, Any]) -> Tup
     return deduplicated_data, comprehensive_stats
 
 
-def deduplicate_bird_audio_data(bird_audio_data: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, int]]:
-    """Simplified deduplication for backwards compatibility."""
-    deduplicated_data, comprehensive_stats = deduplicate_bird_audio_data_enhanced(bird_audio_data)
-
-    # Convert to simple stats format for backwards compatibility
-    duplicate_stats = {}
-    for bird_id, stats in comprehensive_stats.items():
-        if bird_id == '_summary':
-            duplicate_stats[bird_id] = stats
-        else:
-            duplicate_stats[bird_id] = stats.get('deduplication', {})
-
-    return deduplicated_data, duplicate_stats
-
-
-@lru_cache(maxsize=1000)
-def generate_bird_name_variations(bird_name: str) -> frozenset:
-    """Cached bird name variation generation."""
-    if not bird_name or not isinstance(bird_name, str):
-        return frozenset([bird_name])
-
-    # Color mappings
-    color_variations = {
-        'bk': ['bk', 'b', 'k', 'black'],
-        'wh': ['wh', 'w', 'white'],
-        'gr': ['gr', 'g', 'green'],
-        'ye': ['ye', 'y', 'yw', 'yellow'],
-        'rd': ['rd', 'r', 'red'],
-        'pk': ['pk', 'pink'],
-        'or': ['or', 'o', 'orange'],
-        'pu': ['pu', 'purple'],
-        'br': ['br', 'brown'],
-        'bl': ['bl', 'bu', 'blue'],
-        'nb': ['nb', 'noband']
-    }
-
-    # Reverse mapping for standardization
-    standardization_map = {}
-    for standard, variations in color_variations.items():
-        for variation in variations:
-            standardization_map[variation.lower()] = standard
-
-    def standardize_color(color_str):  # Fixed: added proper indentation
-        if not color_str:
-            return ''
-        color_str = color_str.lower().strip()
-        return standardization_map.get(color_str, color_str)
-
-    # Parse the input bird name
-    parts = re.findall(r'([a-zA-Z]+)|(\d+)', bird_name.lower())
-
-    if not parts:
-        return frozenset([bird_name])
-
-    standardized_colors = []
-    numbers = []
-
-    for letter_part, digit_part in parts:
-        if letter_part:
-            standardized_colors.append(standardize_color(letter_part))
-        if digit_part:
-            numbers.append(digit_part)
-
-    variations = set()
-
-    # Generate all combinations based on structure
-    if len(standardized_colors) == 1 and len(numbers) == 1:
-        # Single band: co#
-        color_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
-        for color_var in color_vars:
-            variations.add(f"{color_var}{numbers[0]}")
-    elif len(standardized_colors) == 2 and len(numbers) == 2:
-        # Two bands: co#co#
-        color1_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
-        color2_vars = color_variations.get(standardized_colors[1], [standardized_colors[1]])
-        for color1_var in color1_vars:
-            for color2_var in color2_vars:
-                variations.add(f"{color1_var}{numbers[0]}{color2_var}{numbers[1]}")
-    elif len(standardized_colors) == 2 and len(numbers) == 1:
-        # Two colors, one number: co#co
-        color1_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
-        color2_vars = color_variations.get(standardized_colors[1], [standardized_colors[1]])
-        for color1_var in color1_vars:
-            for color2_var in color2_vars:
-                variations.add(f"{color1_var}{numbers[0]}{color2_var}")
-    elif len(standardized_colors) == 1 and len(numbers) == 2:
-        # One color, two numbers: co##
-        color_vars = color_variations.get(standardized_colors[0], [standardized_colors[0]])
-        for color_var in color_vars:
-            variations.add(f"{color_var}{numbers[0]}{numbers[1]}")
-
-    # Add original input
-    variations.add(bird_name.lower())
-    return frozenset(variations)
-
-def scan_directory_parallel(directory_info: Tuple[str, str, set]) -> Tuple[
-    str, List[str], List[str], List[str], List[str]]:
-    """Scan a single directory for audio files - designed for parallel execution."""
-    bird_name, bird_dir, bird_name_variations = directory_info
-
-    if not os.path.exists(bird_dir):
-        logging.warning(f"Directory not found: {bird_dir}")
-        return bird_name, [], [], [], []
-
-    def is_date_file(filename, variations):
-        """Check if file matches birdname.date.* pattern."""
-        file_parts = filename.split('.')
-        if len(file_parts) < 3:
-            return False
-        if not (len(file_parts[1]) == 8 and file_parts[1].isdigit()):
-            return False
-        return file_parts[0].lower() in {var.lower() for var in variations}
-
-    wav_files = []
-    cbin_files = []
-    batch_files = []
-    audio_from_batch_files = []
-
-    try:
-        for file in os.listdir(bird_dir):
-            try:
-                full_path = os.path.join(bird_dir, file)
-                if not os.path.isfile(full_path):
-                    continue
-
-                # Check for audio files
-                if file.lower().endswith('.wav') or is_date_file(file, bird_name_variations):
-                    wav_files.append(full_path)
-                elif file.lower().endswith('.cbin'):
-                    cbin_files.append(full_path)
-                elif file.lower().endswith('.keep'):
-                    batch_files.append(full_path)
-                    # Process batch file contents
-                    try:
-                        with open(full_path, 'r') as f:
-                            for line in f:
-                                line = line.strip()
-                                if line:
-                                    audio_from_batch_files.append(os.path.join(bird_dir, line))
-                    except Exception as e:
-                        logging.error(f"Error reading batch file {full_path}: {e}")
-
-            except Exception as e:
-                logging.error(f"Error processing file {file}: {e}")
-
-    except Exception as e:
-        logging.error(f"Error accessing directory {bird_dir}: {e}")
-
-    return bird_name, wav_files, cbin_files, batch_files, audio_from_batch_files
-
-
 def scan_directory_parallel(directory_info: Tuple[str, str, frozenset]) -> Tuple[
     str, List[str], List[str], List[str], List[str]]:
     """Scan a single directory for audio files - designed for parallel execution."""
@@ -635,7 +569,6 @@ def get_all_audio_files_for_birds_parallel(bird_file_locations: Dict[str, List[s
     logging.info(f"Processing {len(birds_to_process)} birds ({len(birds_completed)} already completed)")
 
     # Check screening directories
-    from tools.system_utils import check_sys_for_macaw_root
     screening_directories = [
         os.path.join(check_sys_for_macaw_root(), 'public', 'screening'),
         os.path.join(check_sys_for_macaw_root(), 'public', 'adult_screening'),
@@ -749,14 +682,12 @@ def get_all_audio_files_for_birds_parallel(bird_file_locations: Dict[str, List[s
     logging.info(f"Completed processing all birds! Final data saved to {save_file}")
     return bird_audio_files
 
-
 # Backwards compatibility wrapper
 def get_all_audio_files_for_birds(bird_file_locations: Dict[str, List[str]],
                                   root_directory: str,
                                   save_file: str = "bird_audio_data.json") -> Dict[str, Any]:
     """Backwards compatibility wrapper for parallel audio file search."""
     return get_all_audio_files_for_birds_parallel(bird_file_locations, root_directory, save_file)
-
 
 def create_datetime_summary_report(comprehensive_stats: Dict[str, Any],
                                    output_file: str = "datetime_analysis_report.txt"):
@@ -785,7 +716,8 @@ def create_datetime_summary_report(comprehensive_stats: Dict[str, Any],
                 f.write(f"  Datetime coverage: {overall['datetime_coverage']:.1%}\n")
 
                 if overall.get('earliest_recording'):
-                    f.write(f"  Recording period: {overall['earliest_recording']} to {overall['latest_recording']}\n")
+                    f.write(
+                        f"  Recording period: {overall['earliest_recording']} to {overall['latest_recording']}\n")
                     f.write(f"  Date range: {overall['date_range_days']} days\n")
                     f.write(f"  Unique recording days: {overall['unique_recording_days']}\n")
                     f.write(f"  Average recordings per day: {overall['average_recordings_per_day']:.1f}\n")
@@ -814,7 +746,8 @@ def create_datetime_summary_report(comprehensive_stats: Dict[str, Any],
                     f.write(f"    Datetime coverage: {dt_stats['datetime_coverage']:.1%}\n")
 
                     if dt_stats.get('earliest_recording'):
-                        f.write(f"    Date range: {dt_stats['earliest_recording']} to {dt_stats['latest_recording']}\n")
+                        f.write(
+                            f"    Date range: {dt_stats['earliest_recording']} to {dt_stats['latest_recording']}\n")
                         f.write(f"    Span: {dt_stats['date_range_days']} days\n")
 
             # Duplicate details
@@ -832,7 +765,6 @@ def create_datetime_summary_report(comprehensive_stats: Dict[str, Any],
                     f.write(f"  ... and {len(duplicate_details) - 10} more duplicate sets\n")
 
     logging.info(f"Datetime analysis report saved to: {output_file}")
-
 
 def main_enhanced_deduplication(input_file="cross_fostered_bird_audio_data.json",
                                 output_file="cross_fostered_bird_audio_data_deduplicated_enhanced.json",
@@ -885,7 +817,7 @@ def main_enhanced_deduplication(input_file="cross_fostered_bird_audio_data.json"
     except Exception as e:
         logging.error(f"Error creating report: {e}")
 
-    # Print summary
+        # Print summary
     total_removed = comprehensive_stats['_summary']['total_duplicates_removed']
     print(f"\n=== ENHANCED DEDUPLICATION SUMMARY ===")
     print(f"Total duplicate files removed: {total_removed}")
@@ -929,71 +861,14 @@ def main_enhanced_deduplication(input_file="cross_fostered_bird_audio_data.json"
                 print(f"Filename: {detail['filename']} -> {detail['datetime']}")
                 example_count += 1
 
-def main_deduplication():
-    """Backwards compatibility wrapper for simple deduplication."""
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('deduplication.log'),
-            logging.StreamHandler()
-        ]
-    )
 
-    # Load original data
-    input_file = "cross_fostered_bird_audio_data.json"
-    bird_audio_data = load_data(input_file)
-
-    if not bird_audio_data:
-        logging.error("No data loaded. Exiting.")
-        return
-
-    logging.info(f"Loaded data for {len(bird_audio_data)} birds")
-
-    # Perform deduplication
-    deduplicated_data, duplicate_stats = deduplicate_bird_audio_data(bird_audio_data)
-
-    # Save deduplicated data
-    output_file = "cross_fostered_bird_audio_data_deduplicated.json"
-    save_data_atomic(deduplicated_data, output_file)
-
-    # Save deduplication statistics
-    stats_file = "deduplication_stats.json"
-    save_data_atomic(duplicate_stats, stats_file)
-
-    # Print summary
-    total_removed = duplicate_stats['_summary']['total_duplicates_removed']
-    print(f"\n=== DEDUPLICATION SUMMARY ===")
-    print(f"Total duplicate files removed: {total_removed}")
-    print(f"Birds processed: {len(bird_audio_data)}")
-    print(f"Deduplicated data saved to: {output_file}")
-    print(f"Statistics saved to: {stats_file}")
-
-    # Show per-bird summary
-    print(f"\nPer-bird duplicate removal:")
-    for bird_id, stats in duplicate_stats.items():
-        if bird_id == '_summary':
-            continue
-
-        bird_total = sum(field_stats.get('duplicates_removed', 0) for field_stats in stats.values())
-        if bird_total > 0:
-            print(f"  {bird_id}: {bird_total} duplicates removed")
-            for field, field_stats in stats.items():
-                if field_stats.get('duplicates_removed', 0) > 0:
-                    print(f"    {field}: {field_stats['original_count']} → {field_stats['final_count']}")
-
-# Import and compatibility functions from your original code
-def get_file_locations_for_birds(cross_fostered_birds, txt_file_path="MacawAllDirsByBird.txt",
-                                db_path='2026-01-15-db.sqlite3'):
+def get_file_locations_for_birds(cross_fostered_birds, txt_file_path="../refs/MacawAllDirsByBird.txt",
+                                 db_path='../refs/2026-01-15-db.sqlite3'):
     """Parse the text file and return a dictionary mapping bird names to their file locations"""
     bird_files = {}
 
     con = sqlite3.connect(db_path)
     cur = con.cursor()
-
-    # Import database functions
-    from tools.dbquery import getUUIDfromBands
 
     # First, get the bird names from cross_fostered_birds and filter by sex
     target_birds = {}
@@ -1084,13 +959,29 @@ def get_file_locations_for_birds(cross_fostered_birds, txt_file_path="MacawAllDi
     return bird_files
 
 
-def main():
-    """Main function that combines file search with enhanced deduplication."""
-    from tools.system_utils import check_sys_for_macaw_root
+def main_xfoster_analysis():
+    """
+    Cross-foster analysis pipeline with your specific birds and file paths.
+    Steps: File location mapping -> Audio search -> Deduplication
+    """
 
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('xfoster_analysis.log', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+
+    # Get root directory
     root_dir = check_sys_for_macaw_root()
-    save_file = "xfoster_audio_paths.json"
 
+    # Your specific save file (fixed to use (new) consistently)
+    save_file = "xfoster_audio_paths(new).json"
+
+    # Your specific bird list
     birds = ['wh15wh94', 'wh14wh93', 'wh50wh90', 'wh49wh89', 'wh47wh87', 'wh48wh88',
              'bu26wh39', 'bu25wh38', 'bu82wh76', 'rd39wh3', 'rd40wh4', 'bu9wh89',
              'bu10wh90', 'bu7wh87', 'rd33wh42', 'rd25wh57', 'gr6gr5', 'ye30ye82',
@@ -1109,419 +1000,6 @@ def main():
              'wh88br85', 'ye1tut0', 'ye81br444', 'bk1bk3', 'bk34bk51', 'bk37wh86',
              'bu10wh86', 'bu24wh84', 'bu7wh67', 'gr73gr72', 'gr99or87', 'or10bk88',
              'pk100bk68', 'pk24bu3', 'pu23wh38', 'pu35wh17', 'rd81wh45', 'ye25']
-
-    bird_file_locations = get_file_locations_for_birds(birds,
-                                                       txt_file_path='../refs/MacawAllDirsByBird.txt',
-                                                       db_path='../refs/2026-01-15-db.sqlite3')
-
-    # Use parallel audio file search
-    get_all_audio_files_for_birds_parallel(bird_file_locations, root_directory=root_dir, save_file=save_file)
-
-    # Run enhanced deduplication
-    main_enhanced_deduplication(input_file="xfoster_audio_paths(new).json",
-                                output_file="xfoster_audio_data_deduplicated(new).json",
-                                report_file="xfoster_datetime_analysis_report(new).txt",
-                                stats_file="comprehensive_dedup_stats(new).json")
-
-
-# Additional imports and functions from your original code
-import csv
-
-
-def setup_logging():
-    """Set up logging configuration for this run"""
-    from datetime import datetime
-
-    RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M")
-    LOG_TO_CONSOLE = True
-
-    # Create logs directory if it doesn't exist
-    log_dir = "../logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    # Create log filename with timestamp
-        log_filename = os.path.join(log_dir, f"cross_foster_analysis_{RUN_TIMESTAMP}.log")
-
-        # Configure logging
-        log_format = '%(asctime)s - %(levelname)s - %(message)s'
-
-        # Clear any existing handlers
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-
-        # Set up file handler
-        file_handler = logging.FileHandler(log_filename, mode='w', encoding='utf-8')
-        file_handler.setLevel(logging.INFO)
-        file_handler.setFormatter(logging.Formatter(log_format))
-
-        # Set up console handler if requested
-        handlers = [file_handler]
-        if LOG_TO_CONSOLE:
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(logging.INFO)
-            console_handler.setFormatter(logging.Formatter(log_format))
-            handlers.append(console_handler)
-
-        # Configure root logger
-        logging.basicConfig(
-            level=logging.INFO,
-            handlers=handlers,
-            format=log_format
-        )
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"=== Cross-Foster Analysis Run Started: {RUN_TIMESTAMP} ===")
-        logger.info(f"Log file: {log_filename}")
-
-        return logger
-
-    def create_backup_directory():
-        """Create backups directory if it doesn't exist"""
-        backup_dir = "backups"
-        if not os.path.exists(backup_dir):
-            os.makedirs(backup_dir)
-            logging.info(f"Created backup directory: {backup_dir}")
-        return backup_dir
-
-    def backup_file_if_exists(filepath, backup_dir):
-        """Create a backup of a file if it exists"""
-        if os.path.exists(filepath):
-            filename = os.path.basename(filepath)
-            name, ext = os.path.splitext(filename)
-            RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M")
-            backup_filename = f"{name}.backup_{RUN_TIMESTAMP}{ext}"
-            backup_path = os.path.join(backup_dir, backup_filename)
-
-            try:
-                shutil.copy2(filepath, backup_path)
-                logging.info(f"Backed up {filepath} to {backup_path}")
-                return True
-            except Exception as e:
-                logging.error(f"Failed to backup {filepath}: {e}")
-                return False
-        return False
-
-    def get_birds_with_genetic_parents(db_path='2026-01-15-db.sqlite3'):
-        """Get all birds that have genetic parent data."""
-        con = sqlite3.connect(db_path)
-        cur = con.cursor()
-
-        query = """
-                SELECT DISTINCT ba.uuid,
-                                bc1.abbrv || ba.band_number ||
-                                CASE
-                                    WHEN bc2.abbrv IS NOT NULL AND ba.band_number2 IS NOT NULL
-                                        THEN bc2.abbrv || ba.band_number2
-                                    ELSE ''
-                                    END as bird_name
-                FROM birds_animal ba
-                         INNER JOIN birds_geneticparent bgp ON ba.uuid = bgp.genchild_id
-                         LEFT JOIN birds_color bc1 ON ba.band_color_id = bc1.id
-                         LEFT JOIN birds_color bc2 ON ba.band_color2_id = bc2.id
-                WHERE bgp.genparent_id IS NOT NULL
-                  AND bgp.genparent_id != 'NULL';
-                """
-
-        result = cur.execute(query)
-        birds_with_genetic_parents = result.fetchall()
-        con.close()
-
-        return birds_with_genetic_parents
-
-    def find_cross_fostered_birds_father_only(bird_list, db_path='2026-01-15-db.sqlite3'):
-        """Find birds where genetic father differs from nest father."""
-        con = sqlite3.connect(db_path)
-        cur = con.cursor()
-
-        cross_fostered_birds = []
-
-        for uuid, bird_name in bird_list:
-            # Get genetic parents
-            genetic_query = """
-                            SELECT DISTINCT bgp.genparent_id,
-                                            bc1.abbrv || ba.band_number ||
-                                            CASE
-                                                WHEN bc2.abbrv IS NOT NULL AND ba.band_number2 IS NOT NULL
-                                                    THEN bc2.abbrv || ba.band_number2
-                                                ELSE ''
-                                                END as parent_name,
-                                            ba.sex
-                            FROM birds_geneticparent bgp
-                                     LEFT JOIN birds_animal ba ON bgp.genparent_id = ba.uuid
-                                     LEFT JOIN birds_color bc1 ON ba.band_color_id = bc1.id
-                                     LEFT JOIN birds_color bc2 ON ba.band_color2_id = bc2.id
-                            WHERE bgp.genchild_id = ?
-                              AND bgp.genparent_id IS NOT NULL
-                              AND bgp.genparent_id != 'NULL' \
-                            """
-
-            # Get nest parents
-            nest_query = """
-                         SELECT DISTINCT bp.parent_id,
-                                         bc1.abbrv || ba.band_number ||
-                                         CASE
-                                             WHEN bc2.abbrv IS NOT NULL AND ba.band_number2 IS NOT NULL
-                                                 THEN bc2.abbrv || ba.band_number2
-                                             ELSE ''
-                                             END as parent_name,
-                                         ba.sex
-                         FROM birds_parent bp
-                                  LEFT JOIN birds_animal ba ON bp.parent_id = ba.uuid
-                                  LEFT JOIN birds_color bc1 ON ba.band_color_id = bc1.id
-                                  LEFT JOIN birds_color bc2 ON ba.band_color2_id = bc2.id
-                         WHERE bp.child_id = ?
-                           AND bp.parent_id IS NOT NULL
-                           AND bp.parent_id != 'NULL' \
-                         """
-
-            genetic_result = cur.execute(genetic_query, (uuid,))
-            genetic_parents = genetic_result.fetchall()
-
-            nest_result = cur.execute(nest_query, (uuid,))
-            nest_parents = nest_result.fetchall()
-
-            # Extract fathers only
-            genetic_father = next((p for p in genetic_parents if p[2] == 'M'), None)
-            nest_father = next((p for p in nest_parents if p[2] == 'M'), None)
-
-            # Only proceed if we have both genetic and nest father data
-            if genetic_father and nest_father:
-                # Check if fathers are different (cross-fostered)
-                if genetic_father[0] != nest_father[0]:  # Compare UUIDs
-                    # Also get mothers for context
-                    genetic_mother = next((p for p in genetic_parents if p[2] == 'F'), None)
-                    nest_mother = next((p for p in nest_parents if p[2] == 'F'), None)
-
-                    cross_fostered_birds.append({
-                        'child_uuid': uuid,
-                        'child_name': bird_name,
-                        'genetic_father': genetic_father[1],
-                        'nest_father': nest_father[1],
-                        'genetic_mother': genetic_mother[1] if genetic_mother else 'Unknown',
-                        'nest_mother': nest_mother[1] if nest_mother else 'Unknown'
-                    })
-
-        con.close()
-        return cross_fostered_birds
-
-    def create_cross_fostered_birds_csv(cross_fostered_fathers, bird_audio_data,
-                                        output_file="cross_fostered_birds_summary.csv",
-                                        db_path='2026-01-15-db.sqlite3'):
-        """Create a CSV file with cross-fostered bird information"""
-        from tools.dbquery import getUUIDfromBands
-
-        # Backup existing file if it exists
-        backup_dir = create_backup_directory()
-        backup_file_if_exists(output_file, backup_dir)
-
-        con = sqlite3.connect(db_path)
-        cur = con.cursor()
-
-        headers = [
-            'Bird Name',
-            'Sex',
-            'DOB',
-            'Genetic Father',
-            'Genetic Mother',
-            'Nest Father',
-            'Nest Mother',
-            'Total Songs',
-            'Directories Searched'
-        ]
-
-        try:
-            with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(headers)
-
-                for bird in cross_fostered_fathers:
-                    bird_name = bird['child_name']
-
-                    try:
-                        uuid, exists = getUUIDfromBands(cur, bird_name)
-                        if exists:
-                            # Get sex
-                            sex_query = "SELECT sex FROM birds_animal WHERE uuid=?"
-                            sex_result = cur.execute(sex_query, (uuid,))
-                            sex_row = sex_result.fetchone()
-                            sex = sex_row[0] if sex_row and sex_row[0] else 'Unknown'
-
-                            # Get birth date
-                            birth_query = "SELECT hatch_date FROM birds_animal WHERE uuid=?"
-                            birth_result = cur.execute(birth_query, (uuid,))
-                            birth_row = birth_result.fetchone()
-                            birth_date = birth_row[0] if birth_row and birth_row[0] else 'Unknown'
-                        else:
-                            sex = 'Unknown'
-                            birth_date = 'Unknown'
-                    except Exception as e:
-                        logging.error(f"Error getting sex/birth date for {bird_name}: {e}")
-                        sex = 'Error'
-                        birth_date = 'Error'
-
-                    # Get audio data for this bird (if available)
-                    if bird_name in bird_audio_data:
-                        audio_data = bird_audio_data[bird_name]
-                        total_songs = audio_data.get('wav_and_cbin_count', 0)
-                        directories = '; '.join(audio_data.get('directories_searched', []))
-                    else:
-                        total_songs = 0
-                        directories = 'No audio data found'
-
-                    row = [
-                        bird_name,
-                        sex,
-                        birth_date,
-                        bird['genetic_father'],
-                        bird['genetic_mother'],
-                        bird['nest_father'],
-                        bird['nest_mother'],
-                        total_songs,
-                        directories
-                    ]
-
-                    writer.writerow(row)
-
-            con.close()
-            logging.info(f"CSV file created successfully: {output_file}")
-            logging.info(f"Exported data for {len(cross_fostered_fathers)} cross-fostered birds")
-
-        except Exception as e:
-            con.close()
-            logging.error(f"Error creating CSV file: {e}")
-
-
-def main_xfoster_analysis():
-    """
-    Cross-foster analysis pipeline with your specific birds and file paths.
-    Steps: File location mapping -> Audio search -> Deduplication
-    """
-
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('xfoster_analysis.log', encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
-
-    # Get root directory
-    from tools.system_utils import check_sys_for_macaw_root
-    root_dir = check_sys_for_macaw_root()
-
-    # Your specific save file (fixed to use (new) consistently)
-    save_file = "xfoster_audio_paths(new).json"
-
-    # Your specific bird list
-    birds = ['wh15wh94', 'wh14wh93', 'wh50wh90',
-             'wh49wh89',
-             'wh47wh87',
-             'wh48wh88',
-             'bu26wh39',
-             'bu25wh38',
-             'bu82wh76',
-             'rd39wh3',
-             'rd40wh4',
-             'bu9wh89',
-             'bu10wh90',
-             'bu7wh87',
-             'rd33wh42',
-             'rd25wh57',
-             'gr6gr5',
-             'ye30ye82',
-             'ye23ye43',
-             'rd42pu47',
-             'rd43pu46',
-             'rd50gr1',
-             'rd39gr23',
-             'bk45wh59',
-             'wh86or19',
-             'wh85or81',
-             'wh82or15',
-             'wh83or16',
-             'rd77wh77',
-             'bk24wh25',
-             'bk100wh89',
-             'bk17wh56',
-             'bk81wh20',
-             'bk79wh14',
-             'bk38bk39',
-             'bk4bk47',
-             'bk36bk37',
-             'bk83bk73',
-             'bk94bk87',
-             'bk67bk44',
-             'bk76bk63',
-             'bk75bk62',
-             'bk43bk70',
-             'bk13bk12',
-             'bk41bk14',
-             'pk61bk8',
-             'pk15bk43',
-             'pu57wh52',
-             'pu55wh32',
-             'ye92br4',
-             'ye93br5',
-             'ye91br6',
-             'bk34bk51',
-             'bk73bk71',
-             'bk1bk3',
-             'bk91wh31',
-             'bk61wh42',
-             'bk63wh43',
-             'pu1wh51',
-             'wh93pk62',
-             'wh91pk61',
-             'pk6bk65',
-             'pk37bk19',
-             'pk46bk46',
-             'bk40wh47',
-             'pu31br476',
-             'pu33br479',
-             'pk5bk39',
-             'pk2bk37',
-             'pu58br33',
-             'pu55br34',
-             'pu22wh17',
-             'pk1bk31',
-             'pk43bk33',
-             'pu51wh43',
-             'pu71wh42',
-             'pu39wh79',
-             'bk13wh63',
-             'bk72wh64',
-             'bk74wh76',
-             'bu34or18',
-             'pk24bu3',
-             'pk72bk90',
-             'pk85gr19',
-             'pk97rd22',
-             'pu11bk85',
-             'pu42wh35',
-             'pu91wh67',
-             'rd75wh72',
-             'wh71br49',
-             'wh88br85',
-             'ye1tut0',
-             'ye81br444',
-             'bk1bk3',
-             'bk34bk51',
-             'bk37wh86',
-             'bu10wh86',
-             'bu24wh84',
-             'bu7wh67',
-             'gr73gr72',
-             'gr99or87',
-             'or10bk88',
-             'pk100bk68',
-             'pk24bu3',
-             'pu23wh38',
-             'pu35wh17',
-             'rd81wh45',
-             'ye25']
 
     # STEP 2: File location mapping
     logging.info("Step 2: Getting file locations from MacawAllDirsByBird.txt...")
