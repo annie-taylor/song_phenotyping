@@ -108,8 +108,8 @@ class SyllableDatabase:
     def __init__(self, bird_path: str, feature_params: FeatureExtractionParams = None):
         self.bird_path = bird_path
         self.bird_name = os.path.basename(bird_path)
-        self.syllable_dir = os.path.join(bird_path, 'data', 'syllables')
-        self.database_dir = os.path.join(bird_path, 'data', 'syllable_database')
+        self.syllable_dir = os.path.join(bird_path, 'syllable_data', 'specs')
+        self.database_dir = os.path.join(bird_path, 'syllable_data', 'syllable_database')
         os.makedirs(self.database_dir, exist_ok=True)
 
         # Feature extraction parameters
@@ -1698,8 +1698,9 @@ if __name__ == '__main__':
 
     # Test on example datasets
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+        # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        # os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
+        os.path.join('E:', 'ssharma_RNA_seq')
     ]
 
     bird_paths = []
@@ -1710,7 +1711,7 @@ if __name__ == '__main__':
                 item_path = os.path.join(dataset_path, item)
                 if os.path.isdir(item_path) and not item.startswith('.'):
                     # Check if it has syllable data
-                    syllable_dir = os.path.join(item_path, 'data', 'syllables')
+                    syllable_dir = os.path.join(item_path, 'syllable_data', 'specs')
                     if os.path.exists(syllable_dir):
                         bird_paths.append(item_path)
 

@@ -42,9 +42,9 @@ class BirdCatalogPDFGenerator:
         self.config = config or CatalogConfig()
 
         # Directory paths
-        self.syllable_dir = self.bird_path / 'data' / 'syllables'
+        self.syllable_dir = self.bird_path / 'syllable_data' / 'specs'
         self.spectrograms_dir = self.bird_path / 'spectrograms' / 'labelled'
-        self.pdf_output_dir = self.bird_path / 'data' / 'pdfs'
+        self.pdf_output_dir = self.bird_path / 'syllable_data' / 'pdfs'
 
         # Create directories
         self.spectrograms_dir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +57,7 @@ class BirdCatalogPDFGenerator:
     def _load_syllable_database(self):
         """Load and cache the syllable database once."""
         try:
-            syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
+            syllable_db_path = self.bird_path / 'syllable_data' / 'syllable_database' / 'syllable_features.csv'
             if syllable_db_path.exists():
                 self.syllable_db = pd.read_csv(syllable_db_path)
                 logging.info(f"Loaded syllable database: {len(self.syllable_db)} rows")
@@ -594,6 +594,7 @@ def get_bird_list(project_directory: str) -> List[str]:
 
         all_items = os.listdir(project_directory)
         birds = []
+        if 'copied_data' in all_items: all_items.remove('copied_data')
 
         for item in all_items:
             item_path = os.path.join(project_directory, item)
@@ -606,7 +607,7 @@ def get_bird_list(project_directory: str) -> List[str]:
                     not item.endswith('.csv')):
 
                 # Verify it has syllable data
-                syllable_dir = os.path.join(item_path, 'data', 'syllables')
+                syllable_dir = os.path.join(item_path, 'syllable_data', 'specs')
                 if os.path.exists(syllable_dir):
                     syllable_files = [f for f in os.listdir(syllable_dir) if f.endswith('.h5')]
                     if syllable_files:
@@ -628,8 +629,9 @@ if __name__ == '__main__':
 
     # Test on example datasets
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+        # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
+        # os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+        os.path.join('E:', 'ssharma_RNA_seq')
     ]
 
     for dataset_path in test_paths:

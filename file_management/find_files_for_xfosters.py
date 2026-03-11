@@ -17,7 +17,6 @@ from functools import lru_cache
 from tools.system_utils import check_sys_for_macaw_root
 from tools.dbquery import getUUIDfromBands
 
-
 # Configuration
 MAX_WORKERS = min(32, (os.cpu_count() or 1) + 4)
 FILE_BATCH_SIZE = 500
