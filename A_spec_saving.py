@@ -1412,16 +1412,16 @@ def main():
         # },
         'wseg': {
             'enabled': True,
-            'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'bubu-rdyw', 'metadata'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'wseg test new'),
-            'bird_subset': ['bu85bu97'],
+            'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
+            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'xfosters'),
+            'bird_subset': ['bk1bk3'],
             'copy_locally': True,
             'prefer_local': False,
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
-                max_dur=0.150,
-                songs_per_bird=2,
+                max_dur=0.70,
+                songs_per_bird=30,
                 overwrite_existing=True
             )
         }
