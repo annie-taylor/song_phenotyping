@@ -23,13 +23,16 @@ from tools.song_io import (
     generate_syllable_hashes,
     create_output_paths,
     save_segmented_audio_data,
-    get_song_specs,
-    logger  # Use the centralized logger
+    get_song_specs  # Use the centralized logger
 )
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
 from tools.spectrogram_configs import SpectrogramParams
 from tools.audio_path_management import *
 from tools.filerecords import *
+
+from tools.logging_utils import setup_logger
+
+logger = setup_logger(__name__, 'spectrogram_saving.log')
 
 
 def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[str | None, str | None]:
@@ -774,6 +777,7 @@ def reconstruct_server_path(stored_path: str) -> str:
 
         # Combine with current platform's server root
         if platform == "win32":
+            if 'users/' in relative_path: relative_path = relative_path.replace('users/','')
             return os.path.join(server_root, relative_path.replace('/', '\\'))
         else:
             return os.path.join(server_root, relative_path)
