@@ -636,46 +636,44 @@ if __name__ == '__main__':
 
     for dataset_path in test_paths:
         if os.path.exists(dataset_path):
-            try:  # Added missing try block
-                print(f"\nTesting Bird Catalog PDF Generation on {os.path.basename(dataset_path)}...")
+            try:
+                print(f"\nGenerating Bird Catalog PDFs for {os.path.basename(dataset_path)}...")
 
-                # Get available birds
-                birds = get_bird_list(dataset_path)
+                birds = get_bird_list(dataset_path)   # Get available birds
                 if not birds:
                     print(f"No birds found in {dataset_path}")
                     continue
 
                 print(f"Found {len(birds)} birds: {birds[:3]}...")  # Show first 3
 
-                # Test on first bird
-                test_bird = birds[0]
-                bird_path = os.path.join(dataset_path, test_bird)
+                for bird in birds:
+                    bird_path = os.path.join(dataset_path, bird)
 
-                print(f"\n1. Testing catalog generation for {test_bird}...")
+                    print(f"\nGenerating catalog for {bird}...")
 
-                # Create config for testing
-                config = CatalogConfig(
-                    n_spectrograms=1,  # Small number for testing
-                    spectrograms_per_page=2,
-                    overwrite_spectrograms=True # Reuse existing spectrograms
-                )
+                    # Create config for testing
+                    config = CatalogConfig(
+                        n_spectrograms=20,  # Small number for testing
+                        spectrograms_per_page=2,
+                        overwrite_spectrograms=True  # Reuse existing spectrograms
+                    )
 
-                # Generate catalog (rank 0 only by default)
-                catalogs = generate_bird_catalogs(
-                    bird_path=bird_path,
-                    config=config,
-                    max_ranks=1,  # Only rank 0
-                    overwrite=True
-                )
+                    # Generate catalog (rank 0 only by default)
+                    catalogs = generate_bird_catalogs(
+                        bird_path=bird_path,
+                        config=config,
+                        max_ranks=1,  # Only rank 0
+                        overwrite=True
+                    )
 
-                if catalogs:
-                    print(f"✓ Generated catalog PDF:")
-                    for rank, pdf_path in catalogs.items():
-                        print(f"  - Rank {rank}: {pdf_path}")
-                else:
-                    print("✗ No catalog PDF generated")
+                    if catalogs:
+                        print(f"✓ Generated catalog PDF:")
+                        for rank, pdf_path in catalogs.items():
+                            print(f"  - Rank {rank}: {pdf_path}")
+                    else:
+                        print("✗ No catalog PDF generated")
 
-            except Exception as e:  # Now properly paired with try
+            except Exception as e:
                 print(f"Error during testing: {e}")
                 import traceback
                 traceback.print_exc()

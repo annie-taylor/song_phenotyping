@@ -263,8 +263,8 @@ if __name__ == "__main__":
     # Replace these with your actual file paths
     import os
     cd = os.getcwd()
-    file1 = os.path.join(cd, 'refs', 'MacawAllDirsByUniqueBird.txt')
-    file2 = os.path.join(cd, 'refs', 'MacawAllDirsByBird.txt')
+    file1 = os.path.join(cd, '../refs', 'MacawAllDirsByUniqueBird.txt')
+    file2 = os.path.join(cd, '../refs', 'MacawAllDirsByBird.txt')
 
     try:
         compare_files(file1, file2)
