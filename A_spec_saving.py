@@ -489,6 +489,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
 
 def _file_base_remove_after_first_dot(path: str) -> str:
     """
+    #TODO will cause errors for date formate bird.date-idx
     Return the filename without directories and without anything after the FIRST dot.
     Examples:
       '/a/b/foo.bar.wav'   -> 'foo'
@@ -1417,7 +1418,7 @@ def main():
         'wseg': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
-            'save_dir': os.path.join('/Volumes', 'Extreme SSD', 'xfosters'),
+            'save_dir': os.path.join('E:', 'xfosters'),
             'bird_subset': ['bk1bk3'],
             'copy_locally': True,
             'prefer_local': False,

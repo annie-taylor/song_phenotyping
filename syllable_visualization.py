@@ -243,7 +243,8 @@ def example_usage():
     test_paths = [
         #os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         #os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
-        os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq')
+        # os.path.join('/Volumes', 'Extreme SSD', 'ssharma_RNA_seq')
+        os.path.join('E:/', 'xfosters'),  # not sure why path delimiters aren't working properly here...
     ]
 
     for project_dir in test_paths:

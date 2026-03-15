@@ -386,6 +386,7 @@ class BirdCatalogPDFGenerator:
             r'(\w+)_(\d{8})-(\d{6})',
             # bird_DDMMYY-HHMMSS
             r'(\w+)_(\d{6})-(\d{6})',
+            # TODO: add date format name.date-int (int starts at 2, idx 1/0 is unmarked)
         ]
 
         for pattern in patterns:
