@@ -1009,6 +1009,52 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
 
     return metadata_file_paths, audio_file_paths
 
+
+def select_wseg_file_pairs_from_metadata(metadata_files: List[str],
+                                         already_saved_files: List[str],
+                                         needed_count: int) -> List[Tuple[str, str]]:
+    """
+    For wseg files, extract audio paths from metadata and create pairs.
+    """
+    if needed_count <= 0:
+        return []
+
+    from scipy.io import loadmat
+
+    processed_bases = {_file_base_remove_after_first_dot(p) for p in already_saved_files}
+
+    candidates = []
+    for metadata_path in metadata_files:
+        base = _file_base_remove_after_first_dot(metadata_path)
+        if base in processed_bases:
+            continue
+
+        try:
+            # Load metadata to get audio path
+            metadata_matfile = loadmat(metadata_path, squeeze_me=True)
+
+            # Try to get audio path from metadata
+            audio_path, _ = resolve_audio_file_path(
+                metadata_path, metadata_matfile,
+                read_songpath_from_metadata=True
+            )
+
+            if audio_path and os.path.exists(audio_path):
+                candidates.append((metadata_path, audio_path))
+            else:
+                logger.warning(f"Audio file not found for {metadata_path}: {audio_path}")
+
+            del metadata_matfile
+
+        except Exception as e:
+            logger.warning(f"Could not extract audio path from {metadata_path}: {e}")
+            continue
+
+    # Return up to needed_count pairs
+    if len(candidates) <= needed_count:
+        return candidates
+    return sample(candidates, needed_count)
+
 def process_single_file(metadata_file_path: str, audio_file_path: str, save_path: str, params: SpectrogramParams,
                         read_songpath_from_metadata: bool, verbose: bool,
                         prefer_local: bool = True) -> Dict[str, str]:
@@ -1248,7 +1294,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                               save_path: str,
                               songs_per_bird: int = 20,
                               params: SpectrogramParams = None,
-                              verbose: bool = False, prefer_local: bool = True):
+                              verbose: bool = False, prefer_local: bool = True, copy_locally: bool = False):
     """
     Process WhisperSeg files for multiple birds using the new modular pipeline.
     """
@@ -1286,12 +1332,21 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                 continue
 
             logger.info(f"  🔍 Selecting files from {len(metadata_file_paths[bird])} available files")
-            candidate_files = select_new_file_pairs(
-                metadata_file_paths[bird],
-                audio_file_paths[bird],
-                already_saved_files,
-                needed_count
-            )
+            if copy_locally:
+                # Use existing logic with audio_file_paths matching
+                candidate_files = select_new_file_pairs(
+                    metadata_file_paths[bird],
+                    audio_file_paths[bird],
+                    already_saved_files,
+                    needed_count
+                )
+            else:
+                # For server processing, create pairs by reading metadata
+                candidate_files = select_wseg_file_pairs_from_metadata(
+                    metadata_file_paths[bird],
+                    already_saved_files,
+                    needed_count
+                )
 
             if candidate_files:
                 logger.info(f"  🎵 Processing {len(candidate_files)} wseg files for {bird}")
@@ -1301,7 +1356,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     params=params,
                     verbose=verbose,
                     read_songpath_from_metadata=True,
-                    prefer_local=prefer_local
+                    prefer_local=prefer_local,
                 )
 
                 # Report detailed results
@@ -1382,6 +1437,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
                 songs_per_bird=settings['params'].songs_per_bird,  # Extract from params
                 params=settings['params'],
                 prefer_local=settings['prefer_local'],
+                copy_locally=settings['copy_locally'],
             )
 
         logger.info(f"✅ {pipeline_name.capitalize()} processing complete!")
