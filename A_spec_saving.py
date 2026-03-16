@@ -1484,7 +1484,7 @@ def main():
             'save_dir': str(Path('E:/') / 'xfosters'),
             'bird_subset': ['bk1bk3'],
             'copy_locally': False,
-            'prefer_local': False,
+            'prefer_local': True,
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
