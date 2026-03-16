@@ -1394,6 +1394,7 @@ def process_pipeline(pipeline_name: str, settings: dict):
 def main():
     """Main processing pipeline with configurable parameters."""
     start_time = time.time()
+    logger = setup_logging()
     logger.info("🚀 Starting spectrogram processing pipeline")
 
     # Setup
@@ -1424,9 +1425,9 @@ def main():
         'wseg': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
-            'save_dir': str(Path('E:') / 'xfosters'),
+            'save_dir': str(Path('E:/') / 'xfosters'),
             'bird_subset': ['bk1bk3'],
-            'copy_locally': True,
+            'copy_locally': False,
             'prefer_local': False,
             'params': SpectrogramParams(
                 nfft=1024,
@@ -1453,8 +1454,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # Setup logging using consolidated function (consistent with slicing module)
-    logger = setup_logging()
-
-    logger.info("🚀 Starting spectrogram processing pipeline")
     main()
