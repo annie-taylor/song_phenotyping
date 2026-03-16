@@ -100,7 +100,7 @@ class ProcessingResult:
 def parse_audio_filename(file_path: str) -> Dict[str, Any]:
     """
     Parse audio filename to extract bird, date, and time components.
-    Consolidated version from A_spec_saving.py
+    Handles multiple filename formats including wseg patterns.
     """
     try:
         if platform == 'win32':
@@ -108,12 +108,37 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
         else:
             filename = file_path.split('/')[-1]
 
-        split_filename = filename.split('.')
-        if len(split_filename) > 4:
-            bird = split_filename[0]
-            daytime = split_filename[-1]
-            logger.warning(f'🔍 Unusual filename format detected: {filename}')
+        # Remove .not.mat suffix if present (for wseg files)
+        clean_filename = filename.replace('.not.mat', '')
 
+        # Pattern 1: bk1bk3_170811_140945.wav (BIRD_YYMMDD_HHMMSS.wav) - actual timestamp
+        pattern1 = r'^([a-zA-Z]+\d+[a-zA-Z]*\d*)_(\d{6})_(\d{6})\.wav$'
+        match1 = re.match(pattern1, clean_filename)
+        if match1:
+            bird, day, time = match1.groups()
+            # Convert YYMMDD to full date format if needed
+            if len(day) == 6:
+                day = '20' + day  # Convert YY to 20YY
+            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+
+        # Pattern 2: bk1bk3.20081118-10.wav (BIRD.YYYYMMDD-SEQ.wav) - sequence number
+        pattern2 = r'^([a-zA-Z]+\d+[a-zA-Z]*\d*)\.(\d{8})-(\d+)\.wav$'
+        match2 = re.match(pattern2, clean_filename)
+        if match2:
+            bird, day, seq = match2.groups()
+            # Use sequence number as milliseconds offset from midnight to preserve order
+            time = str(int(seq)).zfill(6)  # Convert to 6-digit string (microseconds)
+            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+
+        # Pattern 3: bk1bk3.20081118.wav (BIRD.YYYYMMDD.wav) - no sequence (index 0)
+        pattern3 = r'^([a-zA-Z]+\d+[a-zA-Z]*\d*)\.(\d{8})\.wav$'
+        match3 = re.match(pattern3, clean_filename)
+        if match3:
+            bird, day = match3.groups()
+            time = '000000'  # First song of the day (sequence 0)
+            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+
+        # Original patterns - keep for backward compatibility
         split_filename = filename.split('_')
         if len(split_filename) == 3:
             bird, day, time = split_filename[0:3]
@@ -126,6 +151,8 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
             bird, _, day, time = split_filename[0:4]
             time = time.split('.')[0]
         else:
+            # Log the problematic filename for debugging
+            logger.warning(f'🔍 Unrecognized filename format: {filename}')
             raise ValueError(f'Unrecognized filename format: {filename}')
 
         return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
