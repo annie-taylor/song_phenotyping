@@ -1420,14 +1420,16 @@ def main():
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
             'save_dir': os.path.join('E:\\', 'xfosters'),
             'bird_subset': ['bk1bk3'],
-            'copy_locally': False,
-            'prefer_local': True,
+            'copy_locally': True,
+            'prefer_local': False,
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
                 max_dur=0.070,
                 songs_per_bird=30,
-                overwrite_existing=True
+                overwrite_existing=True,
+                use_warping=True,
+                downsample=True
             )
         }
     }
@@ -1449,4 +1451,4 @@ if __name__ == '__main__':
     logger = setup_logging()
 
     logger.info("🚀 Starting spectrogram processing pipeline")
-git st    main()
+    main()
