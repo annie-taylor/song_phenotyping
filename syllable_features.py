@@ -1398,8 +1398,9 @@ if __name__ == "__main__":
     #import sys
 
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu85bu97'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or18or24')
+        # os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu85bu97'),
+        # os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or18or24'),
+        os.path.join('E:/', 'xfosters')
     ]
 
     #if len(sys.argv) > 1:

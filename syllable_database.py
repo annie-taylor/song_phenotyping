@@ -317,6 +317,15 @@ class SyllableDatabase:
         features = {}
 
         try:
+            # Remove nans from waveform (existing code)
+            original_length = len(waveform)
+            waveform = waveform[~np.isnan(waveform)]
+            cleaned_length = len(waveform)
+
+            # Log waveform info
+            if cleaned_length != original_length:
+                logging.debug(f"Waveform cleaned: {original_length} -> {cleaned_length} samples")
+
             # Apply preemphasis if requested
             if self.feature_params.apply_preemphasis:
                 waveform = librosa.effects.preemphasis(waveform, coef=self.feature_params.preemphasis_coeff)
@@ -359,12 +368,24 @@ class SyllableDatabase:
             features['zero_crossing_rate_std'] = np.std(zcr)
 
             # MFCCs
-            mfccs = librosa.feature.mfcc(
-                y=waveform, sr=sr, n_mfcc=self.feature_params.n_mfcc,
-                hop_length=self.feature_params.hop_length, n_fft=self.feature_params.n_fft
-            )
-            features['mfcc_means'] = np.mean(mfccs, axis=1).tolist()
-            features['mfcc_stds'] = np.std(mfccs, axis=1).tolist()
+            try:
+                mfccs = librosa.feature.mfcc(
+                    y=waveform, sr=sr, n_mfcc=self.feature_params.n_mfcc,
+                    hop_length=self.feature_params.hop_length, n_fft=self.feature_params.n_fft
+                )
+                logging.debug(f"MFCC shape: {mfccs.shape}, expected n_mfcc: {self.feature_params.n_mfcc}")
+
+                features['mfcc_means'] = np.mean(mfccs, axis=1).tolist()
+                features['mfcc_stds'] = np.std(mfccs, axis=1).tolist()
+
+                # Check output lengths
+                logging.debug(f"MFCC means length: {len(features['mfcc_means'])}")
+                logging.debug(f"MFCC stds length: {len(features['mfcc_stds'])}")
+
+            except Exception as e:
+                logging.error(f"MFCC calculation failed: {e}")
+                features['mfcc_means'] = [np.nan] * self.feature_params.n_mfcc
+                features['mfcc_stds'] = [np.nan] * self.feature_params.n_mfcc
 
             # Fundamental frequency estimation
             f0_features = self._extract_f0_features(waveform, sr)
@@ -1700,7 +1721,7 @@ if __name__ == '__main__':
     test_paths = [
         # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         # os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
-        os.path.join('E:', 'ssharma_RNA_seq')
+        os.path.join('E:\\', 'xfosters')
     ]
 
     bird_paths = []

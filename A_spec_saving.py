@@ -46,21 +46,21 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
     copied_data_dir.mkdir(parents=True, exist_ok=True)
 
     filename = p.name
-    local_audio_path = str(copied_data_dir / filename)
+    local_audio_path = copied_data_dir / filename  # Keep as Path object
 
     # Copy audio if not already present
-    if not Path(local_audio_path).exists():
+    if not local_audio_path.exists():  # Use Path methods directly
         try:
-            shutil.copy2(str(p), local_audio_path)
-            logger.debug("  📋 Copied audio: %s -> %s", p, local_audio_path)
+            shutil.copy2(str(p), str(local_audio_path))  # Convert to str only for shutil
+            logger.debug(" 📋 Copied audio: %s -> %s", p, local_audio_path)
         except Exception as e:
-            logger.error("  ❌ Failed to copy audio %s: %s", p, e)
+            logger.error(" ❌ Failed to copy audio %s: %s", p, e)
             return None, None
 
     # Only attempt to find/copy .rec if the audio extension looks like .cbin (or similar)
     # We allow .cbin, .Cbin, or other case variants.
     if p.suffix.lower() != ".cbin":
-        return local_audio_path, None
+        return str(local_audio_path), None  # FIX: Convert to string
 
     # Candidate .rec file search:
     parent = p.parent
@@ -84,14 +84,14 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
         tried.append(str(cand))
         if cand.exists():
             try:
-                local_rec_path = str(copied_data_dir / cand.name)
-                if not Path(local_rec_path).exists():
-                    shutil.copy2(str(cand), local_rec_path)
+                local_rec_path = copied_data_dir / cand.name  # FIX: Keep as Path object
+                if not local_rec_path.exists():
+                    shutil.copy2(str(cand), str(local_rec_path))
                     logger.debug("  📋 Copied rec: %s -> %s", cand, local_rec_path)
-                return local_audio_path, local_rec_path
+                return str(local_audio_path), str(local_rec_path)  # FIX: Convert both to strings
             except Exception as e:
                 logger.error("  ❌ Failed to copy rec %s: %s", cand, e)
-                return local_audio_path, None
+                return str(local_audio_path), None  # FIX: Convert to string
 
     # Fallback: glob for any *.rec in same directory that starts with the same prefix before first dot or stem
     glob_prefixes = [p.name.split(".", 1)[0], p.stem, ".".join(parts[:-1])]
@@ -102,17 +102,17 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
             tried.append(str(g))
             if g.exists():
                 try:
-                    local_rec_path = str(copied_data_dir / g.name)
-                    if not Path(local_rec_path).exists():
-                        shutil.copy2(str(g), local_rec_path)
+                    local_rec_path = copied_data_dir / g.name  # FIX: Keep as Path object
+                    if not local_rec_path.exists():
+                        shutil.copy2(str(g), str(local_rec_path))
                         logger.debug("  📋 Copied rec by glob: %s -> %s", g, local_rec_path)
-                    return local_audio_path, local_rec_path
+                    return str(local_audio_path), str(local_rec_path)  # FIX: Convert both to strings
                 except Exception as e:
                     logger.error("  ❌ Failed to copy rec %s: %s", g, e)
-                    return local_audio_path, None
+                    return str(local_audio_path), None  # FIX: Convert to string
 
     logger.debug("No .rec found for %s. Tried: %s", p, tried)
-    return local_audio_path, None
+    return str(local_audio_path), None
 
 def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         song_or_call: str = 'song',
@@ -1418,14 +1418,14 @@ def main():
         'wseg': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
-            'save_dir': os.path.join('E:', 'xfosters'),
+            'save_dir': os.path.join('E:\\', 'xfosters'),
             'bird_subset': ['bk1bk3'],
-            'copy_locally': True,
-            'prefer_local': False,
+            'copy_locally': False,
+            'prefer_local': True,
             'params': SpectrogramParams(
                 nfft=1024,
                 hop=1,
-                max_dur=0.70,
+                max_dur=0.070,
                 songs_per_bird=30,
                 overwrite_existing=True
             )
@@ -1449,4 +1449,4 @@ if __name__ == '__main__':
     logger = setup_logging()
 
     logger.info("🚀 Starting spectrogram processing pipeline")
-    main()
+git st    main()
