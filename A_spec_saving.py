@@ -11,6 +11,7 @@ from random import sample
 import gc
 import shutil
 from tqdm import tqdm
+from pathlib import Path
 
 
 # Import consolidated functions from song_io
@@ -84,14 +85,14 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
         tried.append(str(cand))
         if cand.exists():
             try:
-                local_rec_path = copied_data_dir / cand.name  # FIX: Keep as Path object
+                local_rec_path = copied_data_dir / cand.name
                 if not local_rec_path.exists():
                     shutil.copy2(str(cand), str(local_rec_path))
                     logger.debug("  📋 Copied rec: %s -> %s", cand, local_rec_path)
-                return str(local_audio_path), str(local_rec_path)  # FIX: Convert both to strings
+                return str(local_audio_path), str(local_rec_path)
             except Exception as e:
                 logger.error("  ❌ Failed to copy rec %s: %s", cand, e)
-                return str(local_audio_path), None  # FIX: Convert to string
+                return str(local_audio_path), None
 
     # Fallback: glob for any *.rec in same directory that starts with the same prefix before first dot or stem
     glob_prefixes = [p.name.split(".", 1)[0], p.stem, ".".join(parts[:-1])]
@@ -102,14 +103,14 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
             tried.append(str(g))
             if g.exists():
                 try:
-                    local_rec_path = copied_data_dir / g.name  # FIX: Keep as Path object
+                    local_rec_path = copied_data_dir / g.name
                     if not local_rec_path.exists():
                         shutil.copy2(str(g), str(local_rec_path))
                         logger.debug("  📋 Copied rec by glob: %s -> %s", g, local_rec_path)
-                    return str(local_audio_path), str(local_rec_path)  # FIX: Convert both to strings
+                    return str(local_audio_path), str(local_rec_path)
                 except Exception as e:
                     logger.error("  ❌ Failed to copy rec %s: %s", g, e)
-                    return str(local_audio_path), None  # FIX: Convert to string
+                    return str(local_audio_path), None
 
     logger.debug("No .rec found for %s. Tried: %s", p, tried)
     return str(local_audio_path), None
@@ -173,8 +174,8 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
 
                 # Handle copying and mapping for wseg files
                 if save_path and copy_locally:
-                    bird_folder = os.path.join(save_path, bird)
-                    os.makedirs(bird_folder, exist_ok=True)
+                    bird_folder = Path(save_path) / bird  # Use Path operations
+                    bird_folder.mkdir(parents=True, exist_ok=True)
 
                     # For wseg, we need to load metadata to get audio path
                     try:
@@ -186,35 +187,36 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         if audio_path and os.path.exists(audio_path):
                             filename = os.path.basename(audio_path)
 
-                            # Copy audio file locally
-                            copied_data_dir = os.path.join(save_path, 'copied_data', bird)
-                            os.makedirs(copied_data_dir, exist_ok=True)
-                            local_audio_path = os.path.join(copied_data_dir, filename)
+                            # Copy audio file locally - use Path operations
+                            copied_data_dir = Path(save_path) / 'copied_data' / bird
+                            copied_data_dir.mkdir(parents=True, exist_ok=True)
 
                             # copy audio and attempt to copy partner .rec if audio is .cbin
-                            local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path, copied_data_dir)
+                            local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path,
+                                                                                          str(copied_data_dir))
 
                             # audio_file_paths[bird] should append the local_audio_path
                             audio_file_paths[bird].append(local_audio_path)
-                            # ALSO COPY THE METADATA FILE
+
+                            # ALSO COPY THE METADATA FILE - use Path operations
                             metadata_filename = os.path.basename(file_path)
-                            local_metadata_path = os.path.join(copied_data_dir, metadata_filename)
+                            local_metadata_path = copied_data_dir / metadata_filename
 
-                            if not os.path.exists(local_metadata_path):
+                            if not local_metadata_path.exists():
                                 try:
-                                    shutil.copy2(file_path, local_metadata_path)
-                                    logger.debug(f"  📋 Copied metadata: {metadata_filename}")
+                                    shutil.copy2(file_path, str(local_metadata_path))
+                                    logger.debug(f" 📋 Copied metadata: {metadata_filename}")
                                 except Exception as e:
-                                    logger.error(f"  ❌ Failed to copy metadata {file_path}: {e}")
+                                    logger.error(f" ❌ Failed to copy metadata {file_path}: {e}")
 
-                            # Update mapping with both paths
-                            update_paths_file(bird_folder, filename,
+                            # Update mapping with both paths - convert to strings for the function
+                            update_paths_file(str(bird_folder), filename,
                                               local_path=local_audio_path,
                                               server_path=audio_path)
 
                             # Also update metadata mapping
-                            update_paths_file(bird_folder, metadata_filename,
-                                              local_path=local_metadata_path,
+                            update_paths_file(str(bird_folder), metadata_filename,
+                                              local_path=str(local_metadata_path),
                                               server_path=file_path)
                         else:
                             logger.warning(f"  ⚠️ Could not resolve audio path for {file_path}")
@@ -398,23 +400,23 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                 filename = os.path.basename(audio_path)
 
                                 if copy_locally:
-                                    # Copy audio file locally
-                                    copied_data_dir = os.path.join(save_path, 'copied_data', bird)
-                                    os.makedirs(copied_data_dir, exist_ok=True)
-                                    local_audio_path = os.path.join(copied_data_dir, filename)
+                                    # Copy audio file locally - use Path operations
+                                    copied_data_dir = Path(save_path) / 'copied_data' / bird
+                                    copied_data_dir.mkdir(parents=True, exist_ok=True)
 
-                                    local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path, copied_data_dir)
+                                    local_audio_path, local_rec_path = copy_audio_and_partner_rec(audio_path,
+                                                                                                  str(copied_data_dir))
 
-                                    # ALSO COPY THE METADATA FILE
+                                    # ALSO COPY THE METADATA FILE - use Path operations
                                     metadata_filename = os.path.basename(song_metadata_path)
-                                    local_metadata_path = os.path.join(copied_data_dir, metadata_filename)
+                                    local_metadata_path = copied_data_dir / metadata_filename
 
-                                    if not os.path.exists(local_metadata_path):
+                                    if not local_metadata_path.exists():
                                         try:
-                                            shutil.copy2(song_metadata_path, local_metadata_path)
-                                            logger.debug(f"      📋 Copied metadata: {metadata_filename}")
+                                            shutil.copy2(song_metadata_path, str(local_metadata_path))
+                                            logger.debug(f" 📋 Copied metadata: {metadata_filename}")
                                         except Exception as e:
-                                            logger.error(f"      ❌ Failed to copy metadata {song_metadata_path}: {e}")
+                                            logger.error(f" ❌ Failed to copy metadata {song_metadata_path}: {e}")
 
                                     # Update mapping with both paths (audio and metadata)
                                     update_paths_file(bird_folder, filename,
@@ -971,6 +973,10 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
                         # TODO potential issue here with assuming directory structure in filepath!!!
                         bird_id, local_path, server_path = parts[0], parts[1], parts[2]
 
+                        # NORMALIZE paths using Path - this handles E: vs E:\ automatically
+                        local_path = str(Path(local_path))
+                        server_path = str(Path(server_path))
+
                         # Look for metadata files (not audio files)
                         if local_path.endswith('.not.mat'):
                             # Check if LOCAL metadata file exists
@@ -1418,7 +1424,7 @@ def main():
         'wseg': {
             'enabled': True,
             'source_dir': os.path.join(path_to_macaw, 'annietaylor', 'x-foster'),
-            'save_dir': os.path.join('E:\\', 'xfosters'),
+            'save_dir': str(Path('E:') / 'xfosters'),
             'bird_subset': ['bk1bk3'],
             'copy_locally': True,
             'prefer_local': False,
