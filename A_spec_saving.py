@@ -1117,16 +1117,10 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
 
     # Create output path and check if already exists
     paths = create_output_paths(save_path, filename_info['bird'])
-    if params.slice_length:
-        output_path = os.path.join(
-            paths['slice_specs_dir'],
-            f"slices_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
-        )
-    else:
-        output_path = os.path.join(
-            paths['syllable_specs_dir'],
-            f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
-        )
+    output_path = os.path.join(
+        paths['syllable_specs_dir'],  # Always syllable_data/specs
+        f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
+    )
     if os.path.exists(output_path):
         return {'status': 'skipped', 'reason': 'Output file already exists'}
 
