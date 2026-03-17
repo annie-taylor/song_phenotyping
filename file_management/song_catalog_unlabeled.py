@@ -565,11 +565,11 @@ if __name__ == '__main__':
     print("=== TESTING SINGLE BIRD ===")
 
     # Parse directories to get first available bird
-    bird_directories = parse_directories_file("xfoster_directories.txt")
-    if bird_directories:
-        first_bird = list(bird_directories.keys())[0]
-        print(f"Testing with bird: {first_bird}")
-        test_single_bird("xfoster_directories.txt", first_bird, "single_bird_test")
+    # bird_directories = parse_directories_file("xfoster_directories.txt")
+    # if bird_directories:
+    #     first_bird = list(bird_directories.keys())[0]
+    #     print(f"Testing with bird: {first_bird}")
+    #     test_single_bird("xfoster_directories.txt", first_bird, "single_bird_test")
 
     # Uncomment below to run full sample generation
     print("\n=== RUNNING MAIN SAMPLE GENERATION ===")
