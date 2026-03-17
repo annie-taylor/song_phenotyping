@@ -167,44 +167,45 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
 def main():
     logging.info("Optimizing PyTables for network access")
     optimize_pytables_for_network()
-
-    # EVSong processing
-    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-    logging.info(f"Processing EVSong directory: {evsong_test_directory}")
-
-    if not os.path.exists(evsong_test_directory):
-        logging.error(f"EVSong directory does not exist: {evsong_test_directory}")
-    else:
-        birds = [b for b in os.listdir(evsong_test_directory)
-                 if b != 'copied_data' and os.path.isdir(os.path.join(evsong_test_directory, b))]
-        logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
-
-        for bird in birds:
-            logging.info(f"Processing EVSong bird: {bird}")
-            success = flatten_bird_spectrograms(evsong_test_directory, bird)
-            if success:
-                logging.info(f"✅ Successfully processed EVSong bird: {bird}")
-            else:
-                logging.error(f"❌ Failed to process EVSong bird: {bird}")
     #
-    # # WSeg processing
-    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
-    # logging.info(f"Processing WSeg directory: {wseg_test_directory}")
+    # # EVSong processing
+    # evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq') #os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
+    # logging.info(f"Processing EVSong directory: {evsong_test_directory}")
     #
-    # if not os.path.exists(wseg_test_directory):
-    #     logging.error(f"WSeg directory does not exist: {wseg_test_directory}")
+    # if not os.path.exists(evsong_test_directory):
+    #     logging.error(f"EVSong directory does not exist: {evsong_test_directory}")
     # else:
-    #     birds = [b for b in os.listdir(wseg_test_directory)
-    #              if b != 'copied_data' and os.path.isdir(os.path.join(wseg_test_directory, b))]
-    #     logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+    #     birds = [b for b in os.listdir(evsong_test_directory)
+    #              if b != 'copied_data' and os.path.isdir(os.path.join(evsong_test_directory, b))]
+    #     logging.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
     #
     #     for bird in birds:
-    #         logging.info(f"Processing WSeg bird: {bird}")
-    #         success = flatten_bird_spectrograms(wseg_test_directory, bird)
+    #         logging.info(f"Processing EVSong bird: {bird}")
+    #         success = flatten_bird_spectrograms(evsong_test_directory, bird)
     #         if success:
-    #             logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+    #             logging.info(f"✅ Successfully processed EVSong bird: {bird}")
     #         else:
-    #             logging.error(f"❌ Failed to process WSeg bird: {bird}")
+    #             logging.error(f"❌ Failed to process EVSong bird: {bird}")
+
+    # WSeg processing
+    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test')
+    wseg_test_directory = Path('E:/') / 'xfosters'
+    logging.info(f"Processing WSeg directory: {wseg_test_directory}")
+
+    if not os.path.exists(wseg_test_directory):
+        logging.error(f"WSeg directory does not exist: {wseg_test_directory}")
+    else:
+        birds = [b for b in os.listdir(wseg_test_directory)
+                 if b != 'copied_data' and os.path.isdir(os.path.join(wseg_test_directory, b))]
+        logging.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+
+        for bird in birds:
+            logging.info(f"Processing WSeg bird: {bird}")
+            success = flatten_bird_spectrograms(wseg_test_directory, bird)
+            if success:
+                logging.info(f"✅ Successfully processed WSeg bird: {bird}")
+            else:
+                logging.error(f"❌ Failed to process WSeg bird: {bird}")
 
     logging.info("Spectrogram flattening pipeline completed")
 

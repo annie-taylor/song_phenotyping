@@ -632,7 +632,7 @@ if __name__ == '__main__':
     test_paths = [
         # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         # os.path.join('/Volumes', 'Extreme SSD', 'evsong test')
-        os.path.join('E:', 'xfosters')
+        os.path.join('E:/', 'xfosters')
     ]
 
     for dataset_path in test_paths:

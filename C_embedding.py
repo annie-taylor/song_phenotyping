@@ -14,6 +14,7 @@ import multiprocessing as mp
 from dataclasses import dataclass
 import pickle as pkl
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 from tools.system_utils import optimize_pytables_for_network
@@ -923,80 +924,81 @@ def main():
     logger.info("Optimizing PyTables for network access")
     optimize_pytables_for_network()
 
-    # EVSong processing
-    evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq')
-    logger.info(f"Processing EVSong directory: {evsong_test_directory}")
-
-    if os.path.exists(evsong_test_directory):
-        birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
-                 os.path.isdir(os.path.join(evsong_test_directory, b))]
-        logger.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
-
-        for bird in birds:
-            logger.info(f"Processing EVSong bird: {bird}")
-
-            # Inspect existing embeddings first
-            bird_path = os.path.join(evsong_test_directory, bird)
-            inspect_existing_embeddings(bird_path)
-
-            success = explore_embedding_parameters_robust(  # Use robust version
-                save_path=evsong_test_directory,
-                bird=bird,
-                min_dists=[0.01, 0.1, 0.2, 0.5],
-                n_neighbors_list=[5, 10, 25, 50, 100],
-                use_parallel=True,
-                overwrite=False,
-                max_samples=None,  # Let auto-management decide
-                memory_per_worker_gb=None,  # Auto-detect based on system
-                auto_memory_management=True,
-                subsample_seed=42
-            )
-
-            if success:
-                logger.info(f"✅ Successfully processed EVSong bird: {bird}")
-            else:
-                logger.error(f"❌ Failed to process EVSong bird: {bird}")
-    else:
-        logger.warning(f"EVSong directory not found: {evsong_test_directory}")
-
-    logger.info("UMAP embeddings pipeline completed")
-
-    # # WSeg processing
-    # wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test new')
-    # logger.info(f"Processing WSeg directory: {wseg_test_directory}")
+    # # EVSong processing
+    # evsong_test_directory = os.path.join('E:', 'ssharma_RNA_seq')
+    # logger.info(f"Processing EVSong directory: {evsong_test_directory}")
     #
-    # if os.path.exists(wseg_test_directory):
-    #     birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
-    #              os.path.isdir(os.path.join(wseg_test_directory, b))]
-    #     logger.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+    # if os.path.exists(evsong_test_directory):
+    #     birds = [b for b in os.listdir(evsong_test_directory) if b != 'copied_data' and
+    #              os.path.isdir(os.path.join(evsong_test_directory, b))]
+    #     logger.info(f"Found {len(birds)} birds in EVSong directory: {birds}")
     #
     #     for bird in birds:
-    #         logger.info(f"Processing WSeg bird: {bird}")
+    #         logger.info(f"Processing EVSong bird: {bird}")
     #
     #         # Inspect existing embeddings first
-    #         bird_path = os.path.join(wseg_test_directory, bird)
+    #         bird_path = os.path.join(evsong_test_directory, bird)
     #         inspect_existing_embeddings(bird_path)
     #
-    #         success = explore_embedding_parameters(
-    #             save_path=wseg_test_directory,
+    #         success = explore_embedding_parameters_robust(  # Use robust version
+    #             save_path=evsong_test_directory,
     #             bird=bird,
-    #             min_dists=[0.01, 0.1, 0.5],
-    #             n_neighbors_list=[5, 10, 50, 100],
+    #             min_dists=[0.01, 0.1, 0.2, 0.5],
+    #             n_neighbors_list=[5, 10, 25, 50, 100],
     #             use_parallel=True,
-    #             overwrite=False,  # Set to True if you want to regenerate all
-    #             max_samples=30000,  # Smaller limit for WSeg data (often more samples)
+    #             overwrite=False,
+    #             max_samples=None,  # Let auto-management decide
     #             memory_per_worker_gb=None,  # Auto-detect based on system
     #             auto_memory_management=True,
-    #             subsample_seed=42  # Fixed seed for reproducibility
+    #             subsample_seed=42
     #         )
-    #         if success:
-    #             logger.info(f"✅ Successfully processed WSeg bird: {bird}")
-    #         else:
-    #             logger.error(f"❌ Failed to process WSeg bird: {bird}")
-    # else:
-    #     logger.warning(f"WSeg directory not found: {wseg_test_directory}")
     #
-    #logger.info("UMAP embeddings pipeline completed")
+    #         if success:
+    #             logger.info(f"✅ Successfully processed EVSong bird: {bird}")
+    #         else:
+    #             logger.error(f"❌ Failed to process EVSong bird: {bird}")
+    # else:
+    #     logger.warning(f"EVSong directory not found: {evsong_test_directory}")
+    #
+    # logger.info("UMAP embeddings pipeline completed")
+
+    # WSeg processing
+    #wseg_test_directory = os.path.join('/Volumes', 'Extreme SSD', 'wseg test new')
+    wseg_test_directory = Path('E:/') / 'xfosters'
+    logger.info(f"Processing WSeg directory: {wseg_test_directory}")
+
+    if os.path.exists(wseg_test_directory):
+        birds = [b for b in os.listdir(wseg_test_directory) if b != 'copied_data' and
+                 os.path.isdir(os.path.join(wseg_test_directory, b))]
+        logger.info(f"Found {len(birds)} birds in WSeg directory: {birds}")
+
+        for bird in birds:
+            logger.info(f"Processing WSeg bird: {bird}")
+
+            # Inspect existing embeddings first
+            bird_path = os.path.join(wseg_test_directory, bird)
+            inspect_existing_embeddings(bird_path)
+
+            success = explore_embedding_parameters_robust(
+                save_path=wseg_test_directory,
+                bird=bird,
+                min_dists=[0.01, 0.1, 0.5],
+                n_neighbors_list=[5, 10, 50, 100],
+                use_parallel=True,
+                overwrite=False,  # Set to True if you want to regenerate all
+                max_samples=30000,  # Smaller limit for WSeg data (often more samples)
+                memory_per_worker_gb=None,  # Auto-detect based on system
+                auto_memory_management=True,
+                subsample_seed=42  # Fixed seed for reproducibility
+            )
+            if success:
+                logger.info(f"✅ Successfully processed WSeg bird: {bird}")
+            else:
+                logger.error(f"❌ Failed to process WSeg bird: {bird}")
+    else:
+        logger.warning(f"WSeg directory not found: {wseg_test_directory}")
+
+    logger.info("UMAP embeddings pipeline completed")
 
 
 if __name__ == "__main__":
@@ -1004,15 +1006,6 @@ if __name__ == "__main__":
     logs_dir = 'logs'
     os.makedirs(logs_dir, exist_ok=True)
 
-    # Setup logger
-    logger.basicConfig(
-        level=logger.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logger.FileHandler(os.path.join(logs_dir, 'umap_embeddings.log')),
-            logger.StreamHandler()
-        ]
-    )
-
+    # Logger is already set up at module level
     logger.info("Starting UMAP embeddings pipeline")
     main()
