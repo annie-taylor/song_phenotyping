@@ -10,15 +10,15 @@ import matplotlib.pyplot as plt
 # Set matplotlib backend at the top
 import matplotlib
 # Uncomment the one you want to use:
-matplotlib.use('MacOSX')     # macOS
-# matplotlib.use('TkAgg')      # Cross-platform default
+# matplotlib.use('MacOSX')     # macOS
+matplotlib.use('TkAgg')      # Cross-platform default
 # matplotlib.use('Qt5Agg')     # If you have PyQt5
 # matplotlib.use('Agg')        # Headless/remote
 
 
 def load_spectrogram_for_hash(hash_id: str, bird_path: str) -> np.ndarray:
     """Load spectrogram for a given hash ID."""
-    syllables_dir = os.path.join(bird_path, 'data', 'syllables')
+    syllables_dir = os.path.join(bird_path, 'syllable_data', 'syllables')
 
     if not os.path.exists(syllables_dir):
         return None
@@ -88,7 +88,7 @@ def simple_interactive_umap(bird_path: str, color_by: str = 'auto'):
     metric = best_row['metric']
 
     embeddings_path = os.path.join(
-        bird_path, 'data', 'embeddings',
+        bird_path, 'syllable_data', 'embeddings',
         f'{metric}_{int(n_neighbors)}neighbors_{min_dist}dist.h5'
     )
 
@@ -101,7 +101,7 @@ def simple_interactive_umap(bird_path: str, color_by: str = 'auto'):
     cluster_filename = os.path.basename(str(best_row['label_path']))
     cluster_labels = None
 
-    for root, dirs, files in os.walk(os.path.join(bird_path, 'data', 'labelling')):
+    for root, dirs, files in os.walk(os.path.join(bird_path, 'syllable_data', 'labelling')):
         if cluster_filename in files:
             with tables.open_file(os.path.join(root, cluster_filename), 'r') as f:
                 cluster_labels = f.root.labels.read()
@@ -270,7 +270,7 @@ def analyze_label_distribution(bird_path: str):
     metric = best_row['metric']
 
     embeddings_path = os.path.join(
-        bird_path, 'data', 'embeddings',
+        bird_path, 'syllable_data', 'embeddings',
         f'{metric}_{int(n_neighbors)}neighbors_{min_dist}dist.h5'
     )
 
@@ -281,7 +281,7 @@ def analyze_label_distribution(bird_path: str):
     cluster_filename = os.path.basename(str(best_row['label_path']))
     cluster_labels = None
 
-    for root, dirs, files in os.walk(os.path.join(bird_path, 'data', 'labelling')):
+    for root, dirs, files in os.walk(os.path.join(bird_path, 'syllable_data', 'labelling')):
         if cluster_filename in files:
             with tables.open_file(os.path.join(root, cluster_filename), 'r') as f:
                 cluster_labels = f.root.labels.read()
@@ -308,7 +308,10 @@ def example_usage():
     """Example usage with different options."""
 
     project_dir = '/Volumes/Extreme SSD/wseg test'
+    from pathlib import Path
+    project_dir = Path('E:/') / 'xfosters'
     bird_name = 'bu85bu97'
+    bird_name = 'bk1bk3'
     bird_path = os.path.join(project_dir, bird_name)
 
     print("🎵 Interactive UMAP Examples")
