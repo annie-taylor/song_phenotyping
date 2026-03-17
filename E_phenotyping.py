@@ -3,6 +3,7 @@
 # ============================================================================
 
 import os
+from pathlib import Path
 import logging
 import traceback
 from typing import Dict, List, Any, Tuple, Optional, Union
@@ -1956,11 +1957,12 @@ if __name__ == '__main__':
 
     # Process test datasets
     test_paths = [
-        os.path.join('E:', 'ssharma_RNA_seq'),  # Updated to your actual path
+        #os.path.join('E:', 'ssharma_RNA_seq'),  # Updated to your actual path
         # Add other paths as needed
         # os.path.join('/Volumes', 'Extreme SSD', 'wseg test'),
         # os.path.join('/Volumes', 'Extreme SSD', 'evsong test'),
-        os.path.join('E:', 'ssharma_RNA_seq')
+        #os.path.join('E:', 'ssharma_RNA_seq')
+        Path('E:/') / 'xfosters'
     ]
 
     for save_path in test_paths:

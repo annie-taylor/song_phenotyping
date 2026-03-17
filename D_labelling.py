@@ -1691,7 +1691,7 @@ def main(save_path: str) -> None:
     """Main function to run the clustering pipeline."""
     try:
         # Define evaluation metrics
-        metrics = ['nmi', 'silhouette', 'dbi']
+        metrics = ['silhouette', 'dbi']  # remember not to use nmi for wseg files!
 
         # Get available birds
         birds = _get_available_birds(save_path)
@@ -1890,10 +1890,10 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
 if __name__ == '__main__':
     # Setup paths and parameters
     # Updated to use new directory structure
-    save_path = os.path.join('E:', 'ssharma_RNA_seq')
+    save_path = Path('E:/') / 'xfosters'
 
     # Optional: Clear existing clustering outputs
-    # clear_clustering_outputs(save_path=save_path)
+    clear_clustering_outputs(save_path=save_path)
 
     # Run main pipeline
     main(save_path=save_path)
