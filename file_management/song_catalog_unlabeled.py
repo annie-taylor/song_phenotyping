@@ -12,8 +12,6 @@ import librosa
 import soundfile as sf
 import random
 from scipy import signal
-
-from syllable_features import feature_stats
 from tools.song_io import get_song_spec
 from tools.spectrogram_configs import SpectrogramParams
 
@@ -28,7 +26,7 @@ class BirdSpectrogramGenerator:
     def __init__(self, spec_params=None, n_spectrograms: int = 30, anonymize: bool = False, duration: int = 6):
         # Create default params if none provided
         if spec_params is None:
-            spec_params = SpectrogramParams(max_dur=duration)
+            spec_params = SpectrogramParams(max_dur=duration, downsample=False)
 
         self.spec_params = spec_params
         self.n_spectrograms = n_spectrograms
@@ -43,7 +41,7 @@ class BirdSpectrogramGenerator:
         """Get consistent anonymous ID for a bird name."""
         if bird_name not in self.anonymization_map:
             id_num = len(self.anonymization_map) + 1
-            self.anonymization_map[bird_name] = f"Bird_{chr(64 + id_num)}"
+            self.anonymization_map[bird_name] = f"Bird{id_num}"  # Bird1, Bird2, etc.
         return self.anonymization_map[bird_name]
 
     def _format_bird_name(self, bird_name: str) -> str:
@@ -330,6 +328,32 @@ class BirdSpectrogramGenerator:
                     logger.error(f"Error processing {file_path}: {e}")
                     continue
 
+    def generate_anonymization_key(self, output_dir: str) -> str:
+        """Generate CSV file mapping real bird names to anonymous IDs."""
+        if not self.anonymization_map:
+            return ""
+
+        key_filename = "anonymization_key.csv"
+        key_path = os.path.join(output_dir, key_filename)
+
+        try:
+            with open(key_path, 'w', newline='') as csvfile:
+                import csv
+                writer = csv.writer(csvfile)
+                writer.writerow(['Real_Bird_Name', 'Anonymous_ID'])
+
+                # Sort by anonymous ID for cleaner output
+                sorted_items = sorted(self.anonymization_map.items(), key=lambda x: x[1])
+                for real_name, anonymous_id in sorted_items:
+                    writer.writerow([real_name, anonymous_id])
+
+            logger.info(f"Generated anonymization key: {key_path}")
+            return key_path
+
+        except Exception as e:
+            logger.error(f"Error generating anonymization key: {e}")
+            return ""
+
         logger.info(f"Generated PDF: {output_path} with {successful_count} spectrograms")
         return output_path
 
@@ -438,15 +462,20 @@ def generate_pdfs_for_birds(directories_file: str, output_dir: str,
             logger.error(f"✗ Error processing {bird_name}: {e}")
             continue
 
-    # Summary
-    logger.info(f"\n=== SUMMARY ===")
-    logger.info(f"Successfully generated: {len(successful_pdfs)} PDFs")
-    logger.info(f"Failed: {len(failed_birds)} birds")
+        # Summary
+        logger.info(f"\n=== SUMMARY ===")
+        logger.info(f"Successfully generated: {len(successful_pdfs)} PDFs")
+        logger.info(f"Failed: {len(failed_birds)} birds")
 
-    if anonymize and generator.anonymization_map:
-        logger.info(f"Anonymization mapping:")
-        for original, anonymous in generator.anonymization_map.items():
-            logger.info(f"  {original} -> {anonymous}")
+        # Generate anonymization key if anonymizing
+        if anonymize and generator.anonymization_map:
+            key_path = generator.generate_anonymization_key(output_dir)
+            if key_path:
+                logger.info(f"Anonymization key saved to: {key_path}")
+
+            logger.info(f"Anonymization mapping:")
+            for original, anonymous in generator.anonymization_map.items():
+                logger.info(f"  {original} -> {anonymous}")
 
 def test_single_bird(directories_file: str, bird_name: str, output_dir: str = "test_output"):
     """Test spectrogram generation for a single bird."""
@@ -499,29 +528,29 @@ def main():
         logger.info("=== GENERATING SAMPLE PDFs ===")
         sample_dir = os.path.join(output_base_dir, "samples")
 
-        # Generate identified versions
-        generate_pdfs_for_birds(
-            directories_file=directories_file,
-            output_dir=os.path.join(sample_dir, "identified"),
-            anonymize=False,
-            n_birds=3
-        )
-
-        # Generate anonymous versions
-        generate_pdfs_for_birds(
-            directories_file=directories_file,
-            output_dir=os.path.join(sample_dir, "anonymous"),
-            anonymize=True,
-            n_birds=3
-        )
+        # # Generate identified versions
+        # generate_pdfs_for_birds(
+        #     directories_file=directories_file,
+        #     output_dir=os.path.join(sample_dir, "identified"),
+        #     anonymize=False,
+        #     n_birds=3
+        # )
+        #
+        # # Generate anonymous versions
+        # generate_pdfs_for_birds(
+        #     directories_file=directories_file,
+        #     output_dir=os.path.join(sample_dir, "anonymous"),
+        #     anonymize=True,
+        #     n_birds=3
+        # )
 
         # Uncomment below for full generation
         # logger.info("=== GENERATING ALL ANONYMOUS PDFs ===")
-        # generate_pdfs_for_birds(
-        #     directories_file=directories_file,
-        #     output_dir=os.path.join(output_base_dir, "all_anonymous"),
-        #     anonymize=True
-        # )
+        generate_pdfs_for_birds(
+            directories_file=directories_file,
+            output_dir=os.path.join(output_base_dir, "all_anonymous"),
+            anonymize=True
+        )
 
     except KeyboardInterrupt:
         logger.info("Process interrupted by user")
@@ -543,7 +572,7 @@ if __name__ == '__main__':
         test_single_bird("xfoster_directories.txt", first_bird, "single_bird_test")
 
     # Uncomment below to run full sample generation
-    # print("\n=== RUNNING MAIN SAMPLE GENERATION ===")
-    # main()
+    print("\n=== RUNNING MAIN SAMPLE GENERATION ===")
+    main()
 
     print("\n=== SCRIPT EXECUTION COMPLETE ===")
