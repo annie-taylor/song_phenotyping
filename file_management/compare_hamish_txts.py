@@ -1,3 +1,7 @@
+"""
+Simple set of functions to compare versions of Hamish's db index files
+"""
+
 def parse_file1(filename):
     """Parse MacawAllDirsByUniqueBird.txt"""
     birds = {}

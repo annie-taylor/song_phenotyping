@@ -1,3 +1,7 @@
+"""
+Remove duplicates and extract dates/times from the output of audio directory search.
+"""
+
 import os
 import json
 import logging
@@ -14,7 +18,6 @@ class DateTimeEncoder(json.JSONEncoder):
         if isinstance(obj, datetime):
             return obj.isoformat()
         return super().default(obj)
-
 
 def save_bird_audio_data_with_datetime(data: Dict[str, Any], save_file: str) -> None:
     """Save bird audio data to JSON file with datetime handling."""
@@ -35,7 +38,6 @@ def save_bird_audio_data_with_datetime(data: Dict[str, Any], save_file: str) -> 
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-# You'll also need the load_bird_audio_data function from earlier:
 def load_bird_audio_data(save_file):
     """Load previously saved bird audio data from JSON file"""
     if os.path.exists(save_file):

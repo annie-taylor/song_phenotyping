@@ -1,3 +1,42 @@
+#!/usr/bin/env python3
+"""
+xfoster_metadata_and_filesearch.py
+
+A comprehensive analysis tool for identifying and analyzing cross-fostered birds in
+behavioral research studies. This module extracts data from bird research databases,
+identifies birds whose genetic parents differ from their nest/rearing parents,
+locates their audio recordings, and generates detailed summary reports.
+
+Key Features:
+- Identifies cross-fostered birds by comparing genetic vs nest fathers
+- Searches for and catalogs audio recordings (.wav, .cbin files)
+- Handles multiple bird name variations and formats for robust matching
+- Generates CSV reports for cross-fostered birds and control groups
+- Provides resumable processing with progress tracking and backups
+- Comprehensive logging and error handling
+
+Main Outputs:
+- cross_fostered_birds_summary.csv: Main analysis with song counts
+- cross_fostered_birds_notes.csv: Database notes for each bird
+- home_reared_offspring.csv: Control group of non-cross-fostered siblings
+- cross_fostered_bird_audio_data.json: Detailed audio file locations
+
+Usage:
+    python cross_foster_analysis.py
+
+Configuration:
+    REUSE_AUDIO_DATA: Set to True to reuse existing audio data, False to regenerate
+    LOG_TO_CONSOLE: Set to True to print logs to console, False for file only
+
+Dependencies:
+- SQLite database with bird genetic and nest parent relationships
+- MacawAllDirsByBird.txt file mapping birds to file locations
+- Audio file directories containing .wav and .cbin recordings
+- tools.system_utils and tools.dbquery modules
+
+Author: Annie Taylor
+"""
+
 import os
 import sys
 import signal

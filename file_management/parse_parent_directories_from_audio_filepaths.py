@@ -1,3 +1,8 @@
+"""
+After pulling all filepaths and deduplicating, you can use this process to get a list of the root directories
+(that contain audio files) for each bird.
+"""
+
 import json
 from pathlib import Path
 from collections import defaultdict

@@ -1,3 +1,8 @@
+"""
+For pulling out bird names and identifying content overlaps in various csvs used to keep track of x-foster birds in the lab
+"""
+
+
 import csv
 import json
 import os
