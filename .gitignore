@@ -17,9 +17,10 @@
 analysis_results
 logs
 refs
-file_management/foster_bird_spectrograms_samples
-file_management/foster_bird_spectrograms
-file_management/single_bird_test
-file_management/cross_foster_data_audit
+file_management/foster_bird_spectrograms_samples*
+file_management/foster_bird_spectrograms*
+file_management/single_bird_test*
+file_management/cross_foster_data_audit*
+file_management/older files*
 Volumes*
 

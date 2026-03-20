@@ -210,7 +210,7 @@ def main_deduplication():
     )
 
     # Load original data
-    input_file = "cross_fostered_bird_audio_data.json"
+    input_file = "older files/cross_fostered_bird_audio_data.json"
     bird_audio_data = load_bird_audio_data(input_file)
 
     if not bird_audio_data:
