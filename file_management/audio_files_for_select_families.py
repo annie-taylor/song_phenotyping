@@ -107,55 +107,37 @@ def process_one_bird(
     Resolve candidate directories for one bird, scan them, and keep the largest audio files.
     Returns (bird, result_dict).
     """
-    try:
-        primary_map = get_file_locations_for_birds(
-            [bird],
-            txt_file_path=txt_path,
-            db_path=db_path,
-        )
+    primary_map = get_file_locations_for_birds(
+        [bird],
+        txt_file_path=txt_path,
+        db_path=db_path,
+    )
 
-        dirs = set()
+    dirs = set()
+    for fp in primary_map.get(bird, []):
+        fp = fp.replace("\\", "/")
+        full_path = fp if os.path.isabs(fp) else os.path.join(root_dir, fp)
+        if os.path.exists(full_path):
+            dirs.add(os.path.dirname(full_path))
 
-        # Directories from the main bird->filepath mapping
-        for fp in primary_map.get(bird, []):
-            fp = fp.replace("\\", "/")
-            full_path = fp if os.path.isabs(fp) else os.path.join(root_dir, fp)
-            if os.path.exists(full_path):
-                dirs.add(os.path.dirname(full_path))
+    dirs = list(dirs)[:max_dirs_per_bird]
+    files = get_audio_files_from_dirs(dirs, min_size_mb=min_size_mb)
 
-        # Also search screening locations
-        for d in get_screening_directories(bird, root_dir):
-            dirs.add(d)
+    files.sort(key=lambda x: x[1], reverse=True)
+    top = files[:max_files]
 
-        dirs = list(dirs)[:max_dirs_per_bird]
-
-        files = get_audio_files_from_dirs(dirs, min_size_mb=min_size_mb)
-        files.sort(key=lambda x: x[1], reverse=True)
-        top = files[:max_files]
-
-        result = [
+    return bird, {
+        "n_dirs_searched": len(dirs),
+        "n_files_selected": len(top),
+        "files": [
             {
-                "bird": bird,
                 "filename": os.path.basename(fp),
                 "filepath": fp,
                 "size_mb": round(size / (1024 * 1024), 2),
             }
             for fp, size in top
-        ]
-
-        return bird, {
-            "n_dirs_searched": len(dirs),
-            "n_files_selected": len(top),
-            "files": result,
-        }
-
-    except Exception as e:
-        return bird, {
-            "n_dirs_searched": 0,
-            "n_files_selected": 0,
-            "files": [],
-            "error": str(e),
-        }
+        ],
+    }
 
 
 def get_top_songs_parallel(
@@ -245,33 +227,23 @@ def get_birds_from_nest_summary(csv_path, top_n=3):
 
 
 if __name__ == "__main__":
-
-    # Root + DB paths (same utilities you’ve been using)
     root_dir = check_sys_for_macaw_root()
-    db_path = os.path.join(root_dir, "bird_database.sqlite")
-    txt_path = os.path.join(root_dir, "MacawAllDirsByBird.txt")
 
-    # Your summary CSV (same directory you’ve been working in)
-    csv_path = os.path.join(
-        '/Users','annietaylor','Documents','ucsf','brainard','x-foster',
-        'nest_father_offspring_summary.csv'
+    txt_path = "../refs/MacawAllDirsByBird.txt"
+    db_path = "../refs/2026-01-15-db.sqlite3"
+
+    print("cwd:", os.getcwd())
+    print("txt_path:", os.path.abspath(txt_path), os.path.exists(txt_path))
+    print("db_path:", os.path.abspath(db_path), os.path.exists(db_path))
+
+    if not os.path.exists(txt_path):
+        raise FileNotFoundError(f"Missing txt_path: {txt_path}")
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"Missing db_path: {db_path}")
+
+    birds = get_birds_from_nest_summary(
+        "/Users/annietaylor/Documents/ucsf/brainard/x-foster/nest_father_offspring_summary.csv"
     )
-
-    # OPTIONAL: if you switch to using your canonical bird list instead
-    birds_txt_path = os.path.join(
-        '/Users','annietaylor','Documents','ucsf','brainard','x-foster',
-        'birds_for_analysis.txt'
-    )
-
-    if os.path.exists(birds_txt_path):
-        print("Loading birds from birds_for_analysis.txt")
-        with open(birds_txt_path) as f:
-            birds = [line.strip() for line in f if line.strip()]
-    else:
-        print("Loading birds from summary CSV")
-        birds = get_birds_from_nest_summary(csv_path, top_n=3)
-
-    print(f"Total birds: {len(birds)}")
 
     results = get_top_songs_parallel(
         birds=birds,
@@ -282,15 +254,4 @@ if __name__ == "__main__":
         min_size_mb=0.1,
         max_dirs_per_bird=5,
         max_workers=12,
-    )
-
-    # Save outputs right next to your other analysis files
-    out_dir = os.path.join(
-        '/Users','annietaylor','Documents','ucsf','brainard','x-foster'
-    )
-
-    save_audio_lookup_results(
-        results,
-        out_json_path=os.path.join(out_dir, "audio_lookup_results.json"),
-        out_csv_path=os.path.join(out_dir, "audio_lookup_results.csv"),
     )
