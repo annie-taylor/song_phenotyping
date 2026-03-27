@@ -121,11 +121,12 @@ def process_one_bird(
     )
 
     dirs = set()
-    for fp in primary_map.get(bird, []):
-        fp = fp.replace("\\", "/")
-        full_path = fp if os.path.isabs(fp) else os.path.join(root_dir, fp)
-        if os.path.exists(full_path):
-            dirs.add(os.path.dirname(full_path))
+    for alias in search_terms:
+        for fp in primary_map.get(alias, []):
+            fp = fp.replace("\\", "/")
+            full_path = fp if os.path.isabs(fp) else os.path.join(root_dir, fp)
+            if os.path.exists(full_path):
+                dirs.add(os.path.dirname(full_path))
 
     dirs = list(dirs)[:max_dirs_per_bird]
     files = get_audio_files_from_dirs(dirs, min_size_mb=min_size_mb)
@@ -249,8 +250,7 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"Missing db_path: {db_path}")
 
     birds = get_birds_from_nest_summary(
-        "/Users/annietaylor/Documents/ucsf/brainard/x-foster/nest_father_offspring_summary.csv"
-    )
+        "/Users/annietaylor/Documents/ucsf/brainard/x-foster/nest_father_offspring_summary.csv")
 
     results = get_top_songs_parallel(
         birds=birds,
@@ -262,3 +262,20 @@ if __name__ == "__main__":
         max_dirs_per_bird=5,
         max_workers=12,
     )
+
+    # Flatten for downstream compatibility
+    song_results = {
+        bird: info["files"]
+        for bird, info in results.items()
+    }
+
+    # Save JSON (used by spectrogram + segmentation)
+    json_path = os.path.join(os.getcwd(), "priority_bird_songpaths.json")
+    with open(json_path, "w") as f:
+        json.dump(song_results, f, indent=2)
+
+    # Also save CSV (nice for inspection)
+    csv_path = os.path.join(root_dir, "file_management", "audio_lookup_results.csv")
+    save_audio_lookup_results(results, out_json_path=json_path, out_csv_path=csv_path)
+
+    print(f"Saved JSON to: {json_path}")
