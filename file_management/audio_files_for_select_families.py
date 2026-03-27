@@ -275,7 +275,7 @@ if __name__ == "__main__":
         json.dump(song_results, f, indent=2)
 
     # Also save CSV (nice for inspection)
-    csv_path = os.path.join(root_dir, "file_management", "audio_lookup_results.csv")
+    csv_path = os.path.join(os.getcwd(), "audio_lookup_results.csv")
     save_audio_lookup_results(results, out_json_path=json_path, out_csv_path=csv_path)
 
     print(f"Saved JSON to: {json_path}")
