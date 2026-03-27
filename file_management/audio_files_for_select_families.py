@@ -277,8 +277,15 @@ if __name__ == "__main__":
         json.dump(song_results, f, indent=2)
 
     # --- Save CSV ONLY (prevent JSON overwrite) ---
-    save_audio_lookup_results(
-        results,
-        out_json_path=None,  # 👈 key change
-        out_csv_path=csv_path
-    )
+    pd.DataFrame([
+        {
+            "bird": bird,
+            "filename": item["filename"],
+            "filepath": item["filepath"],
+            "size_mb": item["size_mb"],
+            "n_dirs_searched": results[bird]["n_dirs_searched"],
+            "n_files_selected": results[bird]["n_files_selected"],
+        }
+        for bird in results
+        for item in results[bird]["files"]
+    ]).to_csv(csv_path, index=False)

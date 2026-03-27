@@ -386,7 +386,7 @@ def plot_segmentation_summary(
 
         plt.tight_layout()
         if out_path:
-            fig.savefig(out_path, dpi=200, bbox_inches="tight")
+            fig.savefig(out_path, dpi=400, bbox_inches="tight")
         else:
             plt.show()
     finally:
@@ -506,7 +506,7 @@ def process_one_file(
             ax.set_ylabel("Frequency (Hz)")
             ax.set_ylim(0, min(10000, sr / 2))
             plt.tight_layout()
-            fig.savefig(out_path, dpi=300, bbox_inches="tight")
+            fig.savefig(out_path, dpi=400, bbox_inches="tight")
         finally:
             plt.close(fig)
 
