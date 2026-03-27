@@ -257,9 +257,9 @@ if __name__ == "__main__":
         txt_path=txt_path,
         db_path=db_path,
         root_dir=root_dir,
-        max_files=5,
+        max_files=10,
         min_size_mb=0.1,
-        max_dirs_per_bird=5,
+        max_dirs_per_bird=10,
         max_workers=12,
     )
 
