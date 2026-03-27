@@ -58,7 +58,6 @@ BIRD_ALIASES = {
     "ye1tut0": ["ye1tut0", "ye1", "y1"],
 }
 
-
 # -----------------------------------------------------------------------------
 # IO helpers
 # -----------------------------------------------------------------------------
@@ -337,7 +336,7 @@ def spectrogram_for_plot(audio: np.ndarray, sr: int) -> Tuple[np.ndarray, np.nda
 # -----------------------------------------------------------------------------
 def plot_segmentation_summary(
     audio: np.ndarray,
-    sr: int,
+    fs: int,
     onsets: np.ndarray,
     offsets: np.ndarray,
     threshold: Optional[float] = None,
@@ -352,12 +351,12 @@ def plot_segmentation_summary(
     """
     fig = None
     try:
-        env = smooth_envelope(audio, sr, smooth_ms=2.0)
+        env = smooth_envelope(audio, fs, smooth_ms=2.0)
         if np.max(env) > 0:
             env = env / np.max(env)
 
-        t = np.arange(len(audio)) / sr
-        te = np.arange(len(env)) / sr
+        t = np.arange(len(audio)) / fs
+        te = np.arange(len(env)) / fs
 
         fig, axes = plt.subplots(3, 1, figsize=(15, 10), sharex=False)
 
@@ -375,11 +374,11 @@ def plot_segmentation_summary(
         axes[1].set_title("Smoothed envelope + threshold")
         axes[1].set_ylabel("Normalized envelope")
 
-        f, tt, Sxx = spectrogram_for_plot(audio, sr)
+        f, tt, Sxx = spectrogram_for_plot(audio, fs)
         axes[2].pcolormesh(tt, f, Sxx, shading="auto", cmap="magma")
         for o, off in zip(onsets, offsets):
             axes[2].axvspan(o, off, alpha=0.2)
-        axes[2].set_ylim(0, min(10000, sr / 2))
+        axes[2].set_ylim(400, min(10000, fs / 2))
         axes[2].set_title("Spectrogram with detected segments")
         axes[2].set_xlabel("Time (s)")
         axes[2].set_ylabel("Frequency (Hz)")
@@ -422,11 +421,11 @@ def process_one_file(
     fig = None
     try:
         filepath = resolve_audio_path(filepath)
-        audio, sr = read_audio_file(filepath)
+        audio, fs = read_audio_file(filepath)
 
         score = score_song_candidate(
             audio,
-            sr,
+            fs,
             window_sec=window_sec,
             min_segments=min_segments,
             step_sec=step_sec,
@@ -475,13 +474,13 @@ def process_one_file(
             }
 
         start_t, end_t = best_window
-        s1 = int(round(start_t * sr))
-        s2 = int(round(end_t * sr))
+        s1 = int(round(start_t * fs))
+        s2 = int(round(end_t * fs))
         audio_segment = audio[s1:s2]
 
         spec, f_sel, t_sel = make_song_spectrogram(
             audio_segment,
-            fs=sr,
+            fs=fs,
             nfft=1024,
             hop=1,
             min_freq=400,
@@ -504,7 +503,7 @@ def process_one_file(
             ax.set_title(f"{bird} | {Path(filepath).name}")
             ax.set_xlabel("Time (s)")
             ax.set_ylabel("Frequency (Hz)")
-            ax.set_ylim(0, min(10000, sr / 2))
+            ax.set_ylim(400, min(10000, fs / 2))
             plt.tight_layout()
             fig.savefig(out_path, dpi=400, bbox_inches="tight")
         finally:
@@ -665,14 +664,14 @@ def main() -> None:
     results = build_spectrogram_pipeline(
         song_results=song_results,
         output_root=output_root,
-        window_sec=2.0,
-        min_segments=5,
+        window_sec=6.0,
+        min_segments=8,
         step_sec=0.25,
         threshold_mode="percentile",
         overwrite=True,
         max_files_per_bird=5,
-        use_parallel=True,
-        max_workers=3,
+        use_parallel=False,
+        max_workers=2,
         manifest_path=manifest_path,
     )
 
