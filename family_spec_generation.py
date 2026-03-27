@@ -500,7 +500,7 @@ def process_one_file(
                     extent=[0, end_t - start_t, f_sel[0], f_sel[-1]],
                 )
 
-            ax.set_title(f"{bird} | {Path(filepath).name}")
+            #ax.set_title(f"{bird} | {Path(filepath).name}")
             ax.set_xlabel("Time (s)")
             ax.set_ylabel("Frequency (Hz)")
             ax.set_ylim(400, min(10000, fs / 2))
