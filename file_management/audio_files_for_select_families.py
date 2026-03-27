@@ -14,6 +14,11 @@ from tools.system_utils import check_sys_for_macaw_root
 
 
 AUDIO_TIMESTAMP_RE = re.compile(r"^.+\.\d{8}\.\d{4}(\d{2})?$")  # .YYYYMMDD.HHMM or .YYYYMMDD.HHMMSS
+BIRD_ALIASES = {"ye1tut0": ["ye1tut0", "ye1", "y1"],}
+
+
+def expand_bird_aliases(bird):
+    return BIRD_ALIASES.get(bird, [bird])
 
 
 def parse_macaw_dirs_file(txt_file_path):
@@ -107,8 +112,10 @@ def process_one_bird(
     Resolve candidate directories for one bird, scan them, and keep the largest audio files.
     Returns (bird, result_dict).
     """
+    search_terms = expand_bird_aliases(bird)
+
     primary_map = get_file_locations_for_birds(
-        [bird],
+        search_terms,
         txt_file_path=txt_path,
         db_path=db_path,
     )

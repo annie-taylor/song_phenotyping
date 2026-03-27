@@ -26,7 +26,7 @@ plt.ioff()
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import ShortTimeFFT, butter, filtfilt, get_window
-x
+
 try:
     import soundfile as sf
 except ImportError:  # pragma: no cover
@@ -299,16 +299,16 @@ def save_one_spectrogram_record(
                 "num_offsets": len(offsets),
             }
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig = None
         try:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
             if spec.size > 0:
                 ax.imshow(
                     spec,
                     origin="lower",
                     aspect="auto",
-                    cmap="gray_r",
+                    cmap="magma",
                     vmin=0,
                     vmax=1,
                     extent=[0, end_t - start_t, f_sel[0], f_sel[-1]],
@@ -325,10 +325,12 @@ def save_one_spectrogram_record(
             ax.set_ylabel("Frequency (Hz)")
             ax.set_ylim(0, min(max_freq, sr / 2))
             plt.tight_layout()
-            fig.savefig(out_path, dpi=200, bbox_inches="tight")
+            fig.savefig(out_path, dpi=400, bbox_inches="tight")
+
 
         finally:
-            plt.close(fig)
+            if fig is not None:
+                plt.close(fig)
 
         return {
             "bird": bird,
@@ -510,7 +512,7 @@ def test_song_file_simple(
             spec,
             origin="lower",
             aspect="auto",
-            cmap="gray_r",
+            cmap="magma",
             vmin=0,
             vmax=1,
             extent=[0, end_t - start_t, f_sel[0], f_sel[-1]],
@@ -571,7 +573,7 @@ def main() -> None:
         overwrite=True,
         max_files_per_bird=5,
         use_parallel=True,
-        max_workers=None,
+        max_workers=2,
         manifest_path=manifest_path,
     )
 
