@@ -263,19 +263,22 @@ if __name__ == "__main__":
         max_workers=12,
     )
 
-    # Flatten for downstream compatibility
+    # Flatten
     song_results = {
         bird: info["files"]
         for bird, info in results.items()
     }
 
-    # Save JSON (used by spectrogram + segmentation)
     json_path = os.path.join(os.getcwd(), "priority_bird_songpaths.json")
+    csv_path = os.path.join(os.getcwd(), "audio_lookup_results.csv")
+
+    # --- Save JSON (flattened) ---
     with open(json_path, "w") as f:
         json.dump(song_results, f, indent=2)
 
-    # Also save CSV (nice for inspection)
-    csv_path = os.path.join(os.getcwd(), "audio_lookup_results.csv")
-    save_audio_lookup_results(results, out_json_path=json_path, out_csv_path=csv_path)
-
-    print(f"Saved JSON to: {json_path}")
+    # --- Save CSV ONLY (prevent JSON overwrite) ---
+    save_audio_lookup_results(
+        results,
+        out_json_path=None,  # 👈 key change
+        out_csv_path=csv_path
+    )
