@@ -41,7 +41,7 @@ import shutil
 from tqdm import tqdm
 from pathlib import Path
 
-from tools.song_io import (
+from song_phenotyping.signal import (
     setup_logging,
     get_memory_usage,
     parse_audio_filename,
@@ -52,11 +52,11 @@ from tools.song_io import (
     save_segmented_audio_data,
     get_song_specs,
 )
-from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
+from song_phenotyping.tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
 from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
-from tools.audio_path_management import *
-from tools.filerecords import *
-from tools.logging_utils import setup_logger
+from song_phenotyping.tools.audio_path_management import *
+from song_phenotyping.tools.filerecords import *
+from song_phenotyping.tools.logging_utils import setup_logger
 
 logger = setup_logger(__name__, 'spectrogram_saving.log')
 

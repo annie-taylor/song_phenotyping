@@ -50,8 +50,8 @@ import tables
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 
-from tools.system_utils import check_sys_for_macaw_root
-from tools.logging_utils import setup_logger
+from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
+from song_phenotyping.tools.logging_utils import setup_logger
 
 logger = setup_logger(__name__, 'labeling.log')
 

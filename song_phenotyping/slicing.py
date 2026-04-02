@@ -17,7 +17,7 @@ from random import sample
 import gc
 from tqdm import tqdm
 
-from tools.song_io import (
+from song_phenotyping.signal import (
     setup_logging,
     get_memory_usage,
     parse_audio_filename,
@@ -27,7 +27,7 @@ from tools.song_io import (
     logger,
 )
 from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
-from tools.system_utils import check_sys_for_macaw_root
+from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
 from song_phenotyping.ingestion import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_file_pairs
 
 

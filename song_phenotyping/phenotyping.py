@@ -36,10 +36,7 @@ import tables
 from scipy.stats import skew, kurtosis
 from tqdm import tqdm
 
-try:
-    from song_phenotyping.tools.label_handler import LabelType, LabelHandler, has_manual_labels
-except ImportError:
-    from tools.label_handler import LabelType, LabelHandler, has_manual_labels
+from song_phenotyping.tools.label_handler import LabelType, LabelHandler, has_manual_labels
 
 
 # ============================================================================
@@ -377,7 +374,7 @@ def _resolve_file_path(file_path: str) -> str:
 
     try:
         # Handle network path resolution
-        from tools.system_utils import check_sys_for_macaw_root
+        from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
         path_to_macaw = check_sys_for_macaw_root()
 
         path_parts = file_path.replace('\\', '/').split('/')
