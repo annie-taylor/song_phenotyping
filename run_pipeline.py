@@ -33,12 +33,12 @@ SONGS_PER_BIRD = None
 # ---------------------------------------------------------------------------
 
 def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird):
-    from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
-    from B_flattening import flatten_bird_spectrograms
-    from C_embedding import explore_embedding_parameters_robust
-    from D_labelling import label_bird, DEFAULT_HDBSCAN_GRID
-    from E_phenotyping import phenotype_bird, PhenotypingConfig
-    from tools.spectrogram_configs import SpectrogramParams
+    from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+    from song_phenotyping.flattening import flatten_bird_spectrograms
+    from song_phenotyping.embedding import explore_embedding_parameters_robust
+    from song_phenotyping.labelling import label_bird, DEFAULT_HDBSCAN_GRID
+    from song_phenotyping.phenotyping import phenotype_bird, PhenotypingConfig
+    from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 
     print(f"\n{'='*60}")
     print(f"  Running pipeline for {bird} (evsonganaly)")
@@ -83,12 +83,12 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird):
 
 
 def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird):
-    from A_spec_saving import filepaths_from_wseg, save_specs_for_wseg_birds
-    from B_flattening import flatten_bird_spectrograms
-    from C_embedding import explore_embedding_parameters_robust
-    from D_labelling import label_bird, DEFAULT_HDBSCAN_GRID
-    from E_phenotyping import phenotype_bird, PhenotypingConfig
-    from tools.spectrogram_configs import SpectrogramParams
+    from song_phenotyping.ingestion import filepaths_from_wseg, save_specs_for_wseg_birds
+    from song_phenotyping.flattening import flatten_bird_spectrograms
+    from song_phenotyping.embedding import explore_embedding_parameters_robust
+    from song_phenotyping.labelling import label_bird, DEFAULT_HDBSCAN_GRID
+    from song_phenotyping.phenotyping import phenotype_bird, PhenotypingConfig
+    from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 
     print(f"\n{'='*60}")
     print(f"  Running pipeline for {bird} (wseg)")

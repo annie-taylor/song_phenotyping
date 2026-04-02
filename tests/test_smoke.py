@@ -28,7 +28,7 @@ from conftest import (
     EVSONG_BIRD, WSEG_BIRD,
     requires_evsong, requires_wseg,
 )
-from tools.spectrogram_configs import SpectrogramParams
+from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 
 # Minimal params to keep smoke tests fast
 _SPEC_PARAMS  = SpectrogramParams(songs_per_bird=3)
@@ -62,7 +62,7 @@ class TestStageA:
     @requires_evsong
     def test_evsonganaly_filepath_discovery(self, evsong_source_dir):
         """filepaths_from_evsonganaly finds or18or24 and returns non-empty dicts."""
-        from A_spec_saving import filepaths_from_evsonganaly
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir,
             bird_subset=[EVSONG_BIRD],
@@ -73,7 +73,7 @@ class TestStageA:
     @requires_evsong
     def test_evsonganaly_spec_saving(self, evsong_source_dir, evsong_bird_dir):
         """save_specs_for_evsonganaly_birds produces HDF5 files with required keys."""
-        from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
 
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir,
@@ -99,7 +99,7 @@ class TestStageA:
     @requires_wseg
     def test_wseg_filepath_discovery(self, wseg_metadata_dir):
         """filepaths_from_wseg finds bu78bu77 and returns non-empty metadata dict."""
-        from A_spec_saving import filepaths_from_wseg
+        from song_phenotyping.ingestion import filepaths_from_wseg
         meta, audio = filepaths_from_wseg(
             seg_directory=wseg_metadata_dir,
             bird_subset=[WSEG_BIRD],
@@ -110,7 +110,7 @@ class TestStageA:
     @requires_wseg
     def test_wseg_spec_saving(self, wseg_metadata_dir, wseg_bird_dir):
         """save_specs_for_wseg_birds produces HDF5 files with required keys."""
-        from A_spec_saving import filepaths_from_wseg, save_specs_for_wseg_birds
+        from song_phenotyping.ingestion import filepaths_from_wseg, save_specs_for_wseg_birds
 
         meta, audio = filepaths_from_wseg(
             seg_directory=wseg_metadata_dir,
@@ -141,7 +141,7 @@ class TestStageA:
 class TestStageB:
 
     def _run_a_evsong(self, evsong_source_dir, out_dir):
-        from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
@@ -151,7 +151,7 @@ class TestStageB:
     @requires_evsong
     def test_flatten_produces_h5(self, evsong_source_dir, evsong_bird_dir):
         """flatten_bird_spectrograms creates flattened HDF5 with correct shape."""
-        from B_flattening import flatten_bird_spectrograms
+        from song_phenotyping.flattening import flatten_bird_spectrograms
         self._run_a_evsong(evsong_source_dir, evsong_bird_dir)
 
         result = flatten_bird_spectrograms(
@@ -180,8 +180,8 @@ class TestStageB:
 class TestStageC:
 
     def _run_ab_evsong(self, evsong_source_dir, out_dir):
-        from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
-        from B_flattening import flatten_bird_spectrograms
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.flattening import flatten_bird_spectrograms
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
@@ -192,7 +192,7 @@ class TestStageC:
     @requires_evsong
     def test_embedding_produces_pkl(self, evsong_source_dir, evsong_bird_dir):
         """explore_embedding_parameters_robust creates embedding files with shape (n, 2)."""
-        from C_embedding import explore_embedding_parameters_robust
+        from song_phenotyping.embedding import explore_embedding_parameters_robust
         self._run_ab_evsong(evsong_source_dir, evsong_bird_dir)
 
         explore_embedding_parameters_robust(
@@ -222,9 +222,9 @@ class TestStageC:
 class TestStageD:
 
     def _run_abc_evsong(self, evsong_source_dir, out_dir):
-        from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
-        from B_flattening import flatten_bird_spectrograms
-        from C_embedding import explore_embedding_parameters_robust
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.flattening import flatten_bird_spectrograms
+        from song_phenotyping.embedding import explore_embedding_parameters_robust
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
@@ -239,7 +239,7 @@ class TestStageD:
     @requires_evsong
     def test_labelling_produces_cluster_files(self, evsong_source_dir, evsong_bird_dir):
         """label_bird creates cluster label files in the expected directory."""
-        from D_labelling import label_bird, HDBSCANParams
+        from song_phenotyping.labelling import label_bird, HDBSCANParams
         self._run_abc_evsong(evsong_source_dir, evsong_bird_dir)
 
         result = label_bird(
@@ -264,11 +264,11 @@ class TestStageE:
     @requires_evsong
     def test_phenotyping_produces_json(self, evsong_source_dir, evsong_bird_dir):
         """phenotype_bird produces a JSON analysis file with expected top-level keys."""
-        from A_spec_saving import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
-        from B_flattening import flatten_bird_spectrograms
-        from C_embedding import explore_embedding_parameters_robust
-        from D_labelling import label_bird, HDBSCANParams
-        from E_phenotyping import phenotype_bird, PhenotypingConfig
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.flattening import flatten_bird_spectrograms
+        from song_phenotyping.embedding import explore_embedding_parameters_robust
+        from song_phenotyping.labelling import label_bird, HDBSCANParams
+        from song_phenotyping.phenotyping import phenotype_bird, PhenotypingConfig
 
         meta, audio = filepaths_from_evsonganaly(
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
