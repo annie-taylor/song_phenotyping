@@ -8,7 +8,6 @@ import logging
 import traceback
 from typing import Dict, List, Any, Tuple, Optional, Union
 from dataclasses import dataclass
-from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -19,27 +18,27 @@ import tables
 from scipy.stats import skew, kurtosis
 from tqdm import tqdm
 
+from tools.label_handler import LabelType, LabelHandler, has_manual_labels
+
 
 # ============================================================================
 # CONFIGURATION AND CONSTANTS
 # ============================================================================
 
-class LabelType(Enum):
-    """Enumeration for different label types in birdsong analysis."""
-    MANUAL = "manual"
-    AUTO = "hdbscan"  # CHANGED: Removed kmeans, only hdbscan
-
-
 @dataclass
 class PhenotypingConfig:
-    """Simplified configuration for phenotyping analysis."""
-    # Analysis parameters
-    min_syllable_proportion: float = 0.02
-    repeat_significance_threshold: float = 0.2
-    repeat_candidate_range: range = None
+    """Configuration for phenotyping analysis."""
+    # Vocabulary parameters
+    min_syllable_proportion: float = 0.02  # min proportion for syllable to count toward repertoire size
+
+    # Repeat analysis parameters
+    repeat_significance_threshold: float = 0.2  # min proportion of syllable instances that must be repeats
+    repeat_candidate_range: range = None         # repeat lengths to search (default: range(2, 20))
+    dyad_threshold: float = 0.7                  # proportion of length-2 repeats for syllable to be a dyad
+    adaptive_repeat_factor: float = 0.25         # scales per-syllable min prevalence for repeat filtering
 
     # Processing options
-    use_top_n_clusterings: int = 5  # How many top clustering results t00o process
+    use_top_n_clusterings: int = 5  # how many top clustering results to process
     generate_plots: bool = True
 
     # Visualization
@@ -51,63 +50,7 @@ class PhenotypingConfig:
             self.repeat_candidate_range = range(2, 20)
 
 
-# ============================================================================
-# LABEL HANDLING AND TYPE DETECTION
-# ============================================================================
-
-class LabelHandler:
-    """Unified handler for manual and automatic labels."""
-
-    def __init__(self, label_type: LabelType):
-        self.label_type = label_type
-
-    @property
-    def start_token(self) -> Union[str, int]:
-        return 's' if self.label_type == LabelType.MANUAL else -5
-
-    @property
-    def end_token(self) -> Union[str, int]:
-        return 'z' if self.label_type == LabelType.MANUAL else -3
-
-    @property
-    def non_syl_tokens(self) -> List[Union[str, int]]:
-        if self.label_type == LabelType.MANUAL:
-            return ['s', 'z', '\r']
-        else:
-            return [-5, -3]
-
-    def normalize_labels(self, raw_labels: List[Any]) -> List[Union[str, int]]:
-        """Convert raw labels to consistent format."""
-        if self.label_type == LabelType.MANUAL:
-            return [self._to_string(label) for label in raw_labels]
-        else:
-            return [self._to_int(label) for label in raw_labels]
-
-    def _to_string(self, item: Any) -> str:
-        if isinstance(item, (bytes, np.bytes_)):
-            return item.decode('utf-8')
-        return str(item)
-
-    def _to_int(self, item: Any) -> int:
-        if isinstance(item, (bytes, np.bytes_)):
-            return int(item.decode('utf-8'))
-        elif isinstance(item, str):
-            return int(item)
-        return int(item)
-
-    def add_sequence_tokens(self, labels: List[Union[str, int]]) -> List[Union[str, int]]:
-        """Add start and end tokens to sequence."""
-        return [self.start_token] + labels + [self.end_token]
-
-
-def has_manual_labels(syllable_data: Dict[str, Any]) -> bool:
-    """
-    Check if manual labels are available.
-
-    Returns:
-        True if manual labels exist and are non-empty
-    """
-    return len(syllable_data.get('manual_syllables', [])) > 0
+# LabelType, LabelHandler, has_manual_labels — imported from tools.label_handler above.
 
 
 
@@ -909,7 +852,7 @@ def _remove_insignificant_repeats(repeat_counts: pd.DataFrame, syl_counts: Dict[
     overall_syl_prop = {syl: count / total_syls for syl, count in syl_counts.items()}
 
     # Remove syllables with very low overall occurrence
-    adaptive_threshold = 0.25 * (1 / len(syl_counts))  # Using fixed factor instead of config
+    adaptive_threshold = config.adaptive_repeat_factor * (1 / len(syl_counts))
     columns_to_remove = []
 
     for syl in repeat_counts.columns:
@@ -1012,7 +955,7 @@ def _repeat_phenotypes(repeat_counts: pd.DataFrame, config: PhenotypingConfig) -
         dyad_count = sum(1 for length in rep_list if length == 2)
         dyad_prop = dyad_count / len(rep_list) if rep_list else 0
 
-        if dyad_prop > 0.7:  # Using fixed threshold instead of config.dyad_threshold
+        if dyad_prop > config.dyad_threshold:
             dyad_bool = True
             num_dyads += 1
             # Remove dyads from longer repeat analysis

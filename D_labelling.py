@@ -1,9 +1,8 @@
 import warnings
-
-warnings.filterwarnings("ignore")
-
 import numpy as np
 import os
+from dataclasses import dataclass, field
+from typing import List
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, davies_bouldin_score, calinski_harabasz_score, \
     normalized_mutual_info_score
@@ -24,6 +23,32 @@ from tools.system_utils import check_sys_for_macaw_root
 from tools.logging_utils import setup_logger
 
 logger = setup_logger(__name__, 'labeling.log')
+
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+@dataclass
+class HDBSCANParams:
+    """Parameters for a single HDBSCAN clustering run."""
+    min_cluster_size: int = 20
+    min_samples: int = 5
+
+    def to_dict(self) -> dict:
+        return {'min_cluster_size': self.min_cluster_size, 'min_samples': self.min_samples}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'HDBSCANParams':
+        return cls(min_cluster_size=data['min_cluster_size'], min_samples=data['min_samples'])
+
+
+# Default grid searched during label_bird(); individual results are stored as HDBSCANParams
+DEFAULT_HDBSCAN_GRID: List[HDBSCANParams] = [
+    HDBSCANParams(min_cluster_size=n, min_samples=m)
+    for n in [5, 20, 60]
+    for m in [5, 15]
+]
 
 
 # ============================================================================
@@ -1575,11 +1600,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         # Default HDBSCAN parameters if not provided
         if hdbscan_params is None:
-            hdbscan_params = [
-                {'min_cluster_size': n, 'min_samples': m}
-                for n in [5, 20, 60]
-                for m in [5, 15]
-            ]
+            hdbscan_params = [p.to_dict() for p in DEFAULT_HDBSCAN_GRID]
 
         # Process each embedding file
         all_summaries = []

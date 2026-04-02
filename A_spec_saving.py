@@ -1226,7 +1226,8 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
             else:
                 already_saved_files = []
 
-            needed_count = songs_per_bird - len(already_saved_files)
+            limit = songs_per_bird if songs_per_bird is not None else len(metadata_file_paths[bird])
+            needed_count = limit - len(already_saved_files)
             logger.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
             if needed_count <= 0:
@@ -1317,7 +1318,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
             else:
                 already_saved_files = []
 
-            needed_count = songs_per_bird - len(already_saved_files)
+            limit = songs_per_bird if songs_per_bird is not None else len(metadata_file_paths[bird])
+            needed_count = limit - len(already_saved_files)
             logger.info(f"  📁 Found {len(already_saved_files)} existing files, need {needed_count} more")
 
             if needed_count <= 0:

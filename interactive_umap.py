@@ -307,12 +307,10 @@ def analyze_label_distribution(bird_path: str):
 def example_usage():
     """Example usage with different options."""
 
-    project_dir = '/Volumes/Extreme SSD/wseg test'
-    from pathlib import Path
-    project_dir = Path('E:/') / 'xfosters'
+    from tools.project_config import ProjectConfig
+    cfg = ProjectConfig.load()
     bird_name = 'bu85bu97'
-    bird_name = 'bk1bk3'
-    bird_path = os.path.join(project_dir, bird_name)
+    bird_path = str(cfg.bird_dir(bird_name, experiment='wseg test'))
 
     print("🎵 Interactive UMAP Examples")
     print("=" * 50)

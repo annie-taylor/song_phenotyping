@@ -1369,9 +1369,11 @@ if __name__ == "__main__":
     # Example usage
     #import sys
 
+    from tools.project_config import ProjectConfig
+    cfg = ProjectConfig.load()
     test_paths = [
-        os.path.join('/Volumes', 'Extreme SSD', 'wseg test', 'bu85bu97'),
-        os.path.join('/Volumes', 'Extreme SSD', 'evsong test', 'or18or24')
+        str(cfg.bird_dir('bu85bu97', experiment='wseg test')),
+        str(cfg.bird_dir('or18or24', experiment='evsong test')),
     ]
 
     #if len(sys.argv) > 1:

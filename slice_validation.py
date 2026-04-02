@@ -448,7 +448,9 @@ def validate_single_bird_slices(project_directory: str, bird: str) -> Optional[s
 def example_usage():
     """Example of how to use the simple slice validation module."""
 
-    project_dir = "/Volumes/Extreme SSD/evsong slice test"
+    from tools.project_config import ProjectConfig
+    cfg = ProjectConfig.load()
+    project_dir = str(cfg.local_cache / 'evsong slice test')
 
     # Basic validation - all birds
     results = quick_slice_validation(project_dir)
