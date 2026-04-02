@@ -1,0 +1,319 @@
+"""Flatten 2-D syllable spectrograms into 1-D feature vectors (Stage B).
+
+Each syllable spectrogram saved by Stage A is an ``(n_freq, n_time)`` array.
+This module reshapes the full set of spectrograms for one song into a 2-D
+matrix of shape ``(n_features, n_syllables)`` — where
+``n_features = n_freq × n_time`` — and writes the result to a paired HDF5
+file under ``<bird>/syllable_data/flattened/``.
+
+Public API
+----------
+- :func:`flatten_bird_spectrograms` — run Stage B for a single bird
+"""
+
+import os
+import logging
+from pathlib import Path
+from typing import List
+
+import numpy as np
+import tables
+from tqdm import tqdm
+
+from tools.system_utils import optimize_pytables_for_network
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def extract_song_id(filepath: str) -> str:
+    """Return the song ID embedded in a syllable HDF5 filename.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to a file named ``syllables_<song_id>.h5``.
+
+    Returns
+    -------
+    str
+        The ``<song_id>`` portion of the filename.
+
+    Raises
+    ------
+    ValueError
+        If ``'syllables_'`` is not found in the filename stem.
+    """
+    stem = Path(filepath).stem
+    if "syllables_" not in stem:
+        raise ValueError(f"Expected 'syllables_' in filename: {filepath}")
+    return stem.replace("syllables_", "")
+
+
+def create_flattened_output_path(data_folder: str, song_id: str) -> str:
+    """Build the output path for a flattened HDF5 file, creating the directory.
+
+    Parameters
+    ----------
+    data_folder : str
+        Bird's ``syllable_data/`` directory. A ``flattened/`` subdirectory
+        is created here if it does not already exist.
+    song_id : str
+        Song identifier (from :func:`extract_song_id`).
+
+    Returns
+    -------
+    str
+        Full path ``<data_folder>/flattened/flattened_<song_id>.h5``.
+    """
+    flattened_dir = os.path.join(data_folder, "flattened")
+    os.makedirs(flattened_dir, exist_ok=True)
+    return os.path.join(flattened_dir, f"flattened_{song_id}.h5")
+
+
+def load_syllable_data(filepath: str) -> tuple:
+    """Load spectrograms and metadata from a Stage A HDF5 file.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to ``syllables_<song_id>.h5`` as written by Stage A.
+
+    Returns
+    -------
+    specs : numpy.ndarray, shape (n_syllables, n_freq, n_time)
+        Raw spectrogram array.
+    labels : numpy.ndarray
+        Syllable label for each entry.
+    position_idxs : numpy.ndarray
+        Position indices within the original recording.
+    hashes : numpy.ndarray
+        Unique hash per syllable for cross-stage tracking.
+
+    Raises
+    ------
+    ValueError
+        If required HDF5 nodes are missing or array lengths are inconsistent.
+    OSError
+        If the file cannot be opened.
+    """
+    try:
+        with tables.open_file(filepath, mode="r") as f:
+            specs = f.root.spectrograms.read()
+            labels = f.root.manual[:]
+            position_idxs = f.root.position_idxs[:]
+            hashes = f.root.hashes[:]
+    except (tables.NoSuchNodeError, AttributeError) as e:
+        logging.error(f"Missing required data in {filepath}: {e}")
+        raise ValueError(f"Invalid HDF5 structure in {filepath}")
+    except (OSError, IOError) as e:
+        logging.error(f"File access error for {filepath}: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Failed to load syllable data from {filepath}: {e}")
+        raise
+
+    if not (len(specs) == len(labels) == len(position_idxs) == len(hashes)):
+        raise ValueError(f"Inconsistent data lengths in {filepath}")
+
+    return specs, labels, position_idxs, hashes
+
+
+def flatten_spectrograms(specs: np.ndarray) -> np.ndarray:
+    """Reshape a stack of 2-D spectrograms into a feature matrix.
+
+    Parameters
+    ----------
+    specs : numpy.ndarray, shape (n_syllables, n_freq, n_time)
+        Stack of spectrogram arrays.
+
+    Returns
+    -------
+    numpy.ndarray, shape (n_freq * n_time, n_syllables), dtype float32
+        Column-per-syllable feature matrix suitable for UMAP input.
+
+    Raises
+    ------
+    ValueError
+        If *specs* is empty or not 3-D.
+    """
+    if specs.size == 0:
+        raise ValueError("Cannot flatten empty spectrogram array")
+    if specs.ndim != 3:
+        raise ValueError(f"Expected 3D spectrogram array, got shape {specs.shape}")
+    n_specs, height, width = specs.shape
+    return specs.reshape(n_specs, -1).T.astype(np.float32)
+
+
+def save_flattened_data(
+    output_path: str,
+    flattened_specs: np.ndarray,
+    labels: np.ndarray,
+    position_idxs: np.ndarray,
+    hashes: np.ndarray,
+) -> None:
+    """Write flattened spectrograms and metadata to an HDF5 file.
+
+    Parameters
+    ----------
+    output_path : str
+        Destination file path (``flattened_<song_id>.h5``).
+    flattened_specs : numpy.ndarray, shape (n_features, n_syllables)
+        Column-per-syllable feature matrix.
+    labels : numpy.ndarray
+        Syllable labels (same length as number of columns).
+    position_idxs : numpy.ndarray
+        Position indices within the original recording.
+    hashes : numpy.ndarray
+        Per-syllable hash values.
+
+    Raises
+    ------
+    Exception
+        Re-raises any PyTables error after logging it.
+    """
+    try:
+        with tables.open_file(output_path, mode="w") as f:
+            f.create_array(f.root, "flattened_specs", flattened_specs)
+            f.create_array(f.root, "labels", labels)
+            f.create_array(f.root, "position_idxs", position_idxs)
+            f.create_array(f.root, "hashes", hashes)
+    except Exception as e:
+        logging.error(f"Failed to save flattened data to {output_path}: {e}")
+        raise
+
+
+def process_single_syllable_file(filepath: str, data_folder: str) -> bool:
+    """Flatten one Stage A HDF5 file and write the result.
+
+    Skips files whose output already exists.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to ``syllables_<song_id>.h5``.
+    data_folder : str
+        Bird's ``syllable_data/`` directory.
+
+    Returns
+    -------
+    bool
+        ``True`` on success or if the output already existed;
+        ``False`` if an error occurred.
+    """
+    try:
+        file_size = os.path.getsize(filepath) / (1024 * 1024)
+        logging.debug(f"Processing {filepath} ({file_size:.1f} MB)")
+
+        song_id = extract_song_id(filepath)
+        output_path = create_flattened_output_path(data_folder, song_id)
+
+        if os.path.exists(output_path):
+            logging.debug(f"Flattened file already exists, skipping: {output_path}")
+            return True
+
+        specs, labels, position_idxs, hashes = load_syllable_data(filepath)
+        flattened_specs = flatten_spectrograms(specs)
+        save_flattened_data(output_path, flattened_specs, labels, position_idxs, hashes)
+
+        logging.info(f"Successfully flattened {len(specs)} syllables from {filepath}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Failed to process syllable file {filepath}: {e}")
+        return False
+
+
+def find_syllable_files(syllables_dir: str) -> List[str]:
+    """Return all Stage A HDF5 files in *syllables_dir*.
+
+    Parameters
+    ----------
+    syllables_dir : str
+        Directory to search (typically ``<bird>/syllable_data/specs/``).
+
+    Returns
+    -------
+    list of str
+        Absolute paths to ``syllables_*.h5`` files; empty list if the
+        directory does not exist.
+    """
+    if not os.path.exists(syllables_dir):
+        return []
+    return [
+        os.path.join(syllables_dir, f)
+        for f in os.listdir(syllables_dir)
+        if f.endswith(".h5") and "syllables" in f
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
+    """Flatten all Stage A spectrograms for one bird (Stage B entry point).
+
+    Reads every ``syllables_*.h5`` file from
+    ``<directory>/<bird>/syllable_data/specs/``, flattens each spectrogram
+    stack from ``(n_syllables, n_freq, n_time)`` to
+    ``(n_freq × n_time, n_syllables)``, and writes
+    ``flattened_<song_id>.h5`` files to
+    ``<directory>/<bird>/syllable_data/flattened/``.
+
+    Already-flattened files are skipped, so re-running is safe.
+
+    Parameters
+    ----------
+    directory : str
+        Project root directory containing bird subdirectories.
+    bird : str
+        Bird identifier (e.g. ``'or18or24'``).
+
+    Returns
+    -------
+    bool
+        ``True`` if at least one file was processed successfully (or if
+        there were no files to process); ``False`` if all files failed.
+
+    Examples
+    --------
+    >>> from song_phenotyping.flattening import flatten_bird_spectrograms
+    >>> flatten_bird_spectrograms("/Volumes/Extreme SSD/pipeline_runs", "or18or24")
+    True
+
+    See Also
+    --------
+    song_phenotyping.ingestion.save_specs_for_evsonganaly_birds : Stage A (produces input).
+    song_phenotyping.embedding.explore_embedding_parameters_robust : Stage C (consumes output).
+    """
+    try:
+        bird_folder = os.path.join(directory, bird)
+        data_path = os.path.join(bird_folder, "syllable_data")
+        syllables_path = os.path.join(data_path, "specs")
+
+        os.makedirs(data_path, exist_ok=True)
+
+        syllable_files = find_syllable_files(syllables_path)
+        if not syllable_files:
+            logging.warning(
+                f"No syllable files found for bird {bird} in {syllables_path}"
+            )
+            return True
+
+        logging.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
+
+        success_count = sum(
+            process_single_syllable_file(fp, data_path)
+            for fp in tqdm(syllable_files, desc=f"Flattening {bird}")
+        )
+
+        logging.info(
+            f"Bird {bird}: {success_count}/{len(syllable_files)} files processed"
+        )
+        return success_count > 0
+
+    except Exception as e:
+        logging.error(f"Error processing bird {bird}: {e}")
+        return False
