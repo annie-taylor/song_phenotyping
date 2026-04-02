@@ -27,4 +27,6 @@ file_management/xfoster_specs*
 xfoster_specs*
 Volumes*
 config.yaml
+docs/_build/
+*.egg-info/
 
