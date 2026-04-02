@@ -888,7 +888,9 @@ def create_segmented_audio_data(specs: List[np.ndarray], wavs: List[np.ndarray],
                                 ts: List[np.ndarray], onsets: np.ndarray,
                                 offsets: np.ndarray, labels: np.ndarray, mean_top_3: np.float64, low_f_mean: np.float64,
                                 mean_all: np.float64,
-                                valid_indices: List[int], file_identifier: str) -> Dict[str, Any]:
+                                valid_indices: List[int], file_identifier: str,
+                                inst_freq_list: List[np.ndarray] = None,
+                                group_delay_list: List[np.ndarray] = None) -> Dict[str, Any]:
     """
     Create organized segmented audio data structure from processing results.
 
@@ -928,6 +930,10 @@ def create_segmented_audio_data(specs: List[np.ndarray], wavs: List[np.ndarray],
     # Pad waveforms and time arrays to same length
     padded_wavs, padded_ts = pad_waveforms_to_same_length(wavs, ts)
 
+    # Syllable durations in seconds (always computed from onset/offset)
+    durations = np.array([(off - on) / 1000.0 for on, off in zip(valid_onsets, valid_offsets)],
+                         dtype=np.float64)
+
     # Build the data structure
     segmented_data = {
         'spectrograms': specs,
@@ -940,7 +946,10 @@ def create_segmented_audio_data(specs: List[np.ndarray], wavs: List[np.ndarray],
         'low_f_mean': low_f_mean,
         'mean_all': mean_all,
         'position_idxs': valid_indices,
-        'hashes': hashes
+        'hashes': hashes,
+        'durations': durations,
+        'inst_freq': inst_freq_list,
+        'group_delay': group_delay_list,
     }
 
     return segmented_data
@@ -956,7 +965,10 @@ def create_empty_segmented_data() -> Dict[str, Any]:
         'onsets': [],
         'offsets': [],
         'position_idxs': [],
-        'hashes': []
+        'hashes': [],
+        'durations': np.array([], dtype=np.float64),
+        'inst_freq': None,
+        'group_delay': None,
     }
 
 
@@ -987,6 +999,11 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
         logger.debug(f" ✅ Generated {len(valid_inds)} valid spectrograms")
         (mean_top_3, low_f_mean, mean_all) = tempos
 
+        # Unpack phase features from ProcessingResult (None when flags are off)
+        pf = result.phase_features  # list of dicts or None
+        inst_freq_list = [d.get('inst_freq') for d in pf] if pf else None
+        group_delay_list = [d.get('group_delay') for d in pf] if pf else None
+
         # Create organized data structure using original onset/offset/label arrays
         segmented_audio_data = create_segmented_audio_data(
             specs=specs,
@@ -999,7 +1016,9 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
             low_f_mean=low_f_mean,
             mean_all=mean_all,
             valid_indices=valid_inds,
-            file_identifier=output_path
+            file_identifier=output_path,
+            inst_freq_list=inst_freq_list,
+            group_delay_list=group_delay_list,
         )
 
         # Save to HDF5 file

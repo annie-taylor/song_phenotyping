@@ -14,13 +14,13 @@ Public API
 import os
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import tables
 from tqdm import tqdm
 
-from tools.system_utils import optimize_pytables_for_network
+from song_phenotyping.tools.system_utils import optimize_pytables_for_network
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +90,14 @@ def load_syllable_data(filepath: str) -> tuple:
         Position indices within the original recording.
     hashes : numpy.ndarray
         Unique hash per syllable for cross-stage tracking.
+    durations : numpy.ndarray or None
+        Syllable durations in seconds; ``None`` if the node is absent.
+    inst_freq : numpy.ndarray or None
+        Instantaneous-frequency array, shape ``(n_syllables, n_freq, n_time-1)``;
+        ``None`` if the node is absent.
+    group_delay : numpy.ndarray or None
+        Group-delay array, shape ``(n_syllables, n_freq-1, n_time)``;
+        ``None`` if the node is absent.
 
     Raises
     ------
@@ -104,6 +112,9 @@ def load_syllable_data(filepath: str) -> tuple:
             labels = f.root.manual[:]
             position_idxs = f.root.position_idxs[:]
             hashes = f.root.hashes[:]
+            durations = f.root.durations[:] if hasattr(f.root, "durations") else None
+            inst_freq = f.root.inst_freq.read() if hasattr(f.root, "inst_freq") else None
+            group_delay = f.root.group_delay.read() if hasattr(f.root, "group_delay") else None
     except (tables.NoSuchNodeError, AttributeError) as e:
         logging.error(f"Missing required data in {filepath}: {e}")
         raise ValueError(f"Invalid HDF5 structure in {filepath}")
@@ -117,21 +128,41 @@ def load_syllable_data(filepath: str) -> tuple:
     if not (len(specs) == len(labels) == len(position_idxs) == len(hashes)):
         raise ValueError(f"Inconsistent data lengths in {filepath}")
 
-    return specs, labels, position_idxs, hashes
+    return specs, labels, position_idxs, hashes, durations, inst_freq, group_delay
 
 
-def flatten_spectrograms(specs: np.ndarray) -> np.ndarray:
+def flatten_spectrograms(
+    specs: np.ndarray,
+    inst_freq: Optional[np.ndarray] = None,
+    group_delay: Optional[np.ndarray] = None,
+    durations: Optional[np.ndarray] = None,
+    duration_feature_weight: float = 0.0,
+) -> np.ndarray:
     """Reshape a stack of 2-D spectrograms into a feature matrix.
+
+    Optionally concatenates instantaneous-frequency and group-delay channels,
+    and a duration token, before transposing to column-per-syllable form.
 
     Parameters
     ----------
     specs : numpy.ndarray, shape (n_syllables, n_freq, n_time)
         Stack of spectrogram arrays.
+    inst_freq : numpy.ndarray or None, shape (n_syllables, n_freq, n_time-1)
+        Instantaneous-frequency channel; appended when provided.
+    group_delay : numpy.ndarray or None, shape (n_syllables, n_freq-1, n_time)
+        Group-delay channel; appended when provided.
+    durations : numpy.ndarray or None, shape (n_syllables,)
+        Normalised syllable durations in [0, 1].  Only used when
+        *duration_feature_weight* is non-zero.
+    duration_feature_weight : float
+        Scale factor applied to the duration block before concatenation.
+        Zero (default) disables the duration feature entirely.
 
     Returns
     -------
-    numpy.ndarray, shape (n_freq * n_time, n_syllables), dtype float32
+    numpy.ndarray, shape (n_features, n_syllables), dtype float32
         Column-per-syllable feature matrix suitable for UMAP input.
+        ``n_features`` equals ``n_freq × n_time`` plus any optional channels.
 
     Raises
     ------
@@ -143,7 +174,15 @@ def flatten_spectrograms(specs: np.ndarray) -> np.ndarray:
     if specs.ndim != 3:
         raise ValueError(f"Expected 3D spectrogram array, got shape {specs.shape}")
     n_specs, height, width = specs.shape
-    return specs.reshape(n_specs, -1).T.astype(np.float32)
+    flat = specs.reshape(n_specs, -1)
+    if inst_freq is not None:
+        flat = np.concatenate([flat, inst_freq.reshape(n_specs, -1)], axis=1)
+    if group_delay is not None:
+        flat = np.concatenate([flat, group_delay.reshape(n_specs, -1)], axis=1)
+    if duration_feature_weight and durations is not None:
+        dur_block = np.outer(durations * duration_feature_weight, np.ones(height))
+        flat = np.concatenate([flat, dur_block], axis=1)
+    return flat.T.astype(np.float32)
 
 
 def save_flattened_data(
@@ -152,6 +191,7 @@ def save_flattened_data(
     labels: np.ndarray,
     position_idxs: np.ndarray,
     hashes: np.ndarray,
+    durations: Optional[np.ndarray] = None,
 ) -> None:
     """Write flattened spectrograms and metadata to an HDF5 file.
 
@@ -167,6 +207,8 @@ def save_flattened_data(
         Position indices within the original recording.
     hashes : numpy.ndarray
         Per-syllable hash values.
+    durations : numpy.ndarray or None
+        Syllable durations in seconds; written when provided.
 
     Raises
     ------
@@ -179,12 +221,18 @@ def save_flattened_data(
             f.create_array(f.root, "labels", labels)
             f.create_array(f.root, "position_idxs", position_idxs)
             f.create_array(f.root, "hashes", hashes)
+            if durations is not None:
+                f.create_array(f.root, "durations", durations)
     except Exception as e:
         logging.error(f"Failed to save flattened data to {output_path}: {e}")
         raise
 
 
-def process_single_syllable_file(filepath: str, data_folder: str) -> bool:
+def process_single_syllable_file(
+    filepath: str,
+    data_folder: str,
+    duration_feature_weight: float = 0.0,
+) -> bool:
     """Flatten one Stage A HDF5 file and write the result.
 
     Skips files whose output already exists.
@@ -195,6 +243,9 @@ def process_single_syllable_file(filepath: str, data_folder: str) -> bool:
         Path to ``syllables_<song_id>.h5``.
     data_folder : str
         Bird's ``syllable_data/`` directory.
+    duration_feature_weight : float
+        Forwarded to :func:`flatten_spectrograms`.  Zero disables the
+        duration feature block (default).
 
     Returns
     -------
@@ -213,9 +264,15 @@ def process_single_syllable_file(filepath: str, data_folder: str) -> bool:
             logging.debug(f"Flattened file already exists, skipping: {output_path}")
             return True
 
-        specs, labels, position_idxs, hashes = load_syllable_data(filepath)
-        flattened_specs = flatten_spectrograms(specs)
-        save_flattened_data(output_path, flattened_specs, labels, position_idxs, hashes)
+        specs, labels, position_idxs, hashes, durations, inst_freq, group_delay = load_syllable_data(filepath)
+        flattened_specs = flatten_spectrograms(
+            specs,
+            inst_freq=inst_freq,
+            group_delay=group_delay,
+            durations=durations,
+            duration_feature_weight=duration_feature_weight,
+        )
+        save_flattened_data(output_path, flattened_specs, labels, position_idxs, hashes, durations=durations)
 
         logging.info(f"Successfully flattened {len(specs)} syllables from {filepath}")
         return True
@@ -252,7 +309,7 @@ def find_syllable_files(syllables_dir: str) -> List[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
+def flatten_bird_spectrograms(directory: str, bird: str, params=None) -> bool:
     """Flatten all Stage A spectrograms for one bird (Stage B entry point).
 
     Reads every ``syllables_*.h5`` file from
@@ -270,6 +327,11 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
         Project root directory containing bird subdirectories.
     bird : str
         Bird identifier (e.g. ``'or18or24'``).
+    params : SpectrogramParams or None
+        Pipeline parameters.  When provided,
+        ``params.duration_feature_weight`` controls whether a duration
+        block is appended to the feature vector.  ``None`` uses defaults
+        (duration feature disabled).
 
     Returns
     -------
@@ -288,6 +350,8 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
     song_phenotyping.ingestion.save_specs_for_evsonganaly_birds : Stage A (produces input).
     song_phenotyping.embedding.explore_embedding_parameters_robust : Stage C (consumes output).
     """
+    duration_feature_weight = getattr(params, "duration_feature_weight", 0.0) or 0.0
+
     try:
         bird_folder = os.path.join(directory, bird)
         data_path = os.path.join(bird_folder, "syllable_data")
@@ -305,7 +369,7 @@ def flatten_bird_spectrograms(directory: str, bird: str) -> bool:
         logging.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
 
         success_count = sum(
-            process_single_syllable_file(fp, data_path)
+            process_single_syllable_file(fp, data_path, duration_feature_weight=duration_feature_weight)
             for fp in tqdm(syllable_files, desc=f"Flattening {bird}")
         )
 

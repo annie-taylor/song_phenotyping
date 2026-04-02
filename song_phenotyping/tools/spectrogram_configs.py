@@ -48,6 +48,24 @@ class SpectrogramParams:
     downsample : bool, optional
         Downsample audio to ``fs`` before computing spectrograms.
         Default is ``False``.
+    save_inst_freq : bool, optional
+        Compute and store instantaneous frequency (IF) alongside the
+        magnitude spectrogram.  IF is the temporal derivative of unwrapped
+        phase, capturing pitch-modulation structure.  Shape per syllable:
+        ``(n_freq, n_time - 1)`` = ``(513, 299)`` with default settings.
+        Default is ``False``.
+    save_group_delay : bool, optional
+        Compute and store group delay (GD) alongside the magnitude
+        spectrogram.  GD is the negative frequency-derivative of unwrapped
+        phase, capturing spectral dispersion.  Shape per syllable:
+        ``(n_freq - 1, n_time)`` = ``(512, 300)`` with default settings.
+        Default is ``False``.
+    duration_feature_weight : float, optional
+        When non-zero, the normalised syllable duration (relative to
+        ``max_dur``) is tiled into ``n_freq`` extra features and appended
+        to the flattened feature vector at Stage B.  Set to a value roughly
+        comparable to the magnitude feature weight (experiment to tune).
+        ``0.0`` (default) disables the feature entirely.
     warp_freq_sum : bool, optional
         Sum over frequency bins before DTW (deprecated). Default is ``True``.
     shift_lambdas : list of float, optional
@@ -92,6 +110,17 @@ class SpectrogramParams:
 
     use_warping: bool = False
     downsample: bool = False
+
+    # Phase-derived feature flags (Stage A optional outputs)
+    save_inst_freq: bool = False
+    """Save instantaneous frequency alongside magnitude spectrograms."""
+    save_group_delay: bool = False
+    """Save group delay alongside magnitude spectrograms."""
+
+    # Duration feature weight for UMAP (Stage B)
+    duration_feature_weight: float = 0.0
+    """Weight for duration token appended to flattened feature vector.
+    Zero (default) disables the feature entirely."""
 
     # DTW parameters — largely deprecated; computationally expensive
     warp_freq_sum: bool = True

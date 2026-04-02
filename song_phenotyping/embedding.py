@@ -32,8 +32,8 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from tools.system_utils import optimize_pytables_for_network
-from tools.logging_utils import setup_logger
+from song_phenotyping.tools.system_utils import optimize_pytables_for_network
+from song_phenotyping.tools.logging_utils import setup_logger
 
 logger = setup_logger(__name__, 'umap_embeddings.log')
 
