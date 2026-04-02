@@ -30,3 +30,4 @@ config.yaml
 docs/_build/
 *.egg-info/
 
+.claude/
