@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "song-phenotyping"
+version = "0.1.0"
+description = "Automated phenotyping pipeline for Bengalese finch song"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Annie Taylor" },
+]
+keywords = ["birdsong", "phenotyping", "umap", "hdbscan", "bioacoustics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "tables",
+    "umap-learn",
+    "hdbscan",
+    "pandas",
+    "scikit-learn",
+    "pyyaml",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+docs = [
+    "sphinx>=8",
+    "sphinx-rtd-theme>=3",
+    "sphinx-autodoc-typehints",
+]
+dev = [
+    "pytest>=8",
+    "pytest-timeout",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["song_phenotyping*"]
+
+[project.scripts]
+song-phenotyping = "song_phenotyping.cli:main"
