@@ -9,4 +9,6 @@ API Reference
    embedding
    labelling
    phenotyping
+   catalog
+   slicing
    tools

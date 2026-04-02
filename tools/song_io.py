@@ -24,7 +24,7 @@ from scipy.ndimage import zoom
 from typing import List, Optional, Tuple, Dict, Any, Union
 from dataclasses import dataclass
 
-from tools.spectrogram_configs import SpectrogramParams
+from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 from tools.audio_utils import read_audio_file
 from tools.signal_utils import smooth, butter_bandpass_filter_sos
 from tools.system_utils import fix_mixture_of_separators

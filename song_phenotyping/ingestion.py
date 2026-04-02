@@ -53,7 +53,7 @@ from tools.song_io import (
     get_song_specs,
 )
 from tools.system_utils import check_sys_for_macaw_root, optimize_pytables_for_network
-from tools.spectrogram_configs import SpectrogramParams
+from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 from tools.audio_path_management import *
 from tools.filerecords import *
 from tools.logging_utils import setup_logger

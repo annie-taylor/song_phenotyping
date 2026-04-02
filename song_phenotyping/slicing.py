@@ -17,32 +17,18 @@ from random import sample
 import gc
 from tqdm import tqdm
 
-try:
-    from song_phenotyping.tools.song_io import (
-        setup_logging,
-        get_memory_usage,
-        parse_audio_filename,
-        load_and_validate_metadata,
-        create_output_paths,
-        save_spec_slices,
-        logger,
-    )
-    from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
-    from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
-    from song_phenotyping.ingestion import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_file_pairs
-except ImportError:
-    from tools.song_io import (
-        setup_logging,
-        get_memory_usage,
-        parse_audio_filename,
-        load_and_validate_metadata,
-        create_output_paths,
-        save_spec_slices,
-        logger,
-    )
-    from tools.spectrogram_configs import SpectrogramParams
-    from tools.system_utils import check_sys_for_macaw_root
-    from A_spec_saving import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_file_pairs
+from tools.song_io import (
+    setup_logging,
+    get_memory_usage,
+    parse_audio_filename,
+    load_and_validate_metadata,
+    create_output_paths,
+    save_spec_slices,
+    logger,
+)
+from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
+from tools.system_utils import check_sys_for_macaw_root
+from song_phenotyping.ingestion import filepaths_from_evsonganaly, filepaths_from_wseg, select_new_file_pairs
 
 
 def slice_syllable_files_from_evsonganaly(wav_directory: str = None, save_path: str = None,

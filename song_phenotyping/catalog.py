@@ -45,18 +45,11 @@ import numpy as np
 import pandas as pd
 import tables
 
-try:
-    from song_phenotyping.tools.audio_utils import read_audio_file
-    from song_phenotyping.tools.label_handler import LabelHandler, LabelType
-    from song_phenotyping.tools.song_io import butter_bandpass_filter_sos, get_song_spec, rms_norm
-    from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
-    from song_phenotyping.tools.system_utils import replace_macaw_root
-except ImportError:
-    from tools.audio_utils import read_audio_file
-    from tools.label_handler import LabelHandler, LabelType
-    from tools.song_io import butter_bandpass_filter_sos, get_song_spec, rms_norm
-    from tools.spectrogram_configs import SpectrogramParams
-    from tools.system_utils import replace_macaw_root
+from tools.audio_utils import read_audio_file
+from song_phenotyping.tools.label_handler import LabelHandler, LabelType
+from tools.song_io import butter_bandpass_filter_sos, get_song_spec, rms_norm
+from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
+from tools.system_utils import replace_macaw_root
 
 logger = logging.getLogger(__name__)
 
@@ -763,10 +756,7 @@ if __name__ == '__main__':
     _logging.basicConfig(level=_logging.INFO,
                          format='%(levelname)s %(name)s: %(message)s')
 
-    try:
-        from song_phenotyping.tools.project_config import ProjectConfig
-    except ImportError:
-        from tools.project_config import ProjectConfig
+    from song_phenotyping.tools.project_config import ProjectConfig
     cfg_proj = ProjectConfig.load()
 
     # Edit these to point at a real bird directory:

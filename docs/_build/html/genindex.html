@@ -39,28 +39,373 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#install-from-source">Install from source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#optional-extras">Optional extras</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#quick-start">Quick start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stage-a-spectrogram-ingestion">Stage A — Spectrogram ingestion</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#stage-a1-fixed-length-slicing-optional">Stage A1 — Fixed-length slicing (optional)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stage-b-flattening">Stage B — Flattening</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stage-c-umap-embedding">Stage C — UMAP embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stage-d-clustering-and-labelling">Stage D — Clustering and labelling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#custom-hdbscan-grid">Custom HDBSCAN grid</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stage-e-phenotyping">Stage E — Phenotyping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#visual-inspection-html-catalogs">Visual inspection — HTML catalogs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#configuration">Configuration</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="api/index.html">API Reference</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html">Ingestion (Stage A)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/flattening.html">Flattening (Stage B)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/embedding.html">Embedding (Stage C)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/labelling.html">Labelling (Stage D)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html">Phenotyping (Stage E)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html">Ingestion (Stage A)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.copy_audio_and_partner_rec"><code class="docutils literal notranslate"><span class="pre">copy_audio_and_partner_rec()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.create_empty_segmented_data"><code class="docutils literal notranslate"><span class="pre">create_empty_segmented_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.create_segmented_audio_data"><code class="docutils literal notranslate"><span class="pre">create_segmented_audio_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">filepaths_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_local_cache"><code class="docutils literal notranslate"><span class="pre">filepaths_from_local_cache()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_wseg"><code class="docutils literal notranslate"><span class="pre">filepaths_from_wseg()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_and_save_audio"><code class="docutils literal notranslate"><span class="pre">process_and_save_audio()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_pipeline"><code class="docutils literal notranslate"><span class="pre">process_pipeline()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_single_file"><code class="docutils literal notranslate"><span class="pre">process_single_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.reconstruct_server_path"><code class="docutils literal notranslate"><span class="pre">reconstruct_server_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.resolve_audio_file_path"><code class="docutils literal notranslate"><span class="pre">resolve_audio_file_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_data_specs"><code class="docutils literal notranslate"><span class="pre">save_data_specs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_evsonganaly_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_evsonganaly_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_wseg_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_wseg_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_new_file_pairs"><code class="docutils literal notranslate"><span class="pre">select_new_file_pairs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_new_files"><code class="docutils literal notranslate"><span class="pre">select_new_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_wseg_file_pairs_from_metadata"><code class="docutils literal notranslate"><span class="pre">select_wseg_file_pairs_from_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.standardize_bird_band"><code class="docutils literal notranslate"><span class="pre">standardize_bird_band()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html">Flattening (Stage B)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.create_flattened_output_path"><code class="docutils literal notranslate"><span class="pre">create_flattened_output_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.extract_song_id"><code class="docutils literal notranslate"><span class="pre">extract_song_id()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.find_syllable_files"><code class="docutils literal notranslate"><span class="pre">find_syllable_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.flatten_bird_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_bird_spectrograms()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.flatten_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_spectrograms()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.load_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_syllable_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.process_single_syllable_file"><code class="docutils literal notranslate"><span class="pre">process_single_syllable_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.save_flattened_data"><code class="docutils literal notranslate"><span class="pre">save_flattened_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html">Embedding (Stage C)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams"><code class="docutils literal notranslate"><span class="pre">UMAPParams</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.calculate_adaptive_workers_improved"><code class="docutils literal notranslate"><span class="pre">calculate_adaptive_workers_improved()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.calculate_safe_batch_size"><code class="docutils literal notranslate"><span class="pre">calculate_safe_batch_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.check_embedding_compatibility"><code class="docutils literal notranslate"><span class="pre">check_embedding_compatibility()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compare_umap_embeddings_plot"><code class="docutils literal notranslate"><span class="pre">compare_umap_embeddings_plot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.complex_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">complex_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_and_save_umap_memory_aware"><code class="docutils literal notranslate"><span class="pre">compute_and_save_umap_memory_aware()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_embedding_grid_parallel_robust"><code class="docutils literal notranslate"><span class="pre">compute_embedding_grid_parallel_robust()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_single_umap_worker_safe"><code class="docutils literal notranslate"><span class="pre">compute_single_umap_worker_safe()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.estimate_umap_memory_usage"><code class="docutils literal notranslate"><span class="pre">estimate_umap_memory_usage()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.explore_embedding_parameters_robust"><code class="docutils literal notranslate"><span class="pre">explore_embedding_parameters_robust()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.generate_embedding_paths"><code class="docutils literal notranslate"><span class="pre">generate_embedding_paths()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.group_delay_distance"><code class="docutils literal notranslate"><span class="pre">group_delay_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.inspect_existing_embeddings"><code class="docutils literal notranslate"><span class="pre">inspect_existing_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.instantaneous_freq_distance"><code class="docutils literal notranslate"><span class="pre">instantaneous_freq_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.load_embedding_from_file"><code class="docutils literal notranslate"><span class="pre">load_embedding_from_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.load_flattened_specs"><code class="docutils literal notranslate"><span class="pre">load_flattened_specs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.monitor_memory_usage"><code class="docutils literal notranslate"><span class="pre">monitor_memory_usage()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.phase_aware_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">phase_aware_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.save_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">save_umap_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.save_umap_model"><code class="docutils literal notranslate"><span class="pre">save_umap_model()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.subsample_data"><code class="docutils literal notranslate"><span class="pre">subsample_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html">Labelling (Stage D)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#supported-quality-metrics">Supported quality metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.DEFAULT_HDBSCAN_GRID"><code class="docutils literal notranslate"><span class="pre">DEFAULT_HDBSCAN_GRID</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.aggregate_raw_scores_across_birds"><code class="docutils literal notranslate"><span class="pre">aggregate_raw_scores_across_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.analyze_parameter_performance_by_sample_size"><code class="docutils literal notranslate"><span class="pre">analyze_parameter_performance_by_sample_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.clear_clustering_outputs"><code class="docutils literal notranslate"><span class="pre">clear_clustering_outputs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.cluster_embeddings"><code class="docutils literal notranslate"><span class="pre">cluster_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_composite_score"><code class="docutils literal notranslate"><span class="pre">compute_composite_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_cross_bird_composite_scores"><code class="docutils literal notranslate"><span class="pre">compute_cross_bird_composite_scores()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_metric_ranking"><code class="docutils literal notranslate"><span class="pre">compute_metric_ranking()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_scores"><code class="docutils literal notranslate"><span class="pre">compute_scores()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.create_cluster_summary_pdf"><code class="docutils literal notranslate"><span class="pre">create_cluster_summary_pdf()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.dunn_index"><code class="docutils literal notranslate"><span class="pre">dunn_index()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.identify_optimal_parameters_by_sample_size"><code class="docutils literal notranslate"><span class="pre">identify_optimal_parameters_by_sample_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.information_criterion"><code class="docutils literal notranslate"><span class="pre">information_criterion()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.label_bird"><code class="docutils literal notranslate"><span class="pre">label_bird()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_labels"><code class="docutils literal notranslate"><span class="pre">load_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_master_summary"><code class="docutils literal notranslate"><span class="pre">load_master_summary()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">load_umap_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.parse_embedding_filename"><code class="docutils literal notranslate"><span class="pre">parse_embedding_filename()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.plot_summary_matrix"><code class="docutils literal notranslate"><span class="pre">plot_summary_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.plot_umap"><code class="docutils literal notranslate"><span class="pre">plot_umap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.remove_directory"><code class="docutils literal notranslate"><span class="pre">remove_directory()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.reorder_columns"><code class="docutils literal notranslate"><span class="pre">reorder_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_cross_bird_analysis"><code class="docutils literal notranslate"><span class="pre">save_cross_bird_analysis()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_labels"><code class="docutils literal notranslate"><span class="pre">save_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_master_summary"><code class="docutils literal notranslate"><span class="pre">save_master_summary()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.score_cluster_penalty"><code class="docutils literal notranslate"><span class="pre">score_cluster_penalty()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.search_cluster_params"><code class="docutils literal notranslate"><span class="pre">search_cluster_params()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.select_best_params"><code class="docutils literal notranslate"><span class="pre">select_best_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html">Phenotyping (Stage E)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_repeats"><code class="docutils literal notranslate"><span class="pre">analyze_repeats()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_transitions"><code class="docutils literal notranslate"><span class="pre">analyze_transitions()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_vocabulary_and_entropy"><code class="docutils literal notranslate"><span class="pre">analyze_vocabulary_and_entropy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.calculate_phenotypes_for_label_type"><code class="docutils literal notranslate"><span class="pre">calculate_phenotypes_for_label_type()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.create_unified_phenotype_row"><code class="docutils literal notranslate"><span class="pre">create_unified_phenotype_row()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.generate_manual_umap_plot"><code class="docutils literal notranslate"><span class="pre">generate_manual_umap_plot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_bird_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_bird_syllable_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_labels_for_syllables"><code class="docutils literal notranslate"><span class="pre">load_clustering_labels_for_syllables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_results"><code class="docutils literal notranslate"><span class="pre">load_clustering_results()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.phenotype_bird"><code class="docutils literal notranslate"><span class="pre">phenotype_bird()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_repeat_patterns"><code class="docutils literal notranslate"><span class="pre">plot_repeat_patterns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_transition_matrices"><code class="docutils literal notranslate"><span class="pre">plot_transition_matrices()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_vocabulary_comparison"><code class="docutils literal notranslate"><span class="pre">plot_vocabulary_comparison()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.save_detailed_phenotype_data"><code class="docutils literal notranslate"><span class="pre">save_detailed_phenotype_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html">Catalog (HTML visualization)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig"><code class="docutils literal notranslate"><span class="pre">CatalogConfig</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_all_catalogs"><code class="docutils literal notranslate"><span class="pre">generate_all_catalogs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_song_catalog"><code class="docutils literal notranslate"><span class="pre">generate_song_catalog()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_syllable_type_catalog"><code class="docutils literal notranslate"><span class="pre">generate_syllable_type_catalog()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html">Slicing (Stage A1)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/slicing.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.process_slicing_pipeline"><code class="docutils literal notranslate"><span class="pre">process_slicing_pipeline()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">slice_syllable_files_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_wseg"><code class="docutils literal notranslate"><span class="pre">slice_syllable_files_from_wseg()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="api/tools.html">Tools</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/tools.html#song-phenotyping-tools">song_phenotyping.tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.label_handler">Label handling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.spectrogram_configs">Spectrogram parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.run_config">Run configuration and registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.project_config">Project configuration</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="api/ingestion.html">Ingestion (Stage A)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api/flattening.html">Flattening (Stage B)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api/embedding.html">Embedding (Stage C)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api/labelling.html">Labelling (Stage D)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="api/phenotyping.html">Phenotyping (Stage E)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/ingestion.html">Ingestion (Stage A)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.copy_audio_and_partner_rec"><code class="docutils literal notranslate"><span class="pre">copy_audio_and_partner_rec()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.create_empty_segmented_data"><code class="docutils literal notranslate"><span class="pre">create_empty_segmented_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.create_segmented_audio_data"><code class="docutils literal notranslate"><span class="pre">create_segmented_audio_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">filepaths_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_local_cache"><code class="docutils literal notranslate"><span class="pre">filepaths_from_local_cache()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_wseg"><code class="docutils literal notranslate"><span class="pre">filepaths_from_wseg()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_and_save_audio"><code class="docutils literal notranslate"><span class="pre">process_and_save_audio()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_pipeline"><code class="docutils literal notranslate"><span class="pre">process_pipeline()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.process_single_file"><code class="docutils literal notranslate"><span class="pre">process_single_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.reconstruct_server_path"><code class="docutils literal notranslate"><span class="pre">reconstruct_server_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.resolve_audio_file_path"><code class="docutils literal notranslate"><span class="pre">resolve_audio_file_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_data_specs"><code class="docutils literal notranslate"><span class="pre">save_data_specs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_evsonganaly_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_evsonganaly_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_wseg_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_wseg_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_new_file_pairs"><code class="docutils literal notranslate"><span class="pre">select_new_file_pairs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_new_files"><code class="docutils literal notranslate"><span class="pre">select_new_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.select_wseg_file_pairs_from_metadata"><code class="docutils literal notranslate"><span class="pre">select_wseg_file_pairs_from_metadata()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/ingestion.html#song_phenotyping.ingestion.standardize_bird_band"><code class="docutils literal notranslate"><span class="pre">standardize_bird_band()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/flattening.html">Flattening (Stage B)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.create_flattened_output_path"><code class="docutils literal notranslate"><span class="pre">create_flattened_output_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.extract_song_id"><code class="docutils literal notranslate"><span class="pre">extract_song_id()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.find_syllable_files"><code class="docutils literal notranslate"><span class="pre">find_syllable_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.flatten_bird_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_bird_spectrograms()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.flatten_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_spectrograms()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.load_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_syllable_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.process_single_syllable_file"><code class="docutils literal notranslate"><span class="pre">process_single_syllable_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/flattening.html#song_phenotyping.flattening.save_flattened_data"><code class="docutils literal notranslate"><span class="pre">save_flattened_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/embedding.html">Embedding (Stage C)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams"><code class="docutils literal notranslate"><span class="pre">UMAPParams</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.from_dict"><code class="docutils literal notranslate"><span class="pre">UMAPParams.from_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.metric"><code class="docutils literal notranslate"><span class="pre">UMAPParams.metric</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.min_dist"><code class="docutils literal notranslate"><span class="pre">UMAPParams.min_dist</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_components"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_components</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_epochs"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_epochs</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_neighbors"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_neighbors</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.to_dict"><code class="docutils literal notranslate"><span class="pre">UMAPParams.to_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.UMAPParams.validate_params"><code class="docutils literal notranslate"><span class="pre">UMAPParams.validate_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.calculate_adaptive_workers_improved"><code class="docutils literal notranslate"><span class="pre">calculate_adaptive_workers_improved()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.calculate_safe_batch_size"><code class="docutils literal notranslate"><span class="pre">calculate_safe_batch_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.check_embedding_compatibility"><code class="docutils literal notranslate"><span class="pre">check_embedding_compatibility()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compare_umap_embeddings_plot"><code class="docutils literal notranslate"><span class="pre">compare_umap_embeddings_plot()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.complex_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">complex_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_and_save_umap_memory_aware"><code class="docutils literal notranslate"><span class="pre">compute_and_save_umap_memory_aware()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_embedding_grid_parallel_robust"><code class="docutils literal notranslate"><span class="pre">compute_embedding_grid_parallel_robust()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.compute_single_umap_worker_safe"><code class="docutils literal notranslate"><span class="pre">compute_single_umap_worker_safe()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.estimate_umap_memory_usage"><code class="docutils literal notranslate"><span class="pre">estimate_umap_memory_usage()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.explore_embedding_parameters_robust"><code class="docutils literal notranslate"><span class="pre">explore_embedding_parameters_robust()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.generate_embedding_paths"><code class="docutils literal notranslate"><span class="pre">generate_embedding_paths()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.group_delay_distance"><code class="docutils literal notranslate"><span class="pre">group_delay_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.inspect_existing_embeddings"><code class="docutils literal notranslate"><span class="pre">inspect_existing_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.instantaneous_freq_distance"><code class="docutils literal notranslate"><span class="pre">instantaneous_freq_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.load_embedding_from_file"><code class="docutils literal notranslate"><span class="pre">load_embedding_from_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.load_flattened_specs"><code class="docutils literal notranslate"><span class="pre">load_flattened_specs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.monitor_memory_usage"><code class="docutils literal notranslate"><span class="pre">monitor_memory_usage()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.phase_aware_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">phase_aware_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.save_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">save_umap_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.save_umap_model"><code class="docutils literal notranslate"><span class="pre">save_umap_model()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/embedding.html#song_phenotyping.embedding.subsample_data"><code class="docutils literal notranslate"><span class="pre">subsample_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/labelling.html">Labelling (Stage D)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#supported-quality-metrics">Supported quality metrics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.DEFAULT_HDBSCAN_GRID"><code class="docutils literal notranslate"><span class="pre">DEFAULT_HDBSCAN_GRID</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.from_dict"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.from_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.min_cluster_size"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.min_cluster_size</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.min_samples"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.min_samples</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.to_dict"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.aggregate_raw_scores_across_birds"><code class="docutils literal notranslate"><span class="pre">aggregate_raw_scores_across_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.analyze_parameter_performance_by_sample_size"><code class="docutils literal notranslate"><span class="pre">analyze_parameter_performance_by_sample_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.clear_clustering_outputs"><code class="docutils literal notranslate"><span class="pre">clear_clustering_outputs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.cluster_embeddings"><code class="docutils literal notranslate"><span class="pre">cluster_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_composite_score"><code class="docutils literal notranslate"><span class="pre">compute_composite_score()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_cross_bird_composite_scores"><code class="docutils literal notranslate"><span class="pre">compute_cross_bird_composite_scores()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_metric_ranking"><code class="docutils literal notranslate"><span class="pre">compute_metric_ranking()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.compute_scores"><code class="docutils literal notranslate"><span class="pre">compute_scores()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.create_cluster_summary_pdf"><code class="docutils literal notranslate"><span class="pre">create_cluster_summary_pdf()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.dunn_index"><code class="docutils literal notranslate"><span class="pre">dunn_index()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.identify_optimal_parameters_by_sample_size"><code class="docutils literal notranslate"><span class="pre">identify_optimal_parameters_by_sample_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.information_criterion"><code class="docutils literal notranslate"><span class="pre">information_criterion()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.label_bird"><code class="docutils literal notranslate"><span class="pre">label_bird()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_labels"><code class="docutils literal notranslate"><span class="pre">load_labels()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_master_summary"><code class="docutils literal notranslate"><span class="pre">load_master_summary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.load_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">load_umap_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.parse_embedding_filename"><code class="docutils literal notranslate"><span class="pre">parse_embedding_filename()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.plot_summary_matrix"><code class="docutils literal notranslate"><span class="pre">plot_summary_matrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.plot_umap"><code class="docutils literal notranslate"><span class="pre">plot_umap()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.remove_directory"><code class="docutils literal notranslate"><span class="pre">remove_directory()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.reorder_columns"><code class="docutils literal notranslate"><span class="pre">reorder_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_cross_bird_analysis"><code class="docutils literal notranslate"><span class="pre">save_cross_bird_analysis()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_labels"><code class="docutils literal notranslate"><span class="pre">save_labels()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.save_master_summary"><code class="docutils literal notranslate"><span class="pre">save_master_summary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.score_cluster_penalty"><code class="docutils literal notranslate"><span class="pre">score_cluster_penalty()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.search_cluster_params"><code class="docutils literal notranslate"><span class="pre">search_cluster_params()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/labelling.html#song_phenotyping.labelling.select_best_params"><code class="docutils literal notranslate"><span class="pre">select_best_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/phenotyping.html">Phenotyping (Stage E)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.adaptive_repeat_factor"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.adaptive_repeat_factor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.dyad_threshold"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.dyad_threshold</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.figure_dpi"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.figure_dpi</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.generate_plots"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.generate_plots</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.heatmap_annotation_size"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.heatmap_annotation_size</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.min_syllable_proportion"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.min_syllable_proportion</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_candidate_range"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.repeat_candidate_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_significance_threshold"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.repeat_significance_threshold</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.use_top_n_clusterings"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.use_top_n_clusterings</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_repeats"><code class="docutils literal notranslate"><span class="pre">analyze_repeats()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_transitions"><code class="docutils literal notranslate"><span class="pre">analyze_transitions()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_vocabulary_and_entropy"><code class="docutils literal notranslate"><span class="pre">analyze_vocabulary_and_entropy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.calculate_phenotypes_for_label_type"><code class="docutils literal notranslate"><span class="pre">calculate_phenotypes_for_label_type()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.create_unified_phenotype_row"><code class="docutils literal notranslate"><span class="pre">create_unified_phenotype_row()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.generate_manual_umap_plot"><code class="docutils literal notranslate"><span class="pre">generate_manual_umap_plot()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_bird_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_bird_syllable_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_labels_for_syllables"><code class="docutils literal notranslate"><span class="pre">load_clustering_labels_for_syllables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_results"><code class="docutils literal notranslate"><span class="pre">load_clustering_results()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.phenotype_bird"><code class="docutils literal notranslate"><span class="pre">phenotype_bird()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_repeat_patterns"><code class="docutils literal notranslate"><span class="pre">plot_repeat_patterns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_transition_matrices"><code class="docutils literal notranslate"><span class="pre">plot_transition_matrices()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.plot_vocabulary_comparison"><code class="docutils literal notranslate"><span class="pre">plot_vocabulary_comparison()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/phenotyping.html#song_phenotyping.phenotyping.save_detailed_phenotype_data"><code class="docutils literal notranslate"><span class="pre">save_detailed_phenotype_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/catalog.html">Catalog (HTML visualization)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig"><code class="docutils literal notranslate"><span class="pre">CatalogConfig</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.dpi"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.dpi</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.grid_cols"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.grid_cols</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.n_per_type"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.n_per_type</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.n_songs"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.n_songs</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.overwrite"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.overwrite</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_duration"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.song_duration</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_fig_height"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.song_fig_height</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_fig_width"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.song_fig_width</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.syl_fig_size"><code class="docutils literal notranslate"><span class="pre">CatalogConfig.syl_fig_size</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_all_catalogs"><code class="docutils literal notranslate"><span class="pre">generate_all_catalogs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_song_catalog"><code class="docutils literal notranslate"><span class="pre">generate_song_catalog()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/catalog.html#song_phenotyping.catalog.generate_syllable_type_catalog"><code class="docutils literal notranslate"><span class="pre">generate_syllable_type_catalog()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/slicing.html">Slicing (Stage A1)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.process_slicing_pipeline"><code class="docutils literal notranslate"><span class="pre">process_slicing_pipeline()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">slice_syllable_files_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_wseg"><code class="docutils literal notranslate"><span class="pre">slice_syllable_files_from_wseg()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="api/tools.html">Tools</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="api/tools.html#song-phenotyping-tools">song_phenotyping.tools</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/tools.html#modules">Modules</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.label_handler">Label handling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#label-conventions">Label conventions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler"><code class="docutils literal notranslate"><span class="pre">LabelHandler</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.label_handler.LabelType"><code class="docutils literal notranslate"><span class="pre">LabelType</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.label_handler.has_manual_labels"><code class="docutils literal notranslate"><span class="pre">has_manual_labels()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.spectrogram_configs">Spectrogram parameters</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><code class="docutils literal notranslate"><span class="pre">SpectrogramParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.run_config">Run configuration and registry</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.run_config.RunConfig"><code class="docutils literal notranslate"><span class="pre">RunConfig</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry"><code class="docutils literal notranslate"><span class="pre">RunRegistry</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/tools.html#module-song_phenotyping.tools.project_config">Project configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig"><code class="docutils literal notranslate"><span class="pre">ProjectConfig</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -94,26 +439,592 @@
 <h1 id="index">Index</h1>
 
 <div class="genindex-jumpbox">
- <a href="#M"><strong>M</strong></a>
+ <a href="#A"><strong>A</strong></a>
+ | <a href="#B"><strong>B</strong></a>
+ | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
+ | <a href="#E"><strong>E</strong></a>
+ | <a href="#F"><strong>F</strong></a>
+ | <a href="#G"><strong>G</strong></a>
+ | <a href="#H"><strong>H</strong></a>
+ | <a href="#I"><strong>I</strong></a>
+ | <a href="#L"><strong>L</strong></a>
+ | <a href="#M"><strong>M</strong></a>
+ | <a href="#N"><strong>N</strong></a>
+ | <a href="#O"><strong>O</strong></a>
+ | <a href="#P"><strong>P</strong></a>
+ | <a href="#Q"><strong>Q</strong></a>
+ | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
+ | <a href="#T"><strong>T</strong></a>
+ | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
+ | <a href="#W"><strong>W</strong></a>
  
 </div>
+<h2 id="A">A</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.adaptive_repeat_factor">adaptive_repeat_factor (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler.add_sequence_tokens">add_sequence_tokens() (song_phenotyping.tools.label_handler.LabelHandler method)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.aggregate_raw_scores_across_birds">aggregate_raw_scores_across_birds() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry.all">all() (song_phenotyping.tools.run_config.RunRegistry method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.analyze_parameter_performance_by_sample_size">analyze_parameter_performance_by_sample_size() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_repeats">analyze_repeats() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_transitions">analyze_transitions() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.analyze_vocabulary_and_entropy">analyze_vocabulary_and_entropy() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/tools.html#id0">AUTO (song_phenotyping.tools.label_handler.LabelType attribute)</a>, <a href="api/tools.html#song_phenotyping.tools.label_handler.LabelType.AUTO">[1]</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="B">B</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.bird_dir">bird_dir() (song_phenotyping.tools.project_config.ProjectConfig method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.bird_ids">bird_ids (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="C">C</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.calculate_adaptive_workers_improved">calculate_adaptive_workers_improved() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.calculate_phenotypes_for_label_type">calculate_phenotypes_for_label_type() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.calculate_safe_batch_size">calculate_safe_batch_size() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig">CatalogConfig (class in song_phenotyping.catalog)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.check_embedding_compatibility">check_embedding_compatibility() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.clear_clustering_outputs">clear_clustering_outputs() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.cluster_embeddings">cluster_embeddings() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.compare_umap_embeddings_plot">compare_umap_embeddings_plot() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.complex_spectrogram_distance">complex_spectrogram_distance() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.compute_and_save_umap_memory_aware">compute_and_save_umap_memory_aware() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.compute_composite_score">compute_composite_score() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.compute_cross_bird_composite_scores">compute_cross_bird_composite_scores() (in module song_phenotyping.labelling)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.compute_embedding_grid_parallel_robust">compute_embedding_grid_parallel_robust() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.compute_metric_ranking">compute_metric_ranking() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.compute_scores">compute_scores() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.compute_single_umap_worker_safe">compute_single_umap_worker_safe() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.copy_audio_and_partner_rec">copy_audio_and_partner_rec() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.create">create() (song_phenotyping.tools.run_config.RunConfig class method)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.create_cluster_summary_pdf">create_cluster_summary_pdf() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.create_empty_segmented_data">create_empty_segmented_data() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.create_flattened_output_path">create_flattened_output_path() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.create_segmented_audio_data">create_segmented_audio_data() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.create_unified_phenotype_row">create_unified_phenotype_row() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.created_at">created_at (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.DEFAULT_HDBSCAN_GRID">DEFAULT_HDBSCAN_GRID (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.downsample">downsample (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.dpi">dpi (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.dunn_index">dunn_index() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.dyad_threshold">dyad_threshold (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="E">E</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler.end_token">end_token (song_phenotyping.tools.label_handler.LabelHandler property)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.estimate_umap_memory_usage">estimate_umap_memory_usage() (in module song_phenotyping.embedding)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.explore_embedding_parameters_robust">explore_embedding_parameters_robust() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.extract_song_id">extract_song_id() (in module song_phenotyping.flattening)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="F">F</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.figure_dpi">figure_dpi (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_evsonganaly">filepaths_from_evsonganaly() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_local_cache">filepaths_from_local_cache() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.filepaths_from_wseg">filepaths_from_wseg() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.find_syllable_files">find_syllable_files() (in module song_phenotyping.flattening)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.flatten_bird_spectrograms">flatten_bird_spectrograms() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.flatten_spectrograms">flatten_spectrograms() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.from_dict">from_dict() (song_phenotyping.embedding.UMAPParams class method)</a>
+
+      <ul>
+        <li><a href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.from_dict">(song_phenotyping.labelling.HDBSCANParams class method)</a>
+</li>
+        <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.from_dict">(song_phenotyping.tools.spectrogram_configs.SpectrogramParams method)</a>
+</li>
+      </ul></li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.fs">fs (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.generate_all_catalogs">generate_all_catalogs() (in module song_phenotyping.catalog)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.generate_embedding_paths">generate_embedding_paths() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.generate_manual_umap_plot">generate_manual_umap_plot() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.generate_plots">generate_plots (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.generate_song_catalog">generate_song_catalog() (in module song_phenotyping.catalog)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.generate_syllable_type_catalog">generate_syllable_type_catalog() (in module song_phenotyping.catalog)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry.get">get() (song_phenotyping.tools.run_config.RunRegistry method)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.grid_cols">grid_cols (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.group_delay_distance">group_delay_distance() (in module song_phenotyping.embedding)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="H">H</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.has_manual_labels">has_manual_labels() (in module song_phenotyping.tools.label_handler)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.hdbscan_params">hdbscan_params (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.hdbscan_params_obj">hdbscan_params_obj (song_phenotyping.tools.run_config.RunConfig property)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams">HDBSCANParams (class in song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.heatmap_annotation_size">heatmap_annotation_size (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.hop">hop (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="I">I</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.identify_optimal_parameters_by_sample_size">identify_optimal_parameters_by_sample_size() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.information_criterion">information_criterion() (in module song_phenotyping.labelling)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.inspect_existing_embeddings">inspect_existing_embeddings() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.instantaneous_freq_distance">instantaneous_freq_distance() (in module song_phenotyping.embedding)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="L">L</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.label_bird">label_bird() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler">LabelHandler (class in song_phenotyping.tools.label_handler)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelType">LabelType (class in song_phenotyping.tools.label_handler)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.load">load() (song_phenotyping.tools.project_config.ProjectConfig class method)</a>
+
+      <ul>
+        <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.load">(song_phenotyping.tools.run_config.RunConfig class method)</a>
+</li>
+      </ul></li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.load_bird_syllable_data">load_bird_syllable_data() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_labels_for_syllables">load_clustering_labels_for_syllables() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.load_clustering_results">load_clustering_results() (in module song_phenotyping.phenotyping)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.load_embedding_from_file">load_embedding_from_file() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.load_flattened_specs">load_flattened_specs() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.load_from_hdf5">load_from_hdf5() (song_phenotyping.tools.spectrogram_configs.SpectrogramParams class method)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.load_labels">load_labels() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.load_master_summary">load_master_summary() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.load_syllable_data">load_syllable_data() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.load_umap_embeddings">load_umap_embeddings() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.local_cache">local_cache (song_phenotyping.tools.project_config.ProjectConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="M">M</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.macaw_bird_dir">macaw_bird_dir() (song_phenotyping.tools.project_config.ProjectConfig method)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.macaw_root">macaw_root (song_phenotyping.tools.project_config.ProjectConfig attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.main">main() (in module song_phenotyping.embedding)</a>
+
+      <ul>
+        <li><a href="api/ingestion.html#song_phenotyping.ingestion.main">(in module song_phenotyping.ingestion)</a>
+</li>
+        <li><a href="api/labelling.html#song_phenotyping.labelling.main">(in module song_phenotyping.labelling)</a>
+</li>
+        <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.main">(in module song_phenotyping.phenotyping)</a>
+</li>
+        <li><a href="api/slicing.html#song_phenotyping.slicing.main">(in module song_phenotyping.slicing)</a>
+</li>
+      </ul></li>
+      <li><a href="api/tools.html#id1">MANUAL (song_phenotyping.tools.label_handler.LabelType attribute)</a>, <a href="api/tools.html#song_phenotyping.tools.label_handler.LabelType.MANUAL">[1]</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_dur">max_dur (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_freq">max_freq (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.metric">metric (song_phenotyping.embedding.UMAPParams attribute)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.min_cluster_size">min_cluster_size (song_phenotyping.labelling.HDBSCANParams attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.min_dist">min_dist (song_phenotyping.embedding.UMAPParams attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.min_freq">min_freq (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.min_samples">min_samples (song_phenotyping.labelling.HDBSCANParams attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.min_syllable_proportion">min_syllable_proportion (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
       <li>
     module
 
       <ul>
+        <li><a href="api/catalog.html#module-song_phenotyping.catalog">song_phenotyping.catalog</a>
+</li>
+        <li><a href="api/embedding.html#module-song_phenotyping.embedding">song_phenotyping.embedding</a>
+</li>
+        <li><a href="api/flattening.html#module-song_phenotyping.flattening">song_phenotyping.flattening</a>
+</li>
+        <li><a href="api/ingestion.html#module-song_phenotyping.ingestion">song_phenotyping.ingestion</a>
+</li>
+        <li><a href="api/labelling.html#module-song_phenotyping.labelling">song_phenotyping.labelling</a>
+</li>
+        <li><a href="api/phenotyping.html#module-song_phenotyping.phenotyping">song_phenotyping.phenotyping</a>
+</li>
+        <li><a href="api/slicing.html#module-song_phenotyping.slicing">song_phenotyping.slicing</a>
+</li>
         <li><a href="api/tools.html#module-song_phenotyping.tools">song_phenotyping.tools</a>
 </li>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.label_handler">song_phenotyping.tools.label_handler</a>
+</li>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.project_config">song_phenotyping.tools.project_config</a>
+</li>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.run_config">song_phenotyping.tools.run_config</a>
+</li>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.spectrogram_configs">song_phenotyping.tools.spectrogram_configs</a>
+</li>
       </ul></li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.monitor_memory_usage">monitor_memory_usage() (in module song_phenotyping.embedding)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="N">N</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_components">n_components (song_phenotyping.embedding.UMAPParams attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_epochs">n_epochs (song_phenotyping.embedding.UMAPParams attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.n_neighbors">n_neighbors (song_phenotyping.embedding.UMAPParams attribute)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.n_per_type">n_per_type (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.n_songs">n_songs (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.nfft">nfft (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler.non_syl_tokens">non_syl_tokens (song_phenotyping.tools.label_handler.LabelHandler property)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler.normalize_labels">normalize_labels() (song_phenotyping.tools.label_handler.LabelHandler method)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.notes">notes (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="O">O</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.overwrite">overwrite (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.overwrite_existing">overwrite_existing (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="P">P</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.padding">padding (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.parse_embedding_filename">parse_embedding_filename() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.phase_aware_spectrogram_distance">phase_aware_spectrogram_distance() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.phenotype_bird">phenotype_bird() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.phenotype_params">phenotype_params (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.phenotype_params_obj">phenotype_params_obj (song_phenotyping.tools.run_config.RunConfig property)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig">PhenotypingConfig (class in song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.plot_repeat_patterns">plot_repeat_patterns() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.plot_summary_matrix">plot_summary_matrix() (in module song_phenotyping.labelling)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.plot_transition_matrices">plot_transition_matrices() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.plot_umap">plot_umap() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.plot_vocabulary_comparison">plot_vocabulary_comparison() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.process_and_save_audio">process_and_save_audio() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.process_pipeline">process_pipeline() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.process_single_file">process_single_file() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.process_single_syllable_file">process_single_syllable_file() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/slicing.html#song_phenotyping.slicing.process_slicing_pipeline">process_slicing_pipeline() (in module song_phenotyping.slicing)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig">ProjectConfig (class in song_phenotyping.tools.project_config)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="Q">Q</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry.query">query() (song_phenotyping.tools.run_config.RunRegistry method)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="R">R</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.reconstruct_server_path">reconstruct_server_path() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry.register">register() (song_phenotyping.tools.run_config.RunRegistry method)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.remove_directory">remove_directory() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.reorder_columns">reorder_columns() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_candidate_range">repeat_candidate_range (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_significance_threshold">repeat_significance_threshold (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.resolve_audio_file_path">resolve_audio_file_path() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.run_id">run_id (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.project_config.ProjectConfig.run_registry">run_registry (song_phenotyping.tools.project_config.ProjectConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig">RunConfig (class in song_phenotyping.tools.run_config)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunRegistry">RunRegistry (class in song_phenotyping.tools.run_config)</a>
+</li>
   </ul></td>
 </tr></table>
 
 <h2 id="S">S</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.save">save() (song_phenotyping.tools.run_config.RunConfig method)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.save_cross_bird_analysis">save_cross_bird_analysis() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.save_data_specs">save_data_specs() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.save_detailed_phenotype_data">save_detailed_phenotype_data() (in module song_phenotyping.phenotyping)</a>
+</li>
+      <li><a href="api/flattening.html#song_phenotyping.flattening.save_flattened_data">save_flattened_data() (in module song_phenotyping.flattening)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.save_labels">save_labels() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.save_master_summary">save_master_summary() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_evsonganaly_birds">save_specs_for_evsonganaly_birds() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.save_specs_for_wseg_birds">save_specs_for_wseg_birds() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.save_to_hdf5">save_to_hdf5() (song_phenotyping.tools.spectrogram_configs.SpectrogramParams method)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.save_umap_embeddings">save_umap_embeddings() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.save_umap_model">save_umap_model() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.score_cluster_penalty">score_cluster_penalty() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.search_cluster_params">search_cluster_params() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/labelling.html#song_phenotyping.labelling.select_best_params">select_best_params() (in module song_phenotyping.labelling)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.select_new_file_pairs">select_new_file_pairs() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.select_new_files">select_new_files() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.select_wseg_file_pairs_from_metadata">select_wseg_file_pairs_from_metadata() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.shift_lambdas">shift_lambdas (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slice_length">slice_length (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_evsonganaly">slice_syllable_files_from_evsonganaly() (in module song_phenotyping.slicing)</a>
+</li>
+      <li><a href="api/slicing.html#song_phenotyping.slicing.slice_syllable_files_from_wseg">slice_syllable_files_from_wseg() (in module song_phenotyping.slicing)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slope_lambdas">slope_lambdas (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_duration">song_duration (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_fig_height">song_fig_height (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.song_fig_width">song_fig_width (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+      <li>
+    song_phenotyping.catalog
+
+      <ul>
+        <li><a href="api/catalog.html#module-song_phenotyping.catalog">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.embedding
+
+      <ul>
+        <li><a href="api/embedding.html#module-song_phenotyping.embedding">module</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li>
+    song_phenotyping.flattening
+
+      <ul>
+        <li><a href="api/flattening.html#module-song_phenotyping.flattening">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.ingestion
+
+      <ul>
+        <li><a href="api/ingestion.html#module-song_phenotyping.ingestion">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.labelling
+
+      <ul>
+        <li><a href="api/labelling.html#module-song_phenotyping.labelling">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.phenotyping
+
+      <ul>
+        <li><a href="api/phenotyping.html#module-song_phenotyping.phenotyping">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.slicing
+
+      <ul>
+        <li><a href="api/slicing.html#module-song_phenotyping.slicing">module</a>
+</li>
+      </ul></li>
       <li>
     song_phenotyping.tools
 
@@ -121,6 +1032,108 @@
         <li><a href="api/tools.html#module-song_phenotyping.tools">module</a>
 </li>
       </ul></li>
+      <li>
+    song_phenotyping.tools.label_handler
+
+      <ul>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.label_handler">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.tools.project_config
+
+      <ul>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.project_config">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.tools.run_config
+
+      <ul>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.run_config">module</a>
+</li>
+      </ul></li>
+      <li>
+    song_phenotyping.tools.spectrogram_configs
+
+      <ul>
+        <li><a href="api/tools.html#module-song_phenotyping.tools.spectrogram_configs">module</a>
+</li>
+      </ul></li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.songs_per_bird">songs_per_bird (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.spec_mode">spec_mode (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.spec_params">spec_params (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.spec_params_obj">spec_params_obj (song_phenotyping.tools.run_config.RunConfig property)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams">SpectrogramParams (class in song_phenotyping.tools.spectrogram_configs)</a>
+</li>
+      <li><a href="api/ingestion.html#song_phenotyping.ingestion.standardize_bird_band">standardize_bird_band() (in module song_phenotyping.ingestion)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.label_handler.LabelHandler.start_token">start_token (song_phenotyping.tools.label_handler.LabelHandler property)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.subsample_data">subsample_data() (in module song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/catalog.html#song_phenotyping.catalog.CatalogConfig.syl_fig_size">syl_fig_size (song_phenotyping.catalog.CatalogConfig attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="T">T</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.target_shape">target_shape (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.to_dict">to_dict() (song_phenotyping.embedding.UMAPParams method)</a>
+
+      <ul>
+        <li><a href="api/labelling.html#song_phenotyping.labelling.HDBSCANParams.to_dict">(song_phenotyping.labelling.HDBSCANParams method)</a>
+</li>
+        <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.to_dict">(song_phenotyping.tools.run_config.RunConfig method)</a>
+</li>
+        <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.to_dict">(song_phenotyping.tools.spectrogram_configs.SpectrogramParams method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="U">U</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.umap_params">umap_params (song_phenotyping.tools.run_config.RunConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.run_config.RunConfig.umap_params_obj">umap_params_obj (song_phenotyping.tools.run_config.RunConfig property)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams">UMAPParams (class in song_phenotyping.embedding)</a>
+</li>
+      <li><a href="api/phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.use_top_n_clusterings">use_top_n_clusterings (song_phenotyping.phenotyping.PhenotypingConfig attribute)</a>
+</li>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.use_warping">use_warping (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/embedding.html#song_phenotyping.embedding.UMAPParams.validate_params">validate_params() (song_phenotyping.embedding.UMAPParams method)</a>
+
+      <ul>
+        <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.validate_params">(song_phenotyping.tools.spectrogram_configs.SpectrogramParams method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/tools.html#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.warp_freq_sum">warp_freq_sum (song_phenotyping.tools.spectrogram_configs.SpectrogramParams attribute)</a>
+</li>
   </ul></td>
 </tr></table>
 

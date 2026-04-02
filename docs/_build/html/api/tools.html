@@ -19,7 +19,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="prev" title="Phenotyping (Stage E)" href="phenotyping.html" /> 
+    <link rel="prev" title="Slicing (Stage A1)" href="slicing.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -41,28 +41,334 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#install-from-source">Install from source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#optional-extras">Optional extras</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../installation.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../usage.html">Usage guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#quick-start">Quick start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#stage-a-spectrogram-ingestion">Stage A — Spectrogram ingestion</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../usage.html#stage-a1-fixed-length-slicing-optional">Stage A1 — Fixed-length slicing (optional)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#stage-b-flattening">Stage B — Flattening</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#stage-c-umap-embedding">Stage C — UMAP embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#stage-d-clustering-and-labelling">Stage D — Clustering and labelling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../usage.html#custom-hdbscan-grid">Custom HDBSCAN grid</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#stage-e-phenotyping">Stage E — Phenotyping</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#visual-inspection-html-catalogs">Visual inspection — HTML catalogs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../usage.html#configuration">Configuration</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API reference</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">API Reference</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="ingestion.html">Ingestion (Stage A)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="flattening.html">Flattening (Stage B)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="embedding.html">Embedding (Stage C)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="labelling.html">Labelling (Stage D)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="phenotyping.html">Phenotyping (Stage E)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html">Ingestion (Stage A)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.copy_audio_and_partner_rec"><code class="docutils literal notranslate"><span class="pre">copy_audio_and_partner_rec()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.create_empty_segmented_data"><code class="docutils literal notranslate"><span class="pre">create_empty_segmented_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.create_segmented_audio_data"><code class="docutils literal notranslate"><span class="pre">create_segmented_audio_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">filepaths_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_local_cache"><code class="docutils literal notranslate"><span class="pre">filepaths_from_local_cache()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_wseg"><code class="docutils literal notranslate"><span class="pre">filepaths_from_wseg()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_and_save_audio"><code class="docutils literal notranslate"><span class="pre">process_and_save_audio()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_pipeline"><code class="docutils literal notranslate"><span class="pre">process_pipeline()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_single_file"><code class="docutils literal notranslate"><span class="pre">process_single_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.reconstruct_server_path"><code class="docutils literal notranslate"><span class="pre">reconstruct_server_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.resolve_audio_file_path"><code class="docutils literal notranslate"><span class="pre">resolve_audio_file_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_data_specs"><code class="docutils literal notranslate"><span class="pre">save_data_specs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_specs_for_evsonganaly_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_evsonganaly_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_specs_for_wseg_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_wseg_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_new_file_pairs"><code class="docutils literal notranslate"><span class="pre">select_new_file_pairs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_new_files"><code class="docutils literal notranslate"><span class="pre">select_new_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_wseg_file_pairs_from_metadata"><code class="docutils literal notranslate"><span class="pre">select_wseg_file_pairs_from_metadata()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.standardize_bird_band"><code class="docutils literal notranslate"><span class="pre">standardize_bird_band()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html">Flattening (Stage B)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.create_flattened_output_path"><code class="docutils literal notranslate"><span class="pre">create_flattened_output_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.extract_song_id"><code class="docutils literal notranslate"><span class="pre">extract_song_id()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.find_syllable_files"><code class="docutils literal notranslate"><span class="pre">find_syllable_files()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.flatten_bird_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_bird_spectrograms()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.flatten_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_spectrograms()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.load_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_syllable_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.process_single_syllable_file"><code class="docutils literal notranslate"><span class="pre">process_single_syllable_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.save_flattened_data"><code class="docutils literal notranslate"><span class="pre">save_flattened_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html">Embedding (Stage C)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams"><code class="docutils literal notranslate"><span class="pre">UMAPParams</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.calculate_adaptive_workers_improved"><code class="docutils literal notranslate"><span class="pre">calculate_adaptive_workers_improved()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.calculate_safe_batch_size"><code class="docutils literal notranslate"><span class="pre">calculate_safe_batch_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.check_embedding_compatibility"><code class="docutils literal notranslate"><span class="pre">check_embedding_compatibility()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compare_umap_embeddings_plot"><code class="docutils literal notranslate"><span class="pre">compare_umap_embeddings_plot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.complex_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">complex_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_and_save_umap_memory_aware"><code class="docutils literal notranslate"><span class="pre">compute_and_save_umap_memory_aware()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_embedding_grid_parallel_robust"><code class="docutils literal notranslate"><span class="pre">compute_embedding_grid_parallel_robust()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_single_umap_worker_safe"><code class="docutils literal notranslate"><span class="pre">compute_single_umap_worker_safe()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.estimate_umap_memory_usage"><code class="docutils literal notranslate"><span class="pre">estimate_umap_memory_usage()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.explore_embedding_parameters_robust"><code class="docutils literal notranslate"><span class="pre">explore_embedding_parameters_robust()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.generate_embedding_paths"><code class="docutils literal notranslate"><span class="pre">generate_embedding_paths()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.group_delay_distance"><code class="docutils literal notranslate"><span class="pre">group_delay_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.inspect_existing_embeddings"><code class="docutils literal notranslate"><span class="pre">inspect_existing_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.instantaneous_freq_distance"><code class="docutils literal notranslate"><span class="pre">instantaneous_freq_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.load_embedding_from_file"><code class="docutils literal notranslate"><span class="pre">load_embedding_from_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.load_flattened_specs"><code class="docutils literal notranslate"><span class="pre">load_flattened_specs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.monitor_memory_usage"><code class="docutils literal notranslate"><span class="pre">monitor_memory_usage()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.phase_aware_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">phase_aware_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.save_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">save_umap_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.save_umap_model"><code class="docutils literal notranslate"><span class="pre">save_umap_model()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.subsample_data"><code class="docutils literal notranslate"><span class="pre">subsample_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html">Labelling (Stage D)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#supported-quality-metrics">Supported quality metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.DEFAULT_HDBSCAN_GRID"><code class="docutils literal notranslate"><span class="pre">DEFAULT_HDBSCAN_GRID</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.aggregate_raw_scores_across_birds"><code class="docutils literal notranslate"><span class="pre">aggregate_raw_scores_across_birds()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.analyze_parameter_performance_by_sample_size"><code class="docutils literal notranslate"><span class="pre">analyze_parameter_performance_by_sample_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.clear_clustering_outputs"><code class="docutils literal notranslate"><span class="pre">clear_clustering_outputs()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.cluster_embeddings"><code class="docutils literal notranslate"><span class="pre">cluster_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_composite_score"><code class="docutils literal notranslate"><span class="pre">compute_composite_score()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_cross_bird_composite_scores"><code class="docutils literal notranslate"><span class="pre">compute_cross_bird_composite_scores()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_metric_ranking"><code class="docutils literal notranslate"><span class="pre">compute_metric_ranking()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_scores"><code class="docutils literal notranslate"><span class="pre">compute_scores()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.create_cluster_summary_pdf"><code class="docutils literal notranslate"><span class="pre">create_cluster_summary_pdf()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.dunn_index"><code class="docutils literal notranslate"><span class="pre">dunn_index()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.identify_optimal_parameters_by_sample_size"><code class="docutils literal notranslate"><span class="pre">identify_optimal_parameters_by_sample_size()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.information_criterion"><code class="docutils literal notranslate"><span class="pre">information_criterion()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.label_bird"><code class="docutils literal notranslate"><span class="pre">label_bird()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_labels"><code class="docutils literal notranslate"><span class="pre">load_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_master_summary"><code class="docutils literal notranslate"><span class="pre">load_master_summary()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">load_umap_embeddings()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.parse_embedding_filename"><code class="docutils literal notranslate"><span class="pre">parse_embedding_filename()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.plot_summary_matrix"><code class="docutils literal notranslate"><span class="pre">plot_summary_matrix()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.plot_umap"><code class="docutils literal notranslate"><span class="pre">plot_umap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.remove_directory"><code class="docutils literal notranslate"><span class="pre">remove_directory()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.reorder_columns"><code class="docutils literal notranslate"><span class="pre">reorder_columns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_cross_bird_analysis"><code class="docutils literal notranslate"><span class="pre">save_cross_bird_analysis()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_labels"><code class="docutils literal notranslate"><span class="pre">save_labels()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_master_summary"><code class="docutils literal notranslate"><span class="pre">save_master_summary()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.score_cluster_penalty"><code class="docutils literal notranslate"><span class="pre">score_cluster_penalty()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.search_cluster_params"><code class="docutils literal notranslate"><span class="pre">search_cluster_params()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.select_best_params"><code class="docutils literal notranslate"><span class="pre">select_best_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html">Phenotyping (Stage E)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#public-api">Public API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_repeats"><code class="docutils literal notranslate"><span class="pre">analyze_repeats()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_transitions"><code class="docutils literal notranslate"><span class="pre">analyze_transitions()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_vocabulary_and_entropy"><code class="docutils literal notranslate"><span class="pre">analyze_vocabulary_and_entropy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.calculate_phenotypes_for_label_type"><code class="docutils literal notranslate"><span class="pre">calculate_phenotypes_for_label_type()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.create_unified_phenotype_row"><code class="docutils literal notranslate"><span class="pre">create_unified_phenotype_row()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.generate_manual_umap_plot"><code class="docutils literal notranslate"><span class="pre">generate_manual_umap_plot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_bird_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_bird_syllable_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_clustering_labels_for_syllables"><code class="docutils literal notranslate"><span class="pre">load_clustering_labels_for_syllables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_clustering_results"><code class="docutils literal notranslate"><span class="pre">load_clustering_results()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.phenotype_bird"><code class="docutils literal notranslate"><span class="pre">phenotype_bird()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_repeat_patterns"><code class="docutils literal notranslate"><span class="pre">plot_repeat_patterns()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_transition_matrices"><code class="docutils literal notranslate"><span class="pre">plot_transition_matrices()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_vocabulary_comparison"><code class="docutils literal notranslate"><span class="pre">plot_vocabulary_comparison()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.save_detailed_phenotype_data"><code class="docutils literal notranslate"><span class="pre">save_detailed_phenotype_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="catalog.html">Catalog (HTML visualization)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="slicing.html">Slicing (Stage A1)</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Tools</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#song-phenotyping-tools">song_phenotyping.tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-song_phenotyping.tools.label_handler">Label handling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-song_phenotyping.tools.spectrogram_configs">Spectrogram parameters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-song_phenotyping.tools.run_config">Run configuration and registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-song_phenotyping.tools.project_config">Project configuration</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="ingestion.html">Ingestion (Stage A)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="flattening.html">Flattening (Stage B)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="embedding.html">Embedding (Stage C)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="labelling.html">Labelling (Stage D)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="phenotyping.html">Phenotyping (Stage E)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ingestion.html">Ingestion (Stage A)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.copy_audio_and_partner_rec"><code class="docutils literal notranslate"><span class="pre">copy_audio_and_partner_rec()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.create_empty_segmented_data"><code class="docutils literal notranslate"><span class="pre">create_empty_segmented_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.create_segmented_audio_data"><code class="docutils literal notranslate"><span class="pre">create_segmented_audio_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_evsonganaly"><code class="docutils literal notranslate"><span class="pre">filepaths_from_evsonganaly()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_local_cache"><code class="docutils literal notranslate"><span class="pre">filepaths_from_local_cache()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.filepaths_from_wseg"><code class="docutils literal notranslate"><span class="pre">filepaths_from_wseg()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_and_save_audio"><code class="docutils literal notranslate"><span class="pre">process_and_save_audio()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_pipeline"><code class="docutils literal notranslate"><span class="pre">process_pipeline()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.process_single_file"><code class="docutils literal notranslate"><span class="pre">process_single_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.reconstruct_server_path"><code class="docutils literal notranslate"><span class="pre">reconstruct_server_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.resolve_audio_file_path"><code class="docutils literal notranslate"><span class="pre">resolve_audio_file_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_data_specs"><code class="docutils literal notranslate"><span class="pre">save_data_specs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_specs_for_evsonganaly_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_evsonganaly_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.save_specs_for_wseg_birds"><code class="docutils literal notranslate"><span class="pre">save_specs_for_wseg_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_new_file_pairs"><code class="docutils literal notranslate"><span class="pre">select_new_file_pairs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_new_files"><code class="docutils literal notranslate"><span class="pre">select_new_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.select_wseg_file_pairs_from_metadata"><code class="docutils literal notranslate"><span class="pre">select_wseg_file_pairs_from_metadata()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ingestion.html#song_phenotyping.ingestion.standardize_bird_band"><code class="docutils literal notranslate"><span class="pre">standardize_bird_band()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="flattening.html">Flattening (Stage B)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.create_flattened_output_path"><code class="docutils literal notranslate"><span class="pre">create_flattened_output_path()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.extract_song_id"><code class="docutils literal notranslate"><span class="pre">extract_song_id()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.find_syllable_files"><code class="docutils literal notranslate"><span class="pre">find_syllable_files()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.flatten_bird_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_bird_spectrograms()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.flatten_spectrograms"><code class="docutils literal notranslate"><span class="pre">flatten_spectrograms()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.load_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_syllable_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.process_single_syllable_file"><code class="docutils literal notranslate"><span class="pre">process_single_syllable_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="flattening.html#song_phenotyping.flattening.save_flattened_data"><code class="docutils literal notranslate"><span class="pre">save_flattened_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="embedding.html">Embedding (Stage C)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams"><code class="docutils literal notranslate"><span class="pre">UMAPParams</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.from_dict"><code class="docutils literal notranslate"><span class="pre">UMAPParams.from_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.metric"><code class="docutils literal notranslate"><span class="pre">UMAPParams.metric</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.min_dist"><code class="docutils literal notranslate"><span class="pre">UMAPParams.min_dist</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.n_components"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_components</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.n_epochs"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_epochs</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.n_neighbors"><code class="docutils literal notranslate"><span class="pre">UMAPParams.n_neighbors</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.to_dict"><code class="docutils literal notranslate"><span class="pre">UMAPParams.to_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams.validate_params"><code class="docutils literal notranslate"><span class="pre">UMAPParams.validate_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.calculate_adaptive_workers_improved"><code class="docutils literal notranslate"><span class="pre">calculate_adaptive_workers_improved()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.calculate_safe_batch_size"><code class="docutils literal notranslate"><span class="pre">calculate_safe_batch_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.check_embedding_compatibility"><code class="docutils literal notranslate"><span class="pre">check_embedding_compatibility()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compare_umap_embeddings_plot"><code class="docutils literal notranslate"><span class="pre">compare_umap_embeddings_plot()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.complex_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">complex_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_and_save_umap_memory_aware"><code class="docutils literal notranslate"><span class="pre">compute_and_save_umap_memory_aware()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_embedding_grid_parallel_robust"><code class="docutils literal notranslate"><span class="pre">compute_embedding_grid_parallel_robust()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.compute_single_umap_worker_safe"><code class="docutils literal notranslate"><span class="pre">compute_single_umap_worker_safe()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.estimate_umap_memory_usage"><code class="docutils literal notranslate"><span class="pre">estimate_umap_memory_usage()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.explore_embedding_parameters_robust"><code class="docutils literal notranslate"><span class="pre">explore_embedding_parameters_robust()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.generate_embedding_paths"><code class="docutils literal notranslate"><span class="pre">generate_embedding_paths()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.group_delay_distance"><code class="docutils literal notranslate"><span class="pre">group_delay_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.inspect_existing_embeddings"><code class="docutils literal notranslate"><span class="pre">inspect_existing_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.instantaneous_freq_distance"><code class="docutils literal notranslate"><span class="pre">instantaneous_freq_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.load_embedding_from_file"><code class="docutils literal notranslate"><span class="pre">load_embedding_from_file()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.load_flattened_specs"><code class="docutils literal notranslate"><span class="pre">load_flattened_specs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.monitor_memory_usage"><code class="docutils literal notranslate"><span class="pre">monitor_memory_usage()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.phase_aware_spectrogram_distance"><code class="docutils literal notranslate"><span class="pre">phase_aware_spectrogram_distance()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.save_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">save_umap_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.save_umap_model"><code class="docutils literal notranslate"><span class="pre">save_umap_model()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#song_phenotyping.embedding.subsample_data"><code class="docutils literal notranslate"><span class="pre">subsample_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="labelling.html">Labelling (Stage D)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#supported-quality-metrics">Supported quality metrics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.DEFAULT_HDBSCAN_GRID"><code class="docutils literal notranslate"><span class="pre">DEFAULT_HDBSCAN_GRID</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams.from_dict"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.from_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams.min_cluster_size"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.min_cluster_size</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams.min_samples"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.min_samples</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams.to_dict"><code class="docutils literal notranslate"><span class="pre">HDBSCANParams.to_dict()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.aggregate_raw_scores_across_birds"><code class="docutils literal notranslate"><span class="pre">aggregate_raw_scores_across_birds()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.analyze_parameter_performance_by_sample_size"><code class="docutils literal notranslate"><span class="pre">analyze_parameter_performance_by_sample_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.clear_clustering_outputs"><code class="docutils literal notranslate"><span class="pre">clear_clustering_outputs()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.cluster_embeddings"><code class="docutils literal notranslate"><span class="pre">cluster_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_composite_score"><code class="docutils literal notranslate"><span class="pre">compute_composite_score()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_cross_bird_composite_scores"><code class="docutils literal notranslate"><span class="pre">compute_cross_bird_composite_scores()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_metric_ranking"><code class="docutils literal notranslate"><span class="pre">compute_metric_ranking()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.compute_scores"><code class="docutils literal notranslate"><span class="pre">compute_scores()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.create_cluster_summary_pdf"><code class="docutils literal notranslate"><span class="pre">create_cluster_summary_pdf()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.dunn_index"><code class="docutils literal notranslate"><span class="pre">dunn_index()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.identify_optimal_parameters_by_sample_size"><code class="docutils literal notranslate"><span class="pre">identify_optimal_parameters_by_sample_size()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.information_criterion"><code class="docutils literal notranslate"><span class="pre">information_criterion()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.label_bird"><code class="docutils literal notranslate"><span class="pre">label_bird()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_labels"><code class="docutils literal notranslate"><span class="pre">load_labels()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_master_summary"><code class="docutils literal notranslate"><span class="pre">load_master_summary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.load_umap_embeddings"><code class="docutils literal notranslate"><span class="pre">load_umap_embeddings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.parse_embedding_filename"><code class="docutils literal notranslate"><span class="pre">parse_embedding_filename()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.plot_summary_matrix"><code class="docutils literal notranslate"><span class="pre">plot_summary_matrix()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.plot_umap"><code class="docutils literal notranslate"><span class="pre">plot_umap()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.remove_directory"><code class="docutils literal notranslate"><span class="pre">remove_directory()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.reorder_columns"><code class="docutils literal notranslate"><span class="pre">reorder_columns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_cross_bird_analysis"><code class="docutils literal notranslate"><span class="pre">save_cross_bird_analysis()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_labels"><code class="docutils literal notranslate"><span class="pre">save_labels()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.save_master_summary"><code class="docutils literal notranslate"><span class="pre">save_master_summary()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.score_cluster_penalty"><code class="docutils literal notranslate"><span class="pre">score_cluster_penalty()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.search_cluster_params"><code class="docutils literal notranslate"><span class="pre">search_cluster_params()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="labelling.html#song_phenotyping.labelling.select_best_params"><code class="docutils literal notranslate"><span class="pre">select_best_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="phenotyping.html">Phenotyping (Stage E)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#public-api">Public API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.adaptive_repeat_factor"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.adaptive_repeat_factor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.dyad_threshold"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.dyad_threshold</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.figure_dpi"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.figure_dpi</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.generate_plots"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.generate_plots</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.heatmap_annotation_size"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.heatmap_annotation_size</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.min_syllable_proportion"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.min_syllable_proportion</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_candidate_range"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.repeat_candidate_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.repeat_significance_threshold"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.repeat_significance_threshold</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig.use_top_n_clusterings"><code class="docutils literal notranslate"><span class="pre">PhenotypingConfig.use_top_n_clusterings</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_repeats"><code class="docutils literal notranslate"><span class="pre">analyze_repeats()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_transitions"><code class="docutils literal notranslate"><span class="pre">analyze_transitions()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.analyze_vocabulary_and_entropy"><code class="docutils literal notranslate"><span class="pre">analyze_vocabulary_and_entropy()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.calculate_phenotypes_for_label_type"><code class="docutils literal notranslate"><span class="pre">calculate_phenotypes_for_label_type()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.create_unified_phenotype_row"><code class="docutils literal notranslate"><span class="pre">create_unified_phenotype_row()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.generate_manual_umap_plot"><code class="docutils literal notranslate"><span class="pre">generate_manual_umap_plot()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_bird_syllable_data"><code class="docutils literal notranslate"><span class="pre">load_bird_syllable_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_clustering_labels_for_syllables"><code class="docutils literal notranslate"><span class="pre">load_clustering_labels_for_syllables()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.load_clustering_results"><code class="docutils literal notranslate"><span class="pre">load_clustering_results()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.phenotype_bird"><code class="docutils literal notranslate"><span class="pre">phenotype_bird()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_repeat_patterns"><code class="docutils literal notranslate"><span class="pre">plot_repeat_patterns()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_transition_matrices"><code class="docutils literal notranslate"><span class="pre">plot_transition_matrices()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.plot_vocabulary_comparison"><code class="docutils literal notranslate"><span class="pre">plot_vocabulary_comparison()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.save_detailed_phenotype_data"><code class="docutils literal notranslate"><span class="pre">save_detailed_phenotype_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="catalog.html">Catalog (HTML visualization)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="slicing.html">Slicing (Stage A1)</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tools</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#song-phenotyping-tools">song_phenotyping.tools</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#modules">Modules</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-song_phenotyping.tools.label_handler">Label handling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#label-conventions">Label conventions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelHandler"><code class="docutils literal notranslate"><span class="pre">LabelHandler</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelType"><code class="docutils literal notranslate"><span class="pre">LabelType</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.label_handler.has_manual_labels"><code class="docutils literal notranslate"><span class="pre">has_manual_labels()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-song_phenotyping.tools.spectrogram_configs">Spectrogram parameters</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><code class="docutils literal notranslate"><span class="pre">SpectrogramParams</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-song_phenotyping.tools.run_config">Run configuration and registry</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig"><code class="docutils literal notranslate"><span class="pre">RunConfig</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.run_config.RunRegistry"><code class="docutils literal notranslate"><span class="pre">RunRegistry</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-song_phenotyping.tools.project_config">Project configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#song_phenotyping.tools.project_config.ProjectConfig"><code class="docutils literal notranslate"><span class="pre">ProjectConfig</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -102,16 +408,775 @@
 <section id="modules">
 <h3>Modules<a class="headerlink" href="#modules" title="Link to this heading"></a></h3>
 <dl class="simple">
-<dt><code class="xref py py-mod docutils literal notranslate"><span class="pre">label_handler</span></code></dt><dd><p>Unified label type handling for manual and HDBSCAN labels.</p>
+<dt><a class="reference internal" href="#module-song_phenotyping.tools.label_handler" title="song_phenotyping.tools.label_handler"><code class="xref py py-mod docutils literal notranslate"><span class="pre">label_handler</span></code></a></dt><dd><p>Unified label type handling for manual and HDBSCAN labels.</p>
 </dd>
-<dt><code class="xref py py-mod docutils literal notranslate"><span class="pre">spectrogram_configs</span></code></dt><dd><p>Parameter dataclasses for spectrogram computation.</p>
+<dt><a class="reference internal" href="#module-song_phenotyping.tools.spectrogram_configs" title="song_phenotyping.tools.spectrogram_configs"><code class="xref py py-mod docutils literal notranslate"><span class="pre">spectrogram_configs</span></code></a></dt><dd><p>Parameter dataclasses for spectrogram computation.</p>
 </dd>
-<dt><code class="xref py py-mod docutils literal notranslate"><span class="pre">run_config</span></code></dt><dd><p>RunConfig and RunRegistry for experiment provenance tracking.</p>
+<dt><a class="reference internal" href="#module-song_phenotyping.tools.run_config" title="song_phenotyping.tools.run_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">run_config</span></code></a></dt><dd><p>RunConfig and RunRegistry for experiment provenance tracking.</p>
 </dd>
-<dt><code class="xref py py-mod docutils literal notranslate"><span class="pre">project_config</span></code></dt><dd><p>Machine-local path configuration loaded from <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>.</p>
+<dt><a class="reference internal" href="#module-song_phenotyping.tools.project_config" title="song_phenotyping.tools.project_config"><code class="xref py py-mod docutils literal notranslate"><span class="pre">project_config</span></code></a></dt><dd><p>Machine-local path configuration loaded from <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>.</p>
 </dd>
 </dl>
 </section>
+</section>
+<section id="module-song_phenotyping.tools.label_handler">
+<span id="label-handling"></span><h2>Label handling<a class="headerlink" href="#module-song_phenotyping.tools.label_handler" title="Link to this heading"></a></h2>
+<p>Unified syllable label handling for the song phenotyping pipeline.</p>
+<p>All pipeline stages that read or write syllable labels should import
+<a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelType" title="song_phenotyping.tools.label_handler.LabelType"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelType</span></code></a> and <a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelHandler" title="song_phenotyping.tools.label_handler.LabelHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelHandler</span></code></a> from here so that label
+normalisation is consistent end-to-end.</p>
+<section id="label-conventions">
+<h3>Label conventions<a class="headerlink" href="#label-conventions" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt>Manual labels</dt><dd><p>Single characters <code class="docutils literal notranslate"><span class="pre">'a'</span></code>–<code class="docutils literal notranslate"><span class="pre">'z'</span></code>, with <code class="docutils literal notranslate"><span class="pre">'s'</span></code> as the song-start token
+and <code class="docutils literal notranslate"><span class="pre">'z'</span></code> as the song-end token.</p>
+</dd>
+<dt>Auto (HDBSCAN) labels</dt><dd><p>Integers produced by HDBSCAN clustering, with <code class="docutils literal notranslate"><span class="pre">-5</span></code> as the song-start
+token and <code class="docutils literal notranslate"><span class="pre">-3</span></code> as the song-end token.</p>
+</dd>
+</dl>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.label_handler.</span></span><span class="sig-name descname"><span class="pre">LabelHandler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/label_handler.html#LabelHandler"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Normalise and tokenise syllable labels for a given <a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelType" title="song_phenotyping.tools.label_handler.LabelType"><code class="xref py py-class docutils literal notranslate"><span class="pre">LabelType</span></code></a>.</p>
+<p>Use this wherever labels are read from HDF5 files or passed between
+pipeline stages so that manual and automated labels are handled
+identically.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>label_type</strong> (<a class="reference internal" href="#song_phenotyping.tools.label_handler.LabelType" title="song_phenotyping.tools.label_handler.LabelType"><em>LabelType</em></a>) – Whether labels are human-annotated (<code class="docutils literal notranslate"><span class="pre">LabelType.MANUAL</span></code>) or
+HDBSCAN-generated (<code class="docutils literal notranslate"><span class="pre">LabelType.AUTO</span></code>).</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">handler</span> <span class="o">=</span> <span class="n">LabelHandler</span><span class="p">(</span><span class="n">LabelType</span><span class="o">.</span><span class="n">MANUAL</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">handler</span><span class="o">.</span><span class="n">normalize_labels</span><span class="p">([</span><span class="sa">b</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="sa">b</span><span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="sa">b</span><span class="s1">&#39;b&#39;</span><span class="p">])</span>
+<span class="go">[&#39;a&#39;, &#39;s&#39;, &#39;b&#39;]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">handler</span><span class="o">.</span><span class="n">add_sequence_tokens</span><span class="p">([</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">])</span>
+<span class="go">[&#39;s&#39;, &#39;a&#39;, &#39;b&#39;, &#39;z&#39;]</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler.add_sequence_tokens">
+<span class="sig-name descname"><span class="pre">add_sequence_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/label_handler.html#LabelHandler.add_sequence_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler.add_sequence_tokens" title="Link to this definition"></a></dt>
+<dd><p>Wrap a label sequence with song-boundary tokens.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>labels</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> or </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Syllable labels for a single song, without boundary tokens.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">[start_token,</span> <span class="pre">*labels,</span> <span class="pre">end_token]</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a> of <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> or <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler.end_token">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">end_token</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler.end_token" title="Link to this definition"></a></dt>
+<dd><p>Song-end boundary token (<code class="docutils literal notranslate"><span class="pre">'z'</span></code> for manual, <code class="docutils literal notranslate"><span class="pre">-3</span></code> for auto).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler.non_syl_tokens">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">non_syl_tokens</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler.non_syl_tokens" title="Link to this definition"></a></dt>
+<dd><p>Tokens that mark song boundaries rather than syllable identity.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">['s',</span> <span class="pre">'z',</span> <span class="pre">'\r']</span></code> for manual labels;
+<code class="docutils literal notranslate"><span class="pre">[-5,</span> <span class="pre">-3]</span></code> for auto labels.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a> of <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> or <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler.normalize_labels">
+<span class="sig-name descname"><span class="pre">normalize_labels</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw_labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/label_handler.html#LabelHandler.normalize_labels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler.normalize_labels" title="Link to this definition"></a></dt>
+<dd><p>Convert raw labels (possibly bytes) to a consistent Python type.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>raw_labels</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>) – Labels as read from HDF5 — may be <code class="docutils literal notranslate"><span class="pre">bytes</span></code>, <code class="docutils literal notranslate"><span class="pre">numpy.bytes_</span></code>,
+<code class="docutils literal notranslate"><span class="pre">str</span></code>, or <code class="docutils literal notranslate"><span class="pre">int</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>String labels for <a class="reference internal" href="#id1" title="song_phenotyping.tools.label_handler.LabelType.MANUAL"><code class="xref py py-attr docutils literal notranslate"><span class="pre">LabelType.MANUAL</span></code></a>; integer labels for
+<a class="reference internal" href="#id0" title="song_phenotyping.tools.label_handler.LabelType.AUTO"><code class="xref py py-attr docutils literal notranslate"><span class="pre">LabelType.AUTO</span></code></a>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a> of <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> or <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelHandler.start_token">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">start_token</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelHandler.start_token" title="Link to this definition"></a></dt>
+<dd><p>Song-start boundary token (<code class="docutils literal notranslate"><span class="pre">'s'</span></code> for manual, <code class="docutils literal notranslate"><span class="pre">-5</span></code> for auto).</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelType">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.label_handler.</span></span><span class="sig-name descname"><span class="pre">LabelType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/label_handler.html#LabelType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelType" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
+<p>Enumeration of syllable label sources.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelType.MANUAL">
+<span class="sig-name descname"><span class="pre">MANUAL</span></span><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelType.MANUAL" title="Link to this definition"></a></dt>
+<dd><p>Human-annotated labels stored as single characters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.LabelType.AUTO">
+<span class="sig-name descname"><span class="pre">AUTO</span></span><a class="headerlink" href="#song_phenotyping.tools.label_handler.LabelType.AUTO" title="Link to this definition"></a></dt>
+<dd><p>Automated labels produced by HDBSCAN clustering.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">AUTO</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'hdbscan'</span></em><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">MANUAL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'manual'</span></em><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="song_phenotyping.tools.label_handler.has_manual_labels">
+<span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.label_handler.</span></span><span class="sig-name descname"><span class="pre">has_manual_labels</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">syllable_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/label_handler.html#has_manual_labels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.label_handler.has_manual_labels" title="Link to this definition"></a></dt>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> if <em>syllable_data</em> contains non-empty manual labels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>syllable_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Dictionary returned by the syllable-data loader, expected to contain
+the key <code class="docutils literal notranslate"><span class="pre">'manual_syllables'</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">True</span></code> when <code class="docutils literal notranslate"><span class="pre">syllable_data['manual_syllables']</span></code> is present and
+non-empty; <code class="docutils literal notranslate"><span class="pre">False</span></code> otherwise.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-song_phenotyping.tools.spectrogram_configs">
+<span id="spectrogram-parameters"></span><h2>Spectrogram parameters<a class="headerlink" href="#module-song_phenotyping.tools.spectrogram_configs" title="Link to this heading"></a></h2>
+<p>Parameter dataclasses for spectrogram computation.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.spectrogram_configs.</span></span><span class="sig-name descname"><span class="pre">SpectrogramParams</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nfft=1024</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hop=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_shape=(513</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">300)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_freq=200.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_freq=15000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_dur=0.08</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs=32000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding=0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slice_length=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">songs_per_bird=5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite_existing=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_warping=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">downsample=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">warp_freq_sum=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_lambdas=&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slope_lambdas=&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Parameters controlling spectrogram computation and syllable extraction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nfft</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – FFT window size in samples. Determines frequency resolution.
+Default is 1024.</p></li>
+<li><p><strong>hop</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Hop size between successive FFT windows in samples. Default is 1.</p></li>
+<li><p><strong>target_shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">(n_freq_bins,</span> <span class="pre">n_time_bins)</span></code> to which each syllable spectrogram is
+resized. Defaults to <code class="docutils literal notranslate"><span class="pre">(nfft</span> <span class="pre">//</span> <span class="pre">2</span> <span class="pre">+</span> <span class="pre">1,</span> <span class="pre">300)</span></code>.</p></li>
+<li><p><strong>min_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Low-frequency cutoff in Hz applied when cropping spectrograms.
+Default is 200.0.</p></li>
+<li><p><strong>max_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – High-frequency cutoff in Hz. Default is 15000.0.</p></li>
+<li><p><strong>max_dur</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> or </em><em>None</em><em>, </em><em>optional</em>) – Maximum syllable duration in seconds. Syllables longer than this are
+discarded. <code class="docutils literal notranslate"><span class="pre">None</span></code> disables the duration filter. Default is 0.080.</p></li>
+<li><p><strong>fs</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Expected audio sample rate in Hz. Default is 32000.0.</p></li>
+<li><p><strong>padding</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Padding added around each syllable boundary in seconds. Default is 0.0.</p></li>
+<li><p><strong>slice_length</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em> or </em><em>None</em><em>, </em><em>optional</em>) – Fixed window length in milliseconds for slice-based extraction
+(Stage A1). <code class="docutils literal notranslate"><span class="pre">None</span></code> disables fixed-window mode. Default is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>songs_per_bird</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Maximum number of songs to process per bird when using
+<code class="docutils literal notranslate"><span class="pre">SpectrogramParams</span></code> as the sole source of this limit. Default is 5.</p></li>
+<li><p><strong>overwrite_existing</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, recompute and overwrite previously saved spectrogram
+files. Default is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>use_warping</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>optional</em>) – Apply dynamic time-warping alignment before saving. Default is
+<code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>downsample</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>optional</em>) – Downsample audio to <code class="docutils literal notranslate"><span class="pre">fs</span></code> before computing spectrograms.
+Default is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>warp_freq_sum</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>optional</em>) – Sum over frequency bins before DTW (deprecated). Default is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>shift_lambdas</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – DTW shift penalty grid (deprecated). Default is <code class="docutils literal notranslate"><span class="pre">[100,</span> <span class="pre">10,</span> <span class="pre">1,</span> <span class="pre">0]</span></code>.</p></li>
+<li><p><strong>slope_lambdas</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – DTW slope penalty grid (deprecated).
+Default is <code class="docutils literal notranslate"><span class="pre">[inf,</span> <span class="pre">inf,</span> <span class="pre">10,</span> <span class="pre">1]</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ValueError" title="(in Python v3.14)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">slice_length</span></code> is not positive, or <code class="docutils literal notranslate"><span class="pre">songs_per_bird</span></code> is not
+    positive.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Default parameters for syllable-based extraction:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">params</span> <span class="o">=</span> <span class="n">SpectrogramParams</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Smoke-test configuration (3 songs, no warping):</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">params</span> <span class="o">=</span> <span class="n">SpectrogramParams</span><span class="p">(</span><span class="n">songs_per_bird</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Fixed-window slice extraction at 50 ms:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">params</span> <span class="o">=</span> <span class="n">SpectrogramParams</span><span class="p">(</span><span class="n">slice_length</span><span class="o">=</span><span class="mf">50.0</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.downsample">
+<span class="sig-name descname"><span class="pre">downsample</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.downsample" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.from_dict">
+<span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">params_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.from_dict" title="Link to this definition"></a></dt>
+<dd><p>Update fields in-place from a dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>params_dict</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Keys matching field names on this dataclass; unrecognised keys
+are silently ignored. After updating, <a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.validate_params" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.validate_params"><code class="xref py py-meth docutils literal notranslate"><span class="pre">validate_params()</span></code></a> is
+called.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.fs">
+<span class="sig-name descname"><span class="pre">fs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">32000.0</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.fs" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.hop">
+<span class="sig-name descname"><span class="pre">hop</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.hop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.load_from_hdf5">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_from_hdf5</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hdf5_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams.load_from_hdf5"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.load_from_hdf5" title="Link to this definition"></a></dt>
+<dd><p>Load parameters from an HDF5 file written by <a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.save_to_hdf5" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.save_to_hdf5"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_to_hdf5()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hdf5_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to the HDF5 file.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>New instance populated from the stored values.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams">SpectrogramParams</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_dur">
+<span class="sig-name descname"><span class="pre">max_dur</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.08</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_dur" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_freq">
+<span class="sig-name descname"><span class="pre">max_freq</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">15000.0</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.max_freq" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.min_freq">
+<span class="sig-name descname"><span class="pre">min_freq</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">200.0</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.min_freq" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.nfft">
+<span class="sig-name descname"><span class="pre">nfft</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1024</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.nfft" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.overwrite_existing">
+<span class="sig-name descname"><span class="pre">overwrite_existing</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.overwrite_existing" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.padding">
+<span class="sig-name descname"><span class="pre">padding</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.padding" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.save_to_hdf5">
+<span class="sig-name descname"><span class="pre">save_to_hdf5</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hdf5_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams.save_to_hdf5"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.save_to_hdf5" title="Link to this definition"></a></dt>
+<dd><p>Persist parameters to an HDF5 file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hdf5_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Destination file path. The parameters are stored under the key
+<code class="docutils literal notranslate"><span class="pre">spectrogram_params</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.shift_lambdas">
+<span class="sig-name descname"><span class="pre">shift_lambdas</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.shift_lambdas" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slice_length">
+<span class="sig-name descname"><span class="pre">slice_length</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slice_length" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slope_lambdas">
+<span class="sig-name descname"><span class="pre">slope_lambdas</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.slope_lambdas" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.songs_per_bird">
+<span class="sig-name descname"><span class="pre">songs_per_bird</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.songs_per_bird" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.target_shape">
+<span class="sig-name descname"><span class="pre">target_shape</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">(513,</span> <span class="pre">300)</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.target_shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Return core parameters as a plain dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Keys: <code class="docutils literal notranslate"><span class="pre">nfft</span></code>, <code class="docutils literal notranslate"><span class="pre">hop</span></code>, <code class="docutils literal notranslate"><span class="pre">target_shape</span></code>, <code class="docutils literal notranslate"><span class="pre">min_freq</span></code>,
+<code class="docutils literal notranslate"><span class="pre">max_freq</span></code>, <code class="docutils literal notranslate"><span class="pre">max_dur</span></code>, <code class="docutils literal notranslate"><span class="pre">fs</span></code>, <code class="docutils literal notranslate"><span class="pre">padding</span></code>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.use_warping">
+<span class="sig-name descname"><span class="pre">use_warping</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.use_warping" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.validate_params">
+<span class="sig-name descname"><span class="pre">validate_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/spectrogram_configs.html#SpectrogramParams.validate_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.validate_params" title="Link to this definition"></a></dt>
+<dd><p>Raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if any parameter is out of range.</p>
+<p>Checks <code class="docutils literal notranslate"><span class="pre">nfft</span></code>, <code class="docutils literal notranslate"><span class="pre">hop</span></code>, <code class="docutils literal notranslate"><span class="pre">min_freq</span></code>, <code class="docutils literal notranslate"><span class="pre">max_freq</span></code>, <code class="docutils literal notranslate"><span class="pre">max_dur</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fs</span></code>, and <code class="docutils literal notranslate"><span class="pre">padding</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.spectrogram_configs.SpectrogramParams.warp_freq_sum">
+<span class="sig-name descname"><span class="pre">warp_freq_sum</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams.warp_freq_sum" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-song_phenotyping.tools.run_config">
+<span id="run-configuration-and-registry"></span><h2>Run configuration and registry<a class="headerlink" href="#module-song_phenotyping.tools.run_config" title="Link to this heading"></a></h2>
+<p>Experiment metadata tracking for the song phenotyping pipeline.</p>
+<p><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> captures the full parameter set for one pipeline run
+(spectrogram generation through phenotyping) so that any output file can be
+traced back to the exact inputs and settings that produced it.</p>
+<p><a class="reference internal" href="#song_phenotyping.tools.run_config.RunRegistry" title="song_phenotyping.tools.run_config.RunRegistry"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunRegistry</span></code></a> is a thin SQLite wrapper for storing and querying
+<a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> records across runs.</p>
+<p class="rubric">Examples</p>
+<p>Create and save a run record:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">cfg</span> <span class="o">=</span> <span class="n">RunConfig</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">spec_mode</span><span class="o">=</span><span class="s2">&quot;syllable&quot;</span><span class="p">,</span> <span class="n">bird_ids</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;or18or24&quot;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cfg</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;run_or18or24.json&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Register in the project database and query later:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span> <span class="o">=</span> <span class="n">RunRegistry</span><span class="p">(</span><span class="s2">&quot;db.sqlite3&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">bird_id</span><span class="o">=</span><span class="s2">&quot;or18or24&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.run_config.</span></span><span class="sig-name descname"><span class="pre">RunConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">created_at</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bird_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">umap_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hdbscan_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phenotype_params</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunConfig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Complete parameter record for one pipeline run.</p>
+<p>One <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> is created at the start of a run (or reconstructed
+from a saved JSON file). The <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.run_id" title="song_phenotyping.tools.run_config.RunConfig.run_id"><code class="xref py py-attr docutils literal notranslate"><span class="pre">run_id</span></code></a> is intended to be embedded in
+every HDF5/pickle output file so results can always be traced back to the
+exact settings that produced them.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>run_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – UUID-4 string that uniquely identifies this run.</p></li>
+<li><p><strong>created_at</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – ISO 8601 timestamp (UTC) of when the run was created.</p></li>
+<li><p><strong>spec_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">&quot;syllable&quot;</span></code> for Stage A syllable-based extraction or <code class="docutils literal notranslate"><span class="pre">&quot;slice&quot;</span></code>
+for Stage A1 fixed-window extraction.</p></li>
+<li><p><strong>bird_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Bird identifiers processed in this run.</p></li>
+<li><p><strong>spec_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Serialised <a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><code class="xref py py-class docutils literal notranslate"><span class="pre">SpectrogramParams</span></code></a>.</p></li>
+<li><p><strong>umap_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Serialised UMAP parameter object.</p></li>
+<li><p><strong>hdbscan_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Serialised <a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams" title="song_phenotyping.labelling.HDBSCANParams"><code class="xref py py-class docutils literal notranslate"><span class="pre">HDBSCANParams</span></code></a> (winning
+configuration after grid search).</p></li>
+<li><p><strong>phenotype_params</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Serialised <a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig" title="song_phenotyping.phenotyping.PhenotypingConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code></a>.</p></li>
+<li><p><strong>notes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>optional</em>) – Free-text annotation. Default is <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<dl class="simple">
+<dt><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.create" title="song_phenotyping.tools.run_config.RunConfig.create"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RunConfig.create</span></code></a></dt><dd><p>Factory method that accepts typed config objects.</p>
+</dd>
+<dt><a class="reference internal" href="#song_phenotyping.tools.run_config.RunRegistry" title="song_phenotyping.tools.run_config.RunRegistry"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RunRegistry</span></code></a></dt><dd><p>SQLite store for querying runs across parameter settings.</p>
+</dd>
+</dl>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.bird_ids">
+<span class="sig-name descname"><span class="pre">bird_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.bird_ids" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.create">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spec_mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bird_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">umap_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hdbscan_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phenotype_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunConfig.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.create" title="Link to this definition"></a></dt>
+<dd><p>Create a new <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> with a fresh UUID and timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spec_mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – <code class="docutils literal notranslate"><span class="pre">&quot;syllable&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;slice&quot;</span></code>.</p></li>
+<li><p><strong>bird_ids</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em> of </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Birds to associate with this run.</p></li>
+<li><p><strong>spec_params</strong> (<a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><em>SpectrogramParams</em></a><em>, </em><em>optional</em>) – Defaults to <a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><code class="xref py py-class docutils literal notranslate"><span class="pre">SpectrogramParams</span></code></a>.</p></li>
+<li><p><strong>umap_params</strong> (<a class="reference internal" href="embedding.html#song_phenotyping.embedding.UMAPParams" title="song_phenotyping.embedding.UMAPParams"><em>UMAPParams</em></a><em>, </em><em>optional</em>) – Defaults to <code class="docutils literal notranslate"><span class="pre">UMAPParams()</span></code>.</p></li>
+<li><p><strong>hdbscan_params</strong> (<a class="reference internal" href="labelling.html#song_phenotyping.labelling.HDBSCANParams" title="song_phenotyping.labelling.HDBSCANParams"><em>HDBSCANParams</em></a><em>, </em><em>optional</em>) – Defaults to <code class="docutils literal notranslate"><span class="pre">HDBSCANParams()</span></code>.</p></li>
+<li><p><strong>phenotype_params</strong> (<a class="reference internal" href="phenotyping.html#song_phenotyping.phenotyping.PhenotypingConfig" title="song_phenotyping.phenotyping.PhenotypingConfig"><em>PhenotypingConfig</em></a><em>, </em><em>optional</em>) – Defaults to <code class="docutils literal notranslate"><span class="pre">PhenotypingConfig()</span></code>.</p></li>
+<li><p><strong>notes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>optional</em>) – Free-text annotation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>New instance with a generated <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.run_id" title="song_phenotyping.tools.run_config.RunConfig.run_id"><code class="xref py py-attr docutils literal notranslate"><span class="pre">run_id</span></code></a>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig">RunConfig</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.created_at">
+<span class="sig-name descname"><span class="pre">created_at</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.created_at" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.hdbscan_params">
+<span class="sig-name descname"><span class="pre">hdbscan_params</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.hdbscan_params" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.hdbscan_params_obj">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">hdbscan_params_obj</span></span><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.hdbscan_params_obj" title="Link to this definition"></a></dt>
+<dd><p>Return <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.hdbscan_params" title="song_phenotyping.tools.run_config.RunConfig.hdbscan_params"><code class="xref py py-attr docutils literal notranslate"><span class="pre">hdbscan_params</span></code></a> as a <code class="docutils literal notranslate"><span class="pre">HDBSCANParams</span></code> instance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.load">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunConfig.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.load" title="Link to this definition"></a></dt>
+<dd><p>Deserialise a <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> from a JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to a JSON file written by <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.save" title="song_phenotyping.tools.run_config.RunConfig.save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save()</span></code></a>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Reconstructed instance with <code class="docutils literal notranslate"><span class="pre">range</span></code> objects restored.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig">RunConfig</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.notes">
+<span class="sig-name descname"><span class="pre">notes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.notes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.phenotype_params">
+<span class="sig-name descname"><span class="pre">phenotype_params</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.phenotype_params" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.phenotype_params_obj">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">phenotype_params_obj</span></span><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.phenotype_params_obj" title="Link to this definition"></a></dt>
+<dd><p>Return <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.phenotype_params" title="song_phenotyping.tools.run_config.RunConfig.phenotype_params"><code class="xref py py-attr docutils literal notranslate"><span class="pre">phenotype_params</span></code></a> as a <code class="docutils literal notranslate"><span class="pre">PhenotypingConfig</span></code> instance.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.run_id">
+<span class="sig-name descname"><span class="pre">run_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.run_id" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunConfig.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.save" title="Link to this definition"></a></dt>
+<dd><p>Serialise this <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> to a JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Destination file path.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.spec_mode">
+<span class="sig-name descname"><span class="pre">spec_mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.spec_mode" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.spec_params">
+<span class="sig-name descname"><span class="pre">spec_params</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.spec_params" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.spec_params_obj">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">spec_params_obj</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#song_phenotyping.tools.spectrogram_configs.SpectrogramParams" title="song_phenotyping.tools.spectrogram_configs.SpectrogramParams"><span class="pre">SpectrogramParams</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.spec_params_obj" title="Link to this definition"></a></dt>
+<dd><p>Return <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.spec_params" title="song_phenotyping.tools.run_config.RunConfig.spec_params"><code class="xref py py-attr docutils literal notranslate"><span class="pre">spec_params</span></code></a> as a <code class="xref py py-class docutils literal notranslate"><span class="pre">SpectrogramParams</span></code> instance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunConfig.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Return all fields as a JSON-serialisable dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>All <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> fields as plain Python types.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.umap_params">
+<span class="sig-name descname"><span class="pre">umap_params</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></em><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.umap_params" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunConfig.umap_params_obj">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">umap_params_obj</span></span><a class="headerlink" href="#song_phenotyping.tools.run_config.RunConfig.umap_params_obj" title="Link to this definition"></a></dt>
+<dd><p>Return <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig.umap_params" title="song_phenotyping.tools.run_config.RunConfig.umap_params"><code class="xref py py-attr docutils literal notranslate"><span class="pre">umap_params</span></code></a> as a <code class="docutils literal notranslate"><span class="pre">UMAPParams</span></code> instance.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunRegistry">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.run_config.</span></span><span class="sig-name descname"><span class="pre">RunRegistry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunRegistry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunRegistry" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>SQLite-backed store for <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> records.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>db_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Path to the SQLite database file. Created automatically if it does
+not exist.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span> <span class="o">=</span> <span class="n">RunRegistry</span><span class="p">(</span><span class="s2">&quot;db.sqlite3&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">run_config</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">spec_mode</span><span class="o">=</span><span class="s2">&quot;syllable&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">bird_id</span><span class="o">=</span><span class="s2">&quot;or18or24&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunRegistry.all">
+<span class="sig-name descname"><span class="pre">all</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunRegistry.all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunRegistry.all" title="Link to this definition"></a></dt>
+<dd><p>Return all registered runs as a <code class="xref py py-class docutils literal notranslate"><span class="pre">DataFrame</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Every run in the registry, ordered by <code class="docutils literal notranslate"><span class="pre">created_at</span></code> descending.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunRegistry.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">run_id</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunRegistry.get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunRegistry.get" title="Link to this definition"></a></dt>
+<dd><p>Retrieve a single <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a> by <em>run_id</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>run_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – UUID of the run to retrieve.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The matching record, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if not found.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig">RunConfig</a> or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunRegistry.query">
+<span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bird_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunRegistry.query"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunRegistry.query" title="Link to this definition"></a></dt>
+<dd><p>Return a <code class="xref py py-class docutils literal notranslate"><span class="pre">DataFrame</span></code> of matching runs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bird_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>optional</em>) – Filter to runs whose <em>bird_ids</em> list contains this identifier
+(substring match on the serialised JSON).</p></li>
+<li><p><strong>**kwargs</strong> – <p>Exact-match filters on top-level columns: <code class="docutils literal notranslate"><span class="pre">spec_mode</span></code>,
+<code class="docutils literal notranslate"><span class="pre">run_id</span></code>, <code class="docutils literal notranslate"><span class="pre">notes</span></code>. To filter on nested parameters (e.g.
+<code class="docutils literal notranslate"><span class="pre">n_neighbors=20</span></code>), filter the returned DataFrame directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;umap_params&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="p">[</span><span class="s1">&#39;n_neighbors&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">20</span><span class="p">]</span>
+</pre></div>
+</div>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>One row per matching run, ordered by <code class="docutils literal notranslate"><span class="pre">created_at</span></code> descending.
+The <code class="docutils literal notranslate"><span class="pre">spec_params</span></code>, <code class="docutils literal notranslate"><span class="pre">umap_params</span></code>, <code class="docutils literal notranslate"><span class="pre">hdbscan_params</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">phenotype_params</span></code> columns contain plain dicts.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pandas.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.run_config.RunRegistry.register">
+<span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/run_config.html#RunRegistry.register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.run_config.RunRegistry.register" title="Link to this definition"></a></dt>
+<dd><p>Insert a <a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><code class="xref py py-class docutils literal notranslate"><span class="pre">RunConfig</span></code></a>. Silently replaces if <em>run_id</em> exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config</strong> (<a class="reference internal" href="#song_phenotyping.tools.run_config.RunConfig" title="song_phenotyping.tools.run_config.RunConfig"><em>RunConfig</em></a>) – Run record to store.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-song_phenotyping.tools.project_config">
+<span id="project-configuration"></span><h2>Project configuration<a class="headerlink" href="#module-song_phenotyping.tools.project_config" title="Link to this heading"></a></h2>
+<p>Machine-local path configuration for the song phenotyping pipeline.</p>
+<p>Reads <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code> from the project root (or a path you specify). Each
+machine keeps its own <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code> (gitignored); <code class="docutils literal notranslate"><span class="pre">config.yaml.example</span></code>
+is committed as a template.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">song_phenotyping.tools.project_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectConfig</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cfg</span> <span class="o">=</span> <span class="n">ProjectConfig</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Resolve a bird directory on the local cache drive</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">bird_path</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">bird_dir</span><span class="p">(</span><span class="s1">&#39;or18or24&#39;</span><span class="p">,</span> <span class="n">experiment</span><span class="o">=</span><span class="s1">&#39;evsong test&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># → /Volumes/Extreme SSD/evsong test/or18or24</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Get the Macaw server root (auto-detected if not set in config)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">macaw</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">macaw_root</span>
+</pre></div>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">song_phenotyping.tools.project_config.</span></span><span class="sig-name descname"><span class="pre">ProjectConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">local_cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">macaw_root</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_registry</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/project_config.html#ProjectConfig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Machine-local path settings loaded from config.yaml.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>local_cache</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a>)</p></li>
+<li><p><strong>macaw_root</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>run_registry</strong> (<a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.bird_dir">
+<span class="sig-name descname"><span class="pre">bird_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bird_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experiment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/project_config.html#ProjectConfig.bird_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.bird_dir" title="Link to this definition"></a></dt>
+<dd><p>Return the local cache directory for a bird.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bird_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Bird identifier, e.g. ‘or18or24’.</p></li>
+<li><p><strong>experiment</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>optional</em>) – Experiment subdirectory name, e.g. ‘evsong test’ or ‘wseg test’.
+If None, returns local_cache / bird_id directly.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>cfg.bird_dir(‘or18or24’, ‘evsong test’)
+# → /Volumes/Extreme SSD/evsong test/or18or24</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.load">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/project_config.html#ProjectConfig.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.load" title="Link to this definition"></a></dt>
+<dd><p>Load config from a YAML file.</p>
+<p>If config_path is None, searches upward from cwd for config.yaml,
+then falls back to config.yaml.example.</p>
+<p>Raises FileNotFoundError if neither file is found.
+Raises ImportError if PyYAML is not installed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config_path</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#song_phenotyping.tools.project_config.ProjectConfig" title="song_phenotyping.tools.project_config.ProjectConfig"><em>ProjectConfig</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.local_cache">
+<span class="sig-name descname"><span class="pre">local_cache</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">Path</span></a></em><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.local_cache" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.macaw_bird_dir">
+<span class="sig-name descname"><span class="pre">macaw_bird_dir</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">parts</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/song_phenotyping/tools/project_config.html#ProjectConfig.macaw_bird_dir"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.macaw_bird_dir" title="Link to this definition"></a></dt>
+<dd><p>Join parts onto macaw_root, or return None if macaw is not mounted.</p>
+<p>Example: cfg.macaw_bird_dir(‘annietaylor’, ‘x-foster’)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>parts</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><em>Path</em></a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.macaw_root">
+<span class="sig-name descname"><span class="pre">macaw_root</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">Path</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.macaw_root" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="song_phenotyping.tools.project_config.ProjectConfig.run_registry">
+<span class="sig-name descname"><span class="pre">run_registry</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">Path</span></a></em><a class="headerlink" href="#song_phenotyping.tools.project_config.ProjectConfig.run_registry" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 </section>
 </section>
 
@@ -119,7 +1184,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="phenotyping.html" class="btn btn-neutral float-left" title="Phenotyping (Stage E)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="slicing.html" class="btn btn-neutral float-left" title="Slicing (Stage A1)" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
     </div>
 
   <hr/>
