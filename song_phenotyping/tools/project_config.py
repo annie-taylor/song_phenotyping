@@ -177,8 +177,7 @@ class ProjectConfig:
     @staticmethod
     def _autodetect_macaw() -> Optional[Path]:
         """Return the Macaw server root for the current OS, or None if not mounted."""
-        try:
-            from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
+        from song_phenotyping.tools.system_utils import check_sys_for_macaw_root
         try:
             root = check_sys_for_macaw_root()
             p = Path(root)

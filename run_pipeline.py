@@ -26,38 +26,40 @@ from pathlib import Path
 # Optional in-script overrides — set to None to use config.yaml values
 # ---------------------------------------------------------------------------
 
-SAVE_PATH      = "E:/pipeline_runs"    # e.g. "E:/pipeline_runs" or "/Volumes/Extreme SSD/pipeline_runs"
-EVSONG_SOURCE  = "E:\ssharma_RNA_seq\copied_data"    # parent dir containing evsonganaly bird subdirs
-WSEG_METADATA  = "E:\\xfosters\copied_data"    # wseg metadata dir; None = skip wseg
+
+SAVE_PATH      = "E:/pipeline_runs" # e.g. "E:/pipeline_runs" or "/Volumes/Extreme SSD/pipeline_runs"
+EVSONG_SOURCE  = "E:/ssharma_RNA_seq/copied_data"  # parent dir containing evsonganaly bird subdirs
+WSEG_METADATA  = "E:/xfosters/copied_data"  # wseg metadata dir; None = skip wseg
+
 BIRDS          = None    # None = all discovered; or e.g. ['or18or24', 'bu78bu77']
 SONGS_PER_BIRD = 30    # None = use config.yaml value (or all songs if unset there)
 
 # Feature flags (these are not in config.yaml — override here if needed)
 SAVE_INST_FREQ          = False   # append instantaneous-frequency channel
 SAVE_GROUP_DELAY        = False  # append group-delay channel
-DURATION_FEATURE_WEIGHT = 1.0   # 0 = disabled; ~1.0 weights duration as one time bin
+DURATION_FEATURE_WEIGHT = 0.0   # 0 = disabled; ~1.0 weights duration as one time bin
 
 # ---------------------------------------------------------------------------
 # Run identity
 # ---------------------------------------------------------------------------
 
-RUN_NAME       = None    # None = auto-derive from params hash; or e.g. "baseline"
-OVERWRITE_MODE = "skip"  # "skip" | "overwrite" | "archive"
+RUN_NAME       = "padding"    # None = auto-derive from params hash; or e.g. "baseline"
+OVERWRITE_MODE = "archive"  # "skip" | "overwrite" | "archive"
 
 # ---------------------------------------------------------------------------
 # Spectrogram parameters (Stage A)
 # ---------------------------------------------------------------------------
 
-NFFT            = 1024
+NFFT            = 512
 HOP             = 1
-MIN_FREQ        = 200.0
-MAX_FREQ        = 15000.0
+MIN_FREQ        = 400.0
+MAX_FREQ        = 10000.0
 MAX_DUR         = 0.080
 FS              = 32000.0
-TARGET_SHAPE    = None       # None → (NFFT//2+1, 300)
+TARGET_SHAPE    = (NFFT//2+1, 300)
 PADDING         = 0.0
-USE_WARPING     = False
-DOWNSAMPLE      = False
+USE_WARPING     = True
+DOWNSAMPLE      = True
 
 # Phase / duration features
 SAVE_INST_FREQ          = False
