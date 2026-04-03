@@ -8,21 +8,25 @@ Output tree layout
 ::
 
     <save_path>/<bird>/
-        stages/
-            01_specs/        ← Stage A  spectrogram HDF5 files
-            02_features/     ← Stage B  flattened feature HDF5 files
-            03_embeddings/   ← Stage C  UMAP HDF5 + pkl models
-            04_labels/       ← Stage D  cluster label HDF5 files
-            05_phenotype/    ← Stage E  detailed phenotype pkl files
-        results/
-            master_summary.csv
-            phenotype_results.csv
-            catalog/         ← HTML song catalogs
-            plots/           ← PDFs / images
+        <run_name>/              ← e.g. "d5dfde49" (SHA256[:8] of config)
+            stages/
+                01_specs/        ← Stage A  spectrogram HDF5 files
+                02_features/     ← Stage B  flattened feature HDF5 files
+                03_embeddings/   ← Stage C  UMAP HDF5 + pkl models
+                04_labels/       ← Stage D  cluster label HDF5 files
+                syllable_database/  ← auto-built label lookup CSV
+                05_phenotype/    ← Stage E  detailed phenotype pkl files
+            results/
+                master_summary.csv
+                phenotype_results.csv
+                run_config.json
+                catalog/         ← HTML song catalogs
+                plots/           ← PDFs / images
 
-The ``stages/`` subtree contains internal computation artifacts that are
-not typically opened by hand.  The ``results/`` subtree contains outputs
-intended for human inspection.
+Each unique combination of computational parameters produces a different
+``<run_name>`` directory, isolating run artifacts completely.  The
+``stages/`` subtree contains internal computation artifacts; ``results/``
+contains outputs intended for human inspection.
 """
 
 from pathlib import Path
@@ -35,7 +39,7 @@ STAGES_DIR  = "stages"
 RESULTS_DIR = "results"
 
 # ---------------------------------------------------------------------------
-# Stage subdirectories (relative to bird root)
+# Stage subdirectories (relative to run root)
 # ---------------------------------------------------------------------------
 
 SPECS_DIR       = "stages/01_specs"
@@ -45,7 +49,7 @@ LABELS_DIR      = "stages/04_labels"
 PHENOTYPE_DIR   = "stages/05_phenotype"
 
 # ---------------------------------------------------------------------------
-# Results subdirectories (relative to bird root)
+# Results subdirectories (relative to run root)
 # ---------------------------------------------------------------------------
 
 CATALOG_DIR = "results/catalog"
@@ -79,11 +83,9 @@ def stage_path(bird_root: str | Path, subdir: str) -> Path:
 # Run-scoped helpers
 # ---------------------------------------------------------------------------
 
-RUNS_DIR = "runs"
-
 
 def run_root(bird_root, run_name: str) -> Path:
-    """Return ``<bird_root>/runs/<run_name>`` as a :class:`~pathlib.Path`.
+    """Return ``<bird_root>/<run_name>`` as a :class:`~pathlib.Path`.
 
     Parameters
     ----------
@@ -96,13 +98,13 @@ def run_root(bird_root, run_name: str) -> Path:
     Example
     -------
     >>> run_root("/data/or18or24", "baseline")
-    PosixPath('/data/or18or24/runs/baseline')
+    PosixPath('/data/or18or24/baseline')
     """
-    return Path(bird_root) / RUNS_DIR / run_name
+    return Path(bird_root) / run_name
 
 
 def run_stage_path(bird_root, run_name: str, subdir: str) -> Path:
-    """Return ``<bird_root>/runs/<run_name>/<subdir>`` as a :class:`~pathlib.Path`.
+    """Return ``<bird_root>/<run_name>/<subdir>`` as a :class:`~pathlib.Path`.
 
     Parameters
     ----------
@@ -116,6 +118,6 @@ def run_stage_path(bird_root, run_name: str, subdir: str) -> Path:
     Example
     -------
     >>> run_stage_path("/data/or18or24", "baseline", SPECS_DIR)
-    PosixPath('/data/or18or24/runs/baseline/stages/01_specs')
+    PosixPath('/data/or18or24/baseline/stages/01_specs')
     """
     return run_root(bird_root, run_name) / subdir
