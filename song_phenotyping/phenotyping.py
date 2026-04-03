@@ -112,7 +112,7 @@ class PhenotypingConfig:
 # ============================================================================
 
 
-def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
+def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[str, Any]:
     """Load manual syllable labels from a bird's Stage A spec files.
 
     Parameters
@@ -130,9 +130,9 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
     """
     bird_name = os.path.basename(bird_path)
 
-    from song_phenotyping.tools.pipeline_paths import SPECS_DIR
-    # Look for spec files in stages/01_specs directory
-    specs_dir = os.path.join(bird_path, SPECS_DIR)
+    from song_phenotyping.tools.pipeline_paths import run_stage_path, SPECS_DIR
+    # Look for spec files in the run-scoped stages/01_specs directory
+    specs_dir = str(run_stage_path(bird_path, run_name, SPECS_DIR))
 
     if not os.path.exists(specs_dir):
         logging.warning(f"No specs directory found at {specs_dir} for {bird_name}")
@@ -205,7 +205,7 @@ def load_bird_syllable_data(bird_path: str) -> Dict[str, Any]:
     }
 
 
-def load_clustering_results(bird_path: str, top_n: int = 5) -> List[Dict[str, Any]]:
+def load_clustering_results(bird_path: str, top_n: int = 5, run_name: str = "default") -> List[Dict[str, Any]]:
     """Load the top-*top_n* clustering results from ``master_summary.csv``.
 
     Parameters
@@ -226,8 +226,8 @@ def load_clustering_results(bird_path: str, top_n: int = 5) -> List[Dict[str, An
         ``'min_samples'``.  Returns an empty list if the CSV is absent or
         cannot be read.
     """
-    from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
-    master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
+    from song_phenotyping.tools.pipeline_paths import RESULTS_DIR, run_root
+    master_summary_path = os.path.join(str(run_root(bird_path, run_name)), RESULTS_DIR, 'master_summary.csv')
 
     if not os.path.exists(master_summary_path):
         logging.warning(f"No master summary found: {master_summary_path}")
@@ -1232,7 +1232,7 @@ def create_unified_phenotype_row(
     return pd.DataFrame(rows)
 
 
-def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
+def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: str = "default") -> bool:
     """Run the complete Stage E phenotyping pipeline for one bird.
 
     Processes manual labels (when available) and the top automated
@@ -1274,14 +1274,14 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
 
     try:
         # Load syllable data
-        syllable_data = load_bird_syllable_data(bird_path)
+        syllable_data = load_bird_syllable_data(bird_path, run_name=run_name)
 
         # Check if manual labels are available
         has_manual = has_manual_labels(syllable_data)
         logging.info(f"Manual labels available for {bird_name}: {has_manual}")
 
         # Load clustering results
-        clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings)
+        clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings, run_name=run_name)
         has_clustering = len(clustering_results) > 0
         logging.info(
             f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
@@ -1346,7 +1346,7 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
             }]
 
         # Save detailed phenotype data for PDF generation
-        save_detailed_phenotype_data(bird_path, manual_results, auto_results, clustering_results)
+        save_detailed_phenotype_data(bird_path, manual_results, auto_results, clustering_results, run_name=run_name)
 
         # Create unified results DataFrame
         results_df = create_unified_phenotype_row(
@@ -1354,8 +1354,8 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
         )
 
         # Save results
-        from song_phenotyping.tools.pipeline_paths import RESULTS_DIR as _RESULTS_DIR
-        results_dir = os.path.join(bird_path, _RESULTS_DIR)
+        from song_phenotyping.tools.pipeline_paths import RESULTS_DIR as _RESULTS_DIR, run_root as _run_root
+        results_dir = os.path.join(str(_run_root(bird_path, run_name)), _RESULTS_DIR)
         os.makedirs(results_dir, exist_ok=True)
         output_path = os.path.join(results_dir, 'phenotype_results.csv')
         results_df.to_csv(output_path, index=False)
@@ -1395,7 +1395,8 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None) -> bool:
 def save_detailed_phenotype_data(bird_path: str,
                                  manual_results: Dict[str, Any],
                                  auto_results: List[Dict[str, Any]],
-                                 clustering_results: List[Dict[str, Any]]) -> bool:
+                                 clustering_results: List[Dict[str, Any]],
+                                 run_name: str = "default") -> bool:
     """Pickle detailed phenotype data structures for downstream PDF generation.
 
     Writes one ``.pkl`` file per clustering rank to
@@ -1417,9 +1418,9 @@ def save_detailed_phenotype_data(bird_path: str,
         bool: Success status
     """
     try:
-        from song_phenotyping.tools.pipeline_paths import PHENOTYPE_DIR
+        from song_phenotyping.tools.pipeline_paths import PHENOTYPE_DIR, run_stage_path
         # Create detailed data directory
-        detailed_data_dir = os.path.join(bird_path, PHENOTYPE_DIR)
+        detailed_data_dir = str(run_stage_path(bird_path, run_name, PHENOTYPE_DIR))
         os.makedirs(detailed_data_dir, exist_ok=True)
 
         # Save manual results if available

@@ -38,6 +38,54 @@ SAVE_GROUP_DELAY        = False  # append group-delay channel
 DURATION_FEATURE_WEIGHT = 1.0   # 0 = disabled; ~1.0 weights duration as one time bin
 
 # ---------------------------------------------------------------------------
+# Run identity
+# ---------------------------------------------------------------------------
+
+RUN_NAME       = None    # None = auto-derive from params hash; or e.g. "baseline"
+OVERWRITE_MODE = "skip"  # "skip" | "overwrite" | "archive"
+
+# ---------------------------------------------------------------------------
+# Spectrogram parameters (Stage A)
+# ---------------------------------------------------------------------------
+
+NFFT            = 1024
+HOP             = 1
+MIN_FREQ        = 200.0
+MAX_FREQ        = 15000.0
+MAX_DUR         = 0.080
+FS              = 32000.0
+TARGET_SHAPE    = None       # None → (NFFT//2+1, 300)
+PADDING         = 0.0
+USE_WARPING     = False
+DOWNSAMPLE      = False
+
+# Phase / duration features
+SAVE_INST_FREQ          = False
+SAVE_GROUP_DELAY        = False
+DURATION_FEATURE_WEIGHT = 0.0
+
+# ---------------------------------------------------------------------------
+# UMAP parameters (Stage C)
+# ---------------------------------------------------------------------------
+
+UMAP_MIN_DISTS   = None  # None → default grid [0.01, 0.05, 0.1, 0.3, 0.5]
+UMAP_N_NEIGHBORS = None  # None → default grid [5, 10, 20, 50, 100]
+UMAP_MAX_SAMPLES = None  # None → use all syllables
+
+# ---------------------------------------------------------------------------
+# HDBSCAN parameters (Stage D)
+# ---------------------------------------------------------------------------
+
+HDBSCAN_GRID = None  # None → DEFAULT_HDBSCAN_GRID from labelling.py
+
+# ---------------------------------------------------------------------------
+# Phenotyping parameters (Stage E)
+# ---------------------------------------------------------------------------
+
+PHENO_MIN_SYLLABLE_PROPORTION = 0.02
+PHENO_GENERATE_PLOTS          = True
+
+# ---------------------------------------------------------------------------
 # Config resolution
 # ---------------------------------------------------------------------------
 
@@ -68,6 +116,29 @@ def _load_pipeline_cfg():
     )
 
 # ---------------------------------------------------------------------------
+# Run management helper
+# ---------------------------------------------------------------------------
+
+def _prepare_run(bird_root, run_name: str, mode: str) -> None:
+    """Handle existing run directory according to OVERWRITE_MODE."""
+    import shutil
+    from datetime import datetime
+    from pathlib import Path as _Path
+    run_dir = _Path(bird_root) / "runs" / run_name
+    if not run_dir.exists():
+        return
+    if mode == "overwrite":
+        shutil.rmtree(run_dir)
+        print(f"  Deleted existing run: {run_dir}")
+    elif mode == "archive":
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archived = run_dir.parent / f"{run_name}_archived_{ts}"
+        run_dir.rename(archived)
+        print(f"  Archived existing run to: {archived}")
+    # "skip": do nothing
+
+
+# ---------------------------------------------------------------------------
 # Single-bird pipeline runners
 # ---------------------------------------------------------------------------
 
@@ -93,38 +164,69 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
         wav_directory=source_dir, bird_subset=[bird]
     )
     spec_params = SpectrogramParams(
+        nfft=NFFT,
+        hop=HOP,
+        min_freq=MIN_FREQ,
+        max_freq=MAX_FREQ,
+        max_dur=MAX_DUR,
+        fs=FS,
+        target_shape=TARGET_SHAPE or (NFFT // 2 + 1, 300),
+        padding=PADDING,
+        use_warping=USE_WARPING,
+        downsample=DOWNSAMPLE,
         songs_per_bird=songs_per_bird or 9999,
-        save_inst_freq=save_inst_freq,
-        save_group_delay=save_group_delay,
-        duration_feature_weight=duration_feature_weight,
+        save_inst_freq=SAVE_INST_FREQ,
+        save_group_delay=SAVE_GROUP_DELAY,
+        duration_feature_weight=DURATION_FEATURE_WEIGHT,
     )
+    run_name = RUN_NAME or spec_params.run_hash()
+    _prepare_run(Path(save_path) / bird, run_name, OVERWRITE_MODE)
+    print(f"  Run name: {run_name}")
+
     save_specs_for_evsonganaly_birds(
         metadata_file_paths=meta,
         audio_file_paths=audio,
         save_path=save_path,
         songs_per_bird=songs_per_bird,
         params=spec_params,
+        run_name=run_name,
     )
 
     print("[ B ] Flattening spectrograms...")
-    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params)
+    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params, run_name=run_name)
 
     print("[ C ] Computing UMAP embeddings...")
-    explore_embedding_parameters_robust(save_path=save_path, bird=bird)
+    explore_embedding_parameters_robust(
+        save_path=save_path,
+        bird=bird,
+        min_dists=UMAP_MIN_DISTS,
+        n_neighbors_list=UMAP_N_NEIGHBORS,
+        max_samples=UMAP_MAX_SAMPLES,
+        run_name=run_name,
+    )
 
     print("[ D ] Clustering / labelling...")
+    hdbscan_params = [p.to_dict() for p in HDBSCAN_GRID] if HDBSCAN_GRID is not None else [p.to_dict() for p in DEFAULT_HDBSCAN_GRID]
     label_bird(
         save_path=save_path,
         bird=bird,
         metrics=['silhouette', 'dbi', 'ch'],
-        hdbscan_params=[p.to_dict() for p in DEFAULT_HDBSCAN_GRID],
+        hdbscan_params=hdbscan_params,
+        run_name=run_name,
     )
 
     print("[ E ] Phenotyping...")
     bird_path = str(Path(save_path) / bird)
-    phenotype_bird(bird_path=bird_path, config=PhenotypingConfig())
+    phenotype_bird(
+        bird_path=bird_path,
+        config=PhenotypingConfig(
+            min_syllable_proportion=PHENO_MIN_SYLLABLE_PROPORTION,
+            generate_plots=PHENO_GENERATE_PLOTS,
+        ),
+        run_name=run_name,
+    )
 
-    print(f"\n✓ Done. Outputs at: {bird_path}\n")
+    print(f"\n Done. Outputs at: {bird_path}/runs/{run_name}\n")
 
 
 def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
@@ -149,38 +251,69 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
         seg_directory=metadata_dir, bird_subset=[bird]
     )
     spec_params = SpectrogramParams(
+        nfft=NFFT,
+        hop=HOP,
+        min_freq=MIN_FREQ,
+        max_freq=MAX_FREQ,
+        max_dur=MAX_DUR,
+        fs=FS,
+        target_shape=TARGET_SHAPE or (NFFT // 2 + 1, 300),
+        padding=PADDING,
+        use_warping=USE_WARPING,
+        downsample=DOWNSAMPLE,
         songs_per_bird=songs_per_bird or 9999,
-        save_inst_freq=save_inst_freq,
-        save_group_delay=save_group_delay,
-        duration_feature_weight=duration_feature_weight,
+        save_inst_freq=SAVE_INST_FREQ,
+        save_group_delay=SAVE_GROUP_DELAY,
+        duration_feature_weight=DURATION_FEATURE_WEIGHT,
     )
+    run_name = RUN_NAME or spec_params.run_hash()
+    _prepare_run(Path(save_path) / bird, run_name, OVERWRITE_MODE)
+    print(f"  Run name: {run_name}")
+
     save_specs_for_wseg_birds(
         metadata_file_paths=meta,
         audio_file_paths=audio,
         save_path=save_path,
         songs_per_bird=songs_per_bird,
         params=spec_params,
+        run_name=run_name,
     )
 
     print("[ B ] Flattening spectrograms...")
-    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params)
+    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params, run_name=run_name)
 
     print("[ C ] Computing UMAP embeddings...")
-    explore_embedding_parameters_robust(save_path=save_path, bird=bird)
+    explore_embedding_parameters_robust(
+        save_path=save_path,
+        bird=bird,
+        min_dists=UMAP_MIN_DISTS,
+        n_neighbors_list=UMAP_N_NEIGHBORS,
+        max_samples=UMAP_MAX_SAMPLES,
+        run_name=run_name,
+    )
 
     print("[ D ] Clustering / labelling...")
+    hdbscan_params = [p.to_dict() for p in HDBSCAN_GRID] if HDBSCAN_GRID is not None else [p.to_dict() for p in DEFAULT_HDBSCAN_GRID]
     label_bird(
         save_path=save_path,
         bird=bird,
         metrics=['silhouette', 'dbi', 'ch'],
-        hdbscan_params=[p.to_dict() for p in DEFAULT_HDBSCAN_GRID],
+        hdbscan_params=hdbscan_params,
+        run_name=run_name,
     )
 
     print("[ E ] Phenotyping...")
     bird_path = str(Path(save_path) / bird)
-    phenotype_bird(bird_path=bird_path, config=PhenotypingConfig())
+    phenotype_bird(
+        bird_path=bird_path,
+        config=PhenotypingConfig(
+            min_syllable_proportion=PHENO_MIN_SYLLABLE_PROPORTION,
+            generate_plots=PHENO_GENERATE_PLOTS,
+        ),
+        run_name=run_name,
+    )
 
-    print(f"\n✓ Done. Outputs at: {bird_path}\n")
+    print(f"\n Done. Outputs at: {bird_path}/runs/{run_name}\n")
 
 # ---------------------------------------------------------------------------
 # Cohort runners

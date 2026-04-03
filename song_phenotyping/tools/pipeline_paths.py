@@ -73,3 +73,49 @@ def stage_path(bird_root: str | Path, subdir: str) -> Path:
     PosixPath('/data/pipeline_runs/or18or24/stages/01_specs')
     """
     return Path(bird_root) / subdir
+
+
+# ---------------------------------------------------------------------------
+# Run-scoped helpers
+# ---------------------------------------------------------------------------
+
+RUNS_DIR = "runs"
+
+
+def run_root(bird_root, run_name: str) -> Path:
+    """Return ``<bird_root>/runs/<run_name>`` as a :class:`~pathlib.Path`.
+
+    Parameters
+    ----------
+    bird_root:
+        Root directory for a single bird, e.g. ``/data/pipeline_runs/or18or24``.
+    run_name:
+        Human-readable or hash-derived run identifier, e.g. ``"baseline"``
+        or ``"a1b2c3d4"``.
+
+    Example
+    -------
+    >>> run_root("/data/or18or24", "baseline")
+    PosixPath('/data/or18or24/runs/baseline')
+    """
+    return Path(bird_root) / RUNS_DIR / run_name
+
+
+def run_stage_path(bird_root, run_name: str, subdir: str) -> Path:
+    """Return ``<bird_root>/runs/<run_name>/<subdir>`` as a :class:`~pathlib.Path`.
+
+    Parameters
+    ----------
+    bird_root:
+        Root directory for a single bird.
+    run_name:
+        Run identifier (see :func:`run_root`).
+    subdir:
+        One of the stage ``*_DIR`` constants, e.g. :data:`SPECS_DIR`.
+
+    Example
+    -------
+    >>> run_stage_path("/data/or18or24", "baseline", SPECS_DIR)
+    PosixPath('/data/or18or24/runs/baseline/stages/01_specs')
+    """
+    return run_root(bird_root, run_name) / subdir
