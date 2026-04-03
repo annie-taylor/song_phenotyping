@@ -565,7 +565,50 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
             logger.error(f"  💥 Error processing batch file {batch_info['file']}: {e}")
             failed_files += 1
 
-    # Remove redundant bird subset filter - already applied above
+    # ---------------------------------------------------------------------------
+    # Flat-directory fallback
+    # If no batch files were found, attempt to discover birds from a flat
+    # layout: <wav_directory>/<bird_id>/*.wav + *.wav.not.mat co-located.
+    # This handles datasets that were exported without batch files.
+    # ---------------------------------------------------------------------------
+    if not batch_file_candidates and wav_directory:
+        logger.info("⚠️  No batch files found — trying flat-directory fallback "
+                    "(co-located .wav + .wav.not.mat pairs)")
+        for entry in os.scandir(wav_directory):
+            if not entry.is_dir():
+                continue
+            bird = entry.name
+            if bird.startswith('.'):
+                continue
+            if bird_subset is not None and bird not in bird_subset:
+                continue
+
+            not_mat_files = sorted(
+                f.path for f in os.scandir(entry.path)
+                if f.name.endswith('.wav.not.mat')
+            )
+            if not not_mat_files:
+                continue
+
+            wav_files = []
+            valid_meta = []
+            for meta_path in not_mat_files:
+                # Derive the paired .wav path by stripping '.not.mat'
+                wav_path = meta_path[:-len('.not.mat')]
+                if os.path.isfile(wav_path):
+                    valid_meta.append(meta_path)
+                    wav_files.append(wav_path)
+
+            if valid_meta:
+                metadata_file_paths[bird] = valid_meta
+                audio_file_paths[bird] = wav_files
+                logger.info(f"  🐦 Flat fallback: {bird} → {len(valid_meta)} pairs")
+
+        if metadata_file_paths:
+            logger.info(f"✅ Flat fallback found {len(metadata_file_paths)} bird(s)")
+        else:
+            logger.warning("❌ Flat fallback also found nothing — check your source directory")
+
     # Final summary
     total_birds = len(metadata_file_paths)
     total_metadata_files = sum(len(files) for files in metadata_file_paths.values())
