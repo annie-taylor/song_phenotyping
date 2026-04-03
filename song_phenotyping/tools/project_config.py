@@ -48,13 +48,23 @@ class PipelineConfig:
     All fields have sensible defaults so that a minimal config.yaml (one that
     only sets ``paths:``) still works — the pipeline will fall back to writing
     outputs next to the source data and processing all discovered birds.
+
+    Sub-section dicts (``spectrogram_params``, ``embedding_params``,
+    ``labelling_params``, ``phenotyping_params``) are kept as plain dicts so
+    each stage can merge them into its own typed dataclass.
     """
 
-    save_path: Optional[Path]       # Where to write pipeline outputs
-    evsong_source: Optional[Path]   # Parent dir containing evsonganaly bird folders
-    wseg_metadata: Optional[Path]   # wseg metadata dir; None = skip wseg
-    birds: Optional[List[str]]      # None = auto-discover all; or explicit list
-    songs_per_bird: Optional[int]   # None = all songs
+    save_path: Optional[Path]           # Where to write pipeline outputs
+    evsong_source: Optional[Path]       # Parent dir containing evsonganaly bird folders
+    wseg_metadata: Optional[Path]       # wseg metadata dir; None = skip wseg
+    birds: Optional[List[str]]          # None = auto-discover all; or explicit list
+    songs_per_bird: Optional[int]       # None = all songs
+    songs_seed: Optional[int]           # None = non-deterministic; int = reproducible subset
+    spectrogram_params: Optional[dict]  # Merged into SpectrogramParams at call site
+    embedding_params: Optional[dict]    # Merged into UMAPParams / grid at call site
+    labelling_params: Optional[dict]    # metrics, weights, HDBSCAN grid, flags
+    phenotyping_params: Optional[dict]  # Merged into PhenotypingConfig at call site
+    generate_catalog: bool              # Whether to run generate_all_catalogs() after Stage E
 
     @classmethod
     def from_dict(cls, d: dict) -> "PipelineConfig":
@@ -62,19 +72,28 @@ class PipelineConfig:
             return Path(os.path.expanduser(str(v))) if v is not None else None
 
         return cls(
-            save_path      = _path(d.get('save_path')),
-            evsong_source  = _path(d.get('evsong_source')),
-            wseg_metadata  = _path(d.get('wseg_metadata')),
-            birds          = d.get('birds'),          # list or null
-            songs_per_bird = d.get('songs_per_bird'), # int or null
+            save_path           = _path(d.get('save_path')),
+            evsong_source       = _path(d.get('evsong_source')),
+            wseg_metadata       = _path(d.get('wseg_metadata')),
+            birds               = d.get('birds'),
+            songs_per_bird      = d.get('songs_per_bird'),
+            songs_seed          = d.get('songs_seed'),
+            spectrogram_params  = d.get('spectrograms') or {},
+            embedding_params    = d.get('embedding') or {},
+            labelling_params    = d.get('labelling') or {},
+            phenotyping_params  = d.get('phenotyping') or {},
+            generate_catalog    = bool(d.get('generate_catalog', True)),
         )
 
     @classmethod
     def empty(cls) -> "PipelineConfig":
-        """Return an all-None PipelineConfig for use when config.yaml lacks a pipeline: block."""
+        """Return a default PipelineConfig for use when config.yaml lacks a pipeline: block."""
         return cls(
             save_path=None, evsong_source=None, wseg_metadata=None,
-            birds=None, songs_per_bird=None,
+            birds=None, songs_per_bird=None, songs_seed=None,
+            spectrogram_params={}, embedding_params={},
+            labelling_params={}, phenotyping_params={},
+            generate_catalog=True,
         )
 
 

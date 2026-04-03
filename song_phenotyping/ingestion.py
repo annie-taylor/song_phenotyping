@@ -565,50 +565,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
             logger.error(f"  💥 Error processing batch file {batch_info['file']}: {e}")
             failed_files += 1
 
-    # ---------------------------------------------------------------------------
-    # Flat-directory fallback
-    # If no batch files were found, attempt to discover birds from a flat
-    # layout: <wav_directory>/<bird_id>/*.wav + *.wav.not.mat co-located.
-    # This handles datasets that were exported without batch files.
-    # ---------------------------------------------------------------------------
-    if not batch_file_candidates and wav_directory:
-        logger.info("⚠️  No batch files found — trying flat-directory fallback "
-                    "(co-located .wav + .wav.not.mat pairs)")
-        for entry in os.scandir(wav_directory):
-            if not entry.is_dir():
-                continue
-            bird = entry.name
-            if bird.startswith('.'):
-                continue
-            if bird_subset is not None and bird not in bird_subset:
-                continue
-
-            not_mat_files = sorted(
-                f.path for f in os.scandir(entry.path)
-                if f.name.endswith('.wav.not.mat')
-            )
-            if not not_mat_files:
-                continue
-
-            wav_files = []
-            valid_meta = []
-            for meta_path in not_mat_files:
-                # Derive the paired .wav path by stripping '.not.mat'
-                wav_path = meta_path[:-len('.not.mat')]
-                if os.path.isfile(wav_path):
-                    valid_meta.append(meta_path)
-                    wav_files.append(wav_path)
-
-            if valid_meta:
-                metadata_file_paths[bird] = valid_meta
-                audio_file_paths[bird] = wav_files
-                logger.info(f"  🐦 Flat fallback: {bird} → {len(valid_meta)} pairs")
-
-        if metadata_file_paths:
-            logger.info(f"✅ Flat fallback found {len(metadata_file_paths)} bird(s)")
-        else:
-            logger.warning("❌ Flat fallback also found nothing — check your source directory")
-
+    # Remove redundant bird subset filter - already applied above
     # Final summary
     total_birds = len(metadata_file_paths)
     total_metadata_files = sum(len(files) for files in metadata_file_paths.values())
@@ -647,12 +604,20 @@ def _file_base_remove_after_first_dot(path: str) -> str:
     return name.split('.', 1)[0]
 
 def select_new_file_pairs(available_metadata_files: list[str], available_audio_files: list[str],
-                          already_saved_files: list[str], needed_count: int,) -> list[tuple[str, str]]:
+                          already_saved_files: list[str], needed_count: int,
+                          seed: int = None) -> list[tuple[str, str]]:
     """
     Return up to `needed_count` (metadata_path, audio_path) pairs whose base names
     are not present in `already_saved_files`. Matching is done by filename stem
     (filename without extension). If a metadata file has no matching audio file,
     it is skipped and a warning is logged.
+
+    Parameters
+    ----------
+    seed : int or None
+        Random seed for reproducible subset selection.  ``None`` (default)
+        uses system entropy so different songs may be chosen each run.
+        Set an integer to always select the same subset from a larger library.
     """
     if needed_count <= 0:
         return []
@@ -670,11 +635,12 @@ def select_new_file_pairs(available_metadata_files: list[str], available_audio_f
         base = _file_base_remove_after_first_dot(p)
         audio_by_base[base] = p
 
-    # Build candidate pairs
+    # Build candidate pairs (sorted for determinism before sampling)
     candidates: List[Tuple[str, str]] = []
-    for base, meta_path in meta_by_base.items():
+    for base in sorted(meta_by_base):
         if base in processed_bases:
             continue
+        meta_path = meta_by_base[base]
         audio_path = audio_by_base.get(base)
         if audio_path:
             candidates.append((meta_path, audio_path))
@@ -684,7 +650,9 @@ def select_new_file_pairs(available_metadata_files: list[str], available_audio_f
     # If fewer candidates than needed_count, return all. Otherwise sample.
     if len(candidates) <= needed_count:
         return candidates
-    return sample(candidates, needed_count)
+    import random as _random
+    rng = _random.Random(seed)
+    return rng.sample(candidates, needed_count)
 
 
 def select_new_files(available_metadata_files: list[str],
@@ -1215,7 +1183,7 @@ def select_wseg_file_pairs_from_metadata(metadata_files: List[str],
 
 def process_single_file(metadata_file_path: str, audio_file_path: str, save_path: str, params: SpectrogramParams,
                         read_songpath_from_metadata: bool, verbose: bool,
-                        prefer_local: bool = True, run_name: str = "default") -> Dict[str, str]:
+                        prefer_local: bool = True) -> Dict[str, str]:
     """
     Process a single metadata file and save spectrograms if conditions are met.
 
@@ -1274,9 +1242,9 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
         return {'status': 'skipped', 'reason': 'Song too short (< 2 seconds)'}
 
     # Create output path and check if already exists
-    paths = create_output_paths(save_path, filename_info['bird'], run_name=run_name)
+    paths = create_output_paths(save_path, filename_info['bird'])
     output_path = os.path.join(
-        paths['syllable_specs_dir'],
+        paths['syllable_specs_dir'],  # Always syllable_data/specs
         f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
     )
     if os.path.exists(output_path):
@@ -1300,7 +1268,7 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
 
 def save_data_specs(candidate_files: List[str], save_path: str,
                     params: SpectrogramParams, verbose: bool = False, read_songpath_from_metadata: bool = True,
-                    prefer_local: bool = True, run_name: str = "default") -> Dict[str, List[str]]:
+                    prefer_local: bool = True) -> Dict[str, List[str]]:
     """
     Process metadata files and save spectrograms to HDF5 files with detailed progress tracking.
     """
@@ -1320,7 +1288,7 @@ def save_data_specs(candidate_files: List[str], save_path: str,
 
             result = process_single_file(
                 metadata_file_path, audio_file_path, save_path, params,
-                read_songpath_from_metadata, verbose, prefer_local, run_name=run_name
+                read_songpath_from_metadata, verbose, prefer_local
             )
 
             results[result['status']].append(metadata_file_path)
@@ -1355,7 +1323,8 @@ def save_data_specs(candidate_files: List[str], save_path: str,
 
 def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths: dict | None, save_path: str = None,
                                      songs_per_bird: int = 5, params: 'SpectrogramParams' = None,
-                                     verbose: bool = False, prefer_local: bool = True, run_name: str = "default"):
+                                     verbose: bool = False, prefer_local: bool = True,
+                                     songs_seed: int = None):
     """Run Stage A for evsonganaly birds: extract and save syllable spectrograms.
 
     For each bird in *metadata_file_paths*, selects up to *songs_per_bird*
@@ -1383,6 +1352,9 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
     prefer_local : bool, optional
         Try to resolve audio from the local cache before the server.
         Default is ``True``.
+    songs_seed : int or None, optional
+        Random seed for song subset selection.  ``None`` (default) gives
+        non-deterministic selection; set an integer for reproducible subsets.
 
     Notes
     -----
@@ -1413,24 +1385,8 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            import json
-            from datetime import datetime
-            from song_phenotyping.tools.pipeline_paths import SPECS_DIR, run_root, run_stage_path
-            bird_root = Path(save_path) / bird
-            syllables_dir = str(run_stage_path(bird_root, run_name, SPECS_DIR))
-
-            # Save run_params.json to the run root
-            run_dir = run_root(bird_root, run_name)
-            run_dir.mkdir(parents=True, exist_ok=True)
-            params_file = run_dir / "run_params.json"
-            if not params_file.exists():
-                with open(params_file, "w") as f:
-                    json.dump({
-                        "run_name": run_name,
-                        "run_hash": params.run_hash() if hasattr(params, 'run_hash') else None,
-                        "created_at": datetime.now().isoformat(),
-                        "params": params.to_dict(),
-                    }, f, indent=2)
+            from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+            syllables_dir = os.path.join(save_path, bird, SPECS_DIR)
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -1451,7 +1407,8 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                 metadata_file_paths[bird],
                 audio_file_paths[bird],
                 already_saved_files,
-                needed_count
+                needed_count,
+                seed=songs_seed,
             )
 
             if candidate_files:
@@ -1463,8 +1420,7 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                     params=params,
                     verbose=verbose,
                     read_songpath_from_metadata=False,
-                    prefer_local=prefer_local,
-                    run_name=run_name,
+                    prefer_local=prefer_local
                 )
 
                 # Report detailed results
@@ -1502,7 +1458,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                               songs_per_bird: int = 20,
                               params: SpectrogramParams = None,
                               verbose: bool = False, prefer_local: bool = True, copy_locally: bool = False,
-                              run_name: str = "default"):
+                              songs_seed: int = None):
     """Run Stage A for WhisperSeg birds: extract and save syllable spectrograms.
 
     For each bird in *metadata_file_paths*, resolves audio paths from the
@@ -1536,6 +1492,9 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         Default is ``True``.
     copy_locally : bool, optional
         Copy audio to *save_path* before processing. Default is ``False``.
+    songs_seed : int or None, optional
+        Random seed for song subset selection.  ``None`` (default) gives
+        non-deterministic selection; set an integer for reproducible subsets.
 
     Notes
     -----
@@ -1562,24 +1521,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            import json
-            from datetime import datetime
-            from song_phenotyping.tools.pipeline_paths import SPECS_DIR, run_root, run_stage_path
-            bird_root = Path(save_path) / bird
-            syllables_dir = str(run_stage_path(bird_root, run_name, SPECS_DIR))
-
-            # Save run_params.json to the run root
-            run_dir = run_root(bird_root, run_name)
-            run_dir.mkdir(parents=True, exist_ok=True)
-            params_file = run_dir / "run_params.json"
-            if not params_file.exists():
-                with open(params_file, "w") as f:
-                    json.dump({
-                        "run_name": run_name,
-                        "run_hash": params.run_hash() if hasattr(params, 'run_hash') else None,
-                        "created_at": datetime.now().isoformat(),
-                        "params": params.to_dict(),
-                    }, f, indent=2)
+            from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+            syllables_dir = os.path.join(save_path, bird, SPECS_DIR)
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -1602,7 +1545,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     metadata_file_paths[bird],
                     audio_file_paths[bird],
                     already_saved_files,
-                    needed_count
+                    needed_count,
+                    seed=songs_seed,
                 )
             else:
                 # For server processing, create pairs by reading metadata
@@ -1621,7 +1565,6 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     verbose=verbose,
                     read_songpath_from_metadata=True,
                     prefer_local=prefer_local,
-                    run_name=run_name,
                 )
 
                 # Report detailed results

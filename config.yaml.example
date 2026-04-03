@@ -51,3 +51,77 @@ pipeline:
   # Maximum songs to process per bird (null = all songs).
   # Use a small number (e.g. 5–30) for quick smoke tests.
   songs_per_bird: 30
+
+  # Random seed for song selection in Stage A.
+  # null = non-deterministic (different songs each run if songs_per_bird < total).
+  # Set an integer (e.g. 42) to always select the same subset.
+  songs_seed: null
+
+  # ---------------------------------------------------------------------------
+  # Stage A — spectrogram parameters
+  # ---------------------------------------------------------------------------
+  # These control how syllable spectrograms are computed.
+  # Defaults shown; omit a key to accept the default.
+  spectrograms:
+    nfft: 1024
+    hop: 1
+    target_shape: [513, 300]    # [freq_bins, time_bins]
+    min_freq: 200.0
+    max_freq: 15000.0
+    max_dur: 0.080              # maximum syllable duration in seconds
+    fs: 32000.0                 # expected sample rate
+    save_inst_freq: false       # append instantaneous-frequency channel
+    save_group_delay: false     # append group-delay channel
+    duration_feature_weight: 0.0  # 0 = disabled; ~1.0 weights duration as one time bin
+    use_warping: false          # frequency-warping augmentation
+
+  # ---------------------------------------------------------------------------
+  # Stage C — UMAP embedding parameters
+  # ---------------------------------------------------------------------------
+  embedding:
+    # Default UMAP parameters (used when not doing a grid search)
+    n_neighbors: 20
+    min_dist: 0.5
+    metric: euclidean
+    n_components: 2
+    # Seed for syllable subsampling when dataset exceeds memory limits
+    subsample_seed: 42
+    # Grid-search values — all combinations are tried; best is selected
+    n_neighbors_grid: [5, 10, 20, 50, 100]
+    min_dist_grid: [0.01, 0.05, 0.1, 0.3, 0.5]
+
+  # ---------------------------------------------------------------------------
+  # Stage D — labelling / clustering parameters
+  # ---------------------------------------------------------------------------
+  labelling:
+    # Clustering evaluation metrics.  Supported: silhouette, dbi, ch, dunn, nmi.
+    # 'ch' (Calinski-Harabasz) is excluded by default; re-add if desired.
+    metrics: [silhouette, dbi]
+    # Optional per-metric weights for the composite score.
+    # Keys must match the metrics list.  Omit to use equal weights.
+    # metric_weights:
+    #   silhouette: 2.0
+    #   dbi: 1.0
+    replace_labels: false       # true = delete existing labels and re-cluster
+    # HDBSCAN grid — null uses the built-in default (min_cluster_size ∈ [5,20,60],
+    # min_samples ∈ [5,15], giving 6 combinations).
+    hdbscan_grid: null
+    # hdbscan_grid:             # custom grid example:
+    #   min_cluster_size: [10, 30]
+    #   min_samples: [5, 10]
+    generate_cluster_pdf: false # true = write a PDF report of top clusterings
+
+  # ---------------------------------------------------------------------------
+  # Stage E — phenotyping parameters
+  # ---------------------------------------------------------------------------
+  phenotyping:
+    min_syllable_proportion: 0.02
+    repeat_significance_threshold: 0.2
+    dyad_threshold: 0.7
+    use_top_n_clusterings: 5
+    generate_plots: true        # write phenotype summary figures
+
+  # ---------------------------------------------------------------------------
+  # Catalog / output
+  # ---------------------------------------------------------------------------
+  generate_catalog: true        # write HTML catalogs to results/catalog/ after Stage E
