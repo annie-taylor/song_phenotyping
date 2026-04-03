@@ -760,7 +760,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
 
         # Setup paths
         from song_phenotyping.tools.pipeline_paths import (
-            FEATURES_DIR, EMBEDDINGS_DIR, STAGES_DIR, run_stage_path, run_root
+            FEATURES_DIR, EMBEDDINGS_DIR, STAGES_DIR, PLOTS_DIR, run_stage_path, run_root
         )
         bird_path = os.path.join(save_path, bird)
 
@@ -768,7 +768,7 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
             'specs':      str(run_stage_path(bird_path, run_name, FEATURES_DIR)),
             'model':      str(run_root(bird_path, run_name) / STAGES_DIR / 'models'),
             'embeddings': str(run_stage_path(bird_path, run_name, EMBEDDINGS_DIR)),
-            'figures':    os.path.join(bird_path, 'figures'),
+            'figures':    str(run_root(bird_path, run_name) / PLOTS_DIR),
         }
 
         # Load data
