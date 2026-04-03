@@ -85,9 +85,9 @@ class PhenotypingConfig:
     min_syllable_proportion: float = 0.02  # min proportion for syllable to count toward repertoire size
 
     # Repeat analysis parameters
-    repeat_significance_threshold: float = 0.2  # min proportion of syllable instances that must be repeats
+    repeat_significance_threshold: float = 0.4  # min proportion of syllable instances that must be repeats
     repeat_candidate_range: range = None         # repeat lengths to search (default: range(2, 20))
-    dyad_threshold: float = 0.7                  # proportion of length-2 repeats for syllable to be a dyad
+    dyad_threshold: float = 0.95                  # proportion of length-2 repeats for syllable to be a dyad
     adaptive_repeat_factor: float = 0.25         # scales per-syllable min prevalence for repeat filtering
 
     # Processing options

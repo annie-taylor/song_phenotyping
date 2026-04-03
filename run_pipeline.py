@@ -26,15 +26,15 @@ from pathlib import Path
 # Optional in-script overrides — set to None to use config.yaml values
 # ---------------------------------------------------------------------------
 
-SAVE_PATH      = None    # e.g. "E:/pipeline_runs" or "/Volumes/Extreme SSD/pipeline_runs"
-EVSONG_SOURCE  = None    # parent dir containing evsonganaly bird subdirs
-WSEG_METADATA  = None    # wseg metadata dir; None = skip wseg
+SAVE_PATH      = "E:/pipeline_runs"    # e.g. "E:/pipeline_runs" or "/Volumes/Extreme SSD/pipeline_runs"
+EVSONG_SOURCE  = "E:\ssharma_RNA_seq\copied_data"    # parent dir containing evsonganaly bird subdirs
+WSEG_METADATA  = "E:\\xfosters\copied_data"    # wseg metadata dir; None = skip wseg
 BIRDS          = None    # None = all discovered; or e.g. ['or18or24', 'bu78bu77']
-SONGS_PER_BIRD = None    # None = use config.yaml value (or all songs if unset there)
+SONGS_PER_BIRD = 30    # None = use config.yaml value (or all songs if unset there)
 
 # Feature flags (these are not in config.yaml — override here if needed)
-SAVE_INST_FREQ          = True   # append instantaneous-frequency channel
-SAVE_GROUP_DELAY        = True   # append group-delay channel
+SAVE_INST_FREQ          = False   # append instantaneous-frequency channel
+SAVE_GROUP_DELAY        = False  # append group-delay channel
 DURATION_FEATURE_WEIGHT = 1.0   # 0 = disabled; ~1.0 weights duration as one time bin
 
 # ---------------------------------------------------------------------------

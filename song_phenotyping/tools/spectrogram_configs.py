@@ -95,21 +95,21 @@ class SpectrogramParams:
     >>> params = SpectrogramParams(slice_length=50.0)
     """
 
-    nfft: int = 1024
+    nfft: int = 512
     hop: int = 1
     target_shape: tuple = (int((nfft / 2) + 1), 300)
-    min_freq: float = 200.0
-    max_freq: float = 15000.0
+    min_freq: float = 400.0
+    max_freq: float = 10000.0
     max_dur: Optional[float] = 0.080
     fs: float = 32000.0
     padding: float = 0.0
 
     slice_length: Optional[float] = None
-    songs_per_bird: int = 5
+    songs_per_bird: int = 30
     overwrite_existing: bool = False
 
-    use_warping: bool = False
-    downsample: bool = False
+    use_warping: bool = True
+    downsample: bool = True
 
     # Phase-derived feature flags (Stage A optional outputs)
     save_inst_freq: bool = False
