@@ -95,14 +95,39 @@ docs/
 
 ## Session workflow
 
-At the **start** of a new session: paste into your first message:
+**Start of session** — paste into your first message:
 > "Read `docs/HANDOFF.md` and `docs/PROJECT_REFERENCE.md` before we begin."
 
-At the **end** of a session:
-1. Archive the current `docs/HANDOFF.md` to `docs/history/YYYY-MM-DD_description.md`.
-2. Overwrite `docs/HANDOFF.md` with the new session's handoff.
-3. Update `docs/PROJECT_REFERENCE.md` if any architecture decisions changed.
-4. Commit all three changes.
+**End of session** — four steps:
+1. Write the session summary into the blank `docs/HANDOFF.md`.
+2. Copy it to `docs/history/YYYY-MM-DD_short_description.md`.
+3. Reset `docs/HANDOFF.md` to the blank template (see below).
+4. Update `docs/PROJECT_REFERENCE.md` if any architecture decisions changed.
+5. Commit all changes.
+
+`docs/HANDOFF.md` should always be the blank template between sessions — a filled-in file is a signal the end-of-session steps weren't completed.
+
+**Blank template for `docs/HANDOFF.md`:**
+```markdown
+## State as of [date]
+
+_Fill in at the end of the session._
+
+**What was built / changed**
+-
+
+**Key decisions made**
+-
+
+**Known issues / open questions**
+-
+
+**Do not touch**
+-
+
+**Next steps**
+1.
+```
 
 ## Run
 ```bash
