@@ -604,12 +604,20 @@ def _file_base_remove_after_first_dot(path: str) -> str:
     return name.split('.', 1)[0]
 
 def select_new_file_pairs(available_metadata_files: list[str], available_audio_files: list[str],
-                          already_saved_files: list[str], needed_count: int,) -> list[tuple[str, str]]:
+                          already_saved_files: list[str], needed_count: int,
+                          seed: int = None) -> list[tuple[str, str]]:
     """
     Return up to `needed_count` (metadata_path, audio_path) pairs whose base names
     are not present in `already_saved_files`. Matching is done by filename stem
     (filename without extension). If a metadata file has no matching audio file,
     it is skipped and a warning is logged.
+
+    Parameters
+    ----------
+    seed : int or None
+        Random seed for reproducible subset selection.  ``None`` (default)
+        uses system entropy so different songs may be chosen each run.
+        Set an integer to always select the same subset from a larger library.
     """
     if needed_count <= 0:
         return []
@@ -627,11 +635,12 @@ def select_new_file_pairs(available_metadata_files: list[str], available_audio_f
         base = _file_base_remove_after_first_dot(p)
         audio_by_base[base] = p
 
-    # Build candidate pairs
+    # Build candidate pairs (sorted for determinism before sampling)
     candidates: List[Tuple[str, str]] = []
-    for base, meta_path in meta_by_base.items():
+    for base in sorted(meta_by_base):
         if base in processed_bases:
             continue
+        meta_path = meta_by_base[base]
         audio_path = audio_by_base.get(base)
         if audio_path:
             candidates.append((meta_path, audio_path))
@@ -641,7 +650,9 @@ def select_new_file_pairs(available_metadata_files: list[str], available_audio_f
     # If fewer candidates than needed_count, return all. Otherwise sample.
     if len(candidates) <= needed_count:
         return candidates
-    return sample(candidates, needed_count)
+    import random as _random
+    rng = _random.Random(seed)
+    return rng.sample(candidates, needed_count)
 
 
 def select_new_files(available_metadata_files: list[str],
@@ -1312,7 +1323,8 @@ def save_data_specs(candidate_files: List[str], save_path: str,
 
 def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths: dict | None, save_path: str = None,
                                      songs_per_bird: int = 5, params: 'SpectrogramParams' = None,
-                                     verbose: bool = False, prefer_local: bool = True):
+                                     verbose: bool = False, prefer_local: bool = True,
+                                     songs_seed: int = None):
     """Run Stage A for evsonganaly birds: extract and save syllable spectrograms.
 
     For each bird in *metadata_file_paths*, selects up to *songs_per_bird*
@@ -1340,6 +1352,9 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
     prefer_local : bool, optional
         Try to resolve audio from the local cache before the server.
         Default is ``True``.
+    songs_seed : int or None, optional
+        Random seed for song subset selection.  ``None`` (default) gives
+        non-deterministic selection; set an integer for reproducible subsets.
 
     Notes
     -----
@@ -1392,7 +1407,8 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                 metadata_file_paths[bird],
                 audio_file_paths[bird],
                 already_saved_files,
-                needed_count
+                needed_count,
+                seed=songs_seed,
             )
 
             if candidate_files:
@@ -1441,7 +1457,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                               save_path: str,
                               songs_per_bird: int = 20,
                               params: SpectrogramParams = None,
-                              verbose: bool = False, prefer_local: bool = True, copy_locally: bool = False):
+                              verbose: bool = False, prefer_local: bool = True, copy_locally: bool = False,
+                              songs_seed: int = None):
     """Run Stage A for WhisperSeg birds: extract and save syllable spectrograms.
 
     For each bird in *metadata_file_paths*, resolves audio paths from the
@@ -1475,6 +1492,9 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         Default is ``True``.
     copy_locally : bool, optional
         Copy audio to *save_path* before processing. Default is ``False``.
+    songs_seed : int or None, optional
+        Random seed for song subset selection.  ``None`` (default) gives
+        non-deterministic selection; set an integer for reproducible subsets.
 
     Notes
     -----
@@ -1525,7 +1545,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     metadata_file_paths[bird],
                     audio_file_paths[bird],
                     already_saved_files,
-                    needed_count
+                    needed_count,
+                    seed=songs_seed,
                 )
             else:
                 # For server processing, create pairs by reading metadata

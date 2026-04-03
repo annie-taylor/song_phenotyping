@@ -1655,7 +1655,8 @@ def remove_directory(path: str):
 
 
 def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = False,
-               hdbscan_params: list = None, top_n_for_pdf: int = 20):
+               hdbscan_params: list = None, top_n_for_pdf: int = 20,
+               generate_cluster_pdf: bool = False, metric_weights: dict = None):
     """Run the complete Stage D labelling pipeline for one bird.
 
     Iterates over all UMAP embedding files produced by Stage C, searches a
@@ -1684,6 +1685,13 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
     top_n_for_pdf : int, optional
         Number of highest-scoring parameter combinations to include in the
         PDF report.  Default is ``20``.
+    generate_cluster_pdf : bool, optional
+        When ``True``, write a PDF summary of the top clusterings to
+        ``results/plots/``.  Default is ``False`` (opt-in, avoids
+        matplotlib PDF overhead on every run).
+    metric_weights : dict or None, optional
+        Per-metric weights for the composite score, e.g.
+        ``{'silhouette': 2.0, 'dbi': 1.0}``.  ``None`` uses equal weights.
 
     Returns
     -------
@@ -1806,7 +1814,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 master_summary_df,
                 metrics=metrics,
                 n_syls=master_summary_df['n_syls'].tolist(),
-                use_cluster_penalty=False  # Add this parameter
+                weights=metric_weights,
+                use_cluster_penalty=False,
             )
 
             # Reorder columns and sort by performance
@@ -1825,16 +1834,16 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 logger.error(f"Failed to save master summary for bird {bird}")
                 return False
 
-            # Create PDF report
-            pdf_success = create_cluster_summary_pdf(
-                master_summary_df,
-                bird=bird,
-                save_path=bird_path,
-                top_n=top_n_for_pdf
-            )
-
-            if not pdf_success:
-                logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
+            # Create PDF report (opt-in: set generate_cluster_pdf=True to enable)
+            if generate_cluster_pdf:
+                pdf_success = create_cluster_summary_pdf(
+                    master_summary_df,
+                    bird=bird,
+                    save_path=bird_path,
+                    top_n=top_n_for_pdf
+                )
+                if not pdf_success:
+                    logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
 
             logger.info(f"Successfully completed labeling pipeline for bird {bird}")
             return True
