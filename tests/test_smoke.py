@@ -87,7 +87,7 @@ class TestStageA:
             params=_SPEC_PARAMS,
         )
 
-        specs_dir = evsong_bird_dir / EVSONG_BIRD / "syllable_data" / "specs"
+        specs_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "01_specs"
         assert specs_dir.exists(), f"specs dir not created: {specs_dir}"
         h5_files = list(specs_dir.glob("syllables_*.h5"))
         assert len(h5_files) > 0, "No syllable HDF5 files produced"
@@ -124,7 +124,7 @@ class TestStageA:
             params=_SPEC_PARAMS,
         )
 
-        specs_dir = wseg_bird_dir / WSEG_BIRD / "syllable_data" / "specs"
+        specs_dir = wseg_bird_dir / WSEG_BIRD / "stages" / "01_specs"
         assert specs_dir.exists(), f"specs dir not created: {specs_dir}"
         h5_files = list(specs_dir.glob("syllables_*.h5"))
         assert len(h5_files) > 0, "No syllable HDF5 files produced"
@@ -159,7 +159,7 @@ class TestStageB:
         )
         assert result is True, "flatten_bird_spectrograms returned False"
 
-        flat_dir = evsong_bird_dir / EVSONG_BIRD / "syllable_data" / "flattened"
+        flat_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "02_features"
         assert flat_dir.exists()
         h5_files = list(flat_dir.glob("flattened_*.h5"))
         assert len(h5_files) > 0, "No flattened HDF5 files produced"
@@ -203,7 +203,7 @@ class TestStageC:
             use_parallel=False,
         )
 
-        embed_dir = evsong_bird_dir / EVSONG_BIRD / "syllable_data" / "embeddings"
+        embed_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "03_embeddings"
         assert embed_dir.exists(), f"Embeddings dir not created: {embed_dir}"
         h5_files = list(embed_dir.glob("*.h5"))
         assert len(h5_files) > 0, "No embedding files produced"
@@ -250,7 +250,7 @@ class TestStageD:
         )
         assert result is True, "label_bird returned False"
 
-        labelling_dir = evsong_bird_dir / EVSONG_BIRD / "syllable_data" / "labelling"
+        labelling_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "04_labels"
         assert labelling_dir.exists(), f"Labelling dir not created: {labelling_dir}"
         assert any(labelling_dir.rglob("*.h5")), "No cluster label files produced"
 
@@ -295,7 +295,7 @@ class TestStageE:
         assert result is True, "phenotype_bird returned False"
 
         # Check phenotype pickle output
-        phenotype_dir = evsong_bird_dir / EVSONG_BIRD / "syllable_data" / "phenotype_detailed"
+        phenotype_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "05_phenotype"
         assert phenotype_dir.exists(), f"Phenotype dir not created: {phenotype_dir}"
         pkl_files = list(phenotype_dir.glob("automated_phenotype_data_rank*.pkl"))
         assert pkl_files, "No automated phenotype pickle files produced"

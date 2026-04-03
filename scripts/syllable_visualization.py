@@ -42,7 +42,7 @@ class SyllableSampler:
                     not item.name.startswith('.') and
                     item.name != 'copied_data'):
 
-                syllables_dir = item / 'syllable_data' / 'specs'
+                syllables_dir = item / 'stages' / '01_specs'
                 if syllables_dir.exists() and list(syllables_dir.glob('*.h5')):
                     birds.append(item.name)
 
@@ -71,7 +71,7 @@ class SyllableSampler:
         bird_dir = self.project_directory / bird
 
         # Setup paths
-        syllables_dir = bird_dir  / 'syllable_data' / 'specs'
+        syllables_dir = bird_dir  / 'stages' / '01_specs'
         pdf_dir = bird_dir / 'pdfs'
         pdf_dir.mkdir(exist_ok=True)
         pdf_path = pdf_dir / f'{bird}_syllable_samples.pdf'

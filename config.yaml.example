@@ -3,9 +3,9 @@
 # Copy this file to config.yaml and edit for your machine.
 # config.yaml is gitignored so each machine keeps its own paths.
 #
-# Paths can use ~ for home directory. Leave macaw_root as null to
-# auto-detect based on OS (macOS: /Volumes/users, Windows: Z:\,
-# Linux: SMB mount). Set it explicitly to override.
+# Paths can use ~ for home directory or forward slashes on all platforms.
+# Leave macaw_root as null to auto-detect (macOS: /Volumes/users,
+# Windows: Z:\, Linux: SMB mount). Set it explicitly to override.
 
 paths:
   # Root of local data cache (external drive or local SSD).
@@ -19,3 +19,35 @@ paths:
   # Path to the SQLite run registry (relative to project root, or absolute).
   # Leave as default unless you want the DB somewhere specific.
   run_registry: db.sqlite3
+
+# ---------------------------------------------------------------------------
+# Pipeline run settings
+# ---------------------------------------------------------------------------
+# These are read by run_pipeline.py.  Any value set here can also be
+# overridden by the ALL-CAPS constants at the top of run_pipeline.py
+# (set them to a non-None value to override).
+pipeline:
+  # Where to write pipeline outputs — one subdirectory per bird.
+  # macOS:   /Volumes/Extreme SSD/pipeline_runs
+  # Windows: E:/pipeline_runs
+  save_path: /Volumes/Extreme SSD/pipeline_runs
+
+  # Parent directory that contains evsonganaly bird folders.
+  # Each bird lives at <evsong_source>/<bird_id>/source/
+  # macOS:   /Volumes/Extreme SSD/birds/evsong
+  # Windows: E:/birds/evsong
+  # Set to null to skip evsonganaly processing.
+  evsong_source: /Volumes/Extreme SSD/birds/evsong
+
+  # WhisperSeg metadata directory (bird folders under here).
+  # Set to null to skip wseg processing.
+  wseg_metadata: null
+
+  # Which birds to process.
+  # null  → auto-discover all birds found under evsong_source / wseg_metadata
+  # list  → process only the named birds, e.g. [or18or24, bu78bu77]
+  birds: null
+
+  # Maximum songs to process per bird (null = all songs).
+  # Use a small number (e.g. 5–30) for quick smoke tests.
+  songs_per_bird: 30

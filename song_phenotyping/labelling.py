@@ -1261,19 +1261,22 @@ def reorder_columns(master_summary_df: pd.DataFrame, metrics: list):
     return master_summary_df[final_columns]
 
 
-def save_master_summary(master_summary_df, save_path: str):
+def save_master_summary(master_summary_df, bird_path: str):
     """
-    Save master summary DataFrame to CSV.
+    Save master summary DataFrame to CSV under the results/ directory.
 
     Args:
         master_summary_df: DataFrame to save
-        save_path: Directory path to save file
+        bird_path: Bird root directory
 
     Returns:
         bool: True if successful, False otherwise
     """
+    from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
     try:
-        master_summary_path = os.path.join(save_path, 'master_summary.csv')
+        results_dir = os.path.join(bird_path, RESULTS_DIR)
+        os.makedirs(results_dir, exist_ok=True)
+        master_summary_path = os.path.join(results_dir, 'master_summary.csv')
         master_summary_df.to_csv(master_summary_path, index=False)
         return True
     except Exception as e:
@@ -1281,18 +1284,19 @@ def save_master_summary(master_summary_df, save_path: str):
         return False
 
 
-def load_master_summary(save_path: str):
+def load_master_summary(bird_path: str):
     """
     Load master summary DataFrame from CSV.
 
     Args:
-        save_path: Directory path containing master_summary.csv
+        bird_path: Bird root directory
 
     Returns:
         pd.DataFrame: Loaded DataFrame or empty DataFrame if not found
     """
+    from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
     try:
-        master_summary_path = os.path.join(save_path, 'master_summary.csv')
+        master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
         if os.path.exists(master_summary_path):
             return pd.read_csv(master_summary_path)
         else:
@@ -1467,11 +1471,11 @@ def _get_available_birds(save_path: str):
 
         for item in all_items:
             item_path = os.path.join(save_path, item)
-            # Check if it's a directory and has expected structure
+            # Check if it's a directory and has expected pipeline structure
             if os.path.isdir(item_path) and not item.startswith('.'):
-                # Check for master_summary.csv or syllable_data directory
-                if (os.path.exists(os.path.join(item_path, 'master_summary.csv')) or
-                        os.path.exists(os.path.join(item_path, 'syllable_data'))):
+                from song_phenotyping.tools.pipeline_paths import RESULTS_DIR, STAGES_DIR
+                if (os.path.exists(os.path.join(item_path, RESULTS_DIR, 'master_summary.csv')) or
+                        os.path.exists(os.path.join(item_path, STAGES_DIR))):
                     birds.append(item)
 
         return sorted(birds)
@@ -1694,11 +1698,13 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
     try:
         logger.info(f"Starting labeling pipeline for bird {bird}")
 
-        # Setup paths - UPDATED for new directory structure
+        # Setup paths
+        from song_phenotyping.tools.pipeline_paths import (
+            EMBEDDINGS_DIR, LABELS_DIR, RESULTS_DIR
+        )
         bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'syllable_data')  # Changed from 'data'
-        labelling_path = os.path.join(data_path, 'labelling')
-        embedding_path = os.path.join(data_path, 'embeddings')
+        labelling_path = os.path.join(bird_path, LABELS_DIR)
+        embedding_path = os.path.join(bird_path, EMBEDDINGS_DIR)
         figure_path = os.path.join(bird_path, 'figures', 'clusters')
 
         # Create directories
@@ -1713,7 +1719,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
             os.makedirs(labelling_path, exist_ok=True)
 
             # Remove existing master summary
-            master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+            master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
             if os.path.exists(master_summary_path):
                 os.remove(master_summary_path)
 
@@ -1962,23 +1968,22 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
         for bird_name in birds_to_clear:
             bird_path = os.path.join(save_path, bird_name)
 
-            # Labelling directory (contains all cluster labels) - UPDATED path
-            labelling_path = os.path.join(bird_path, 'syllable_data', 'labelling')
+            from song_phenotyping.tools.pipeline_paths import LABELS_DIR, RESULTS_DIR
+            # Labelling directory (contains all cluster labels)
+            labelling_path = os.path.join(bird_path, LABELS_DIR)
             if os.path.exists(labelling_path):
                 paths_to_remove.append(('labelling', labelling_path))
-                # Count files for reporting
                 for root, dirs, files in os.walk(labelling_path):
                     total_items += len(files)
             # Cluster figures directory
             cluster_figures_path = os.path.join(bird_path, 'figures', 'clusters')
             if os.path.exists(cluster_figures_path):
                 paths_to_remove.append(('cluster_figures', cluster_figures_path))
-                # Count files for reporting
                 for root, dirs, files in os.walk(cluster_figures_path):
                     total_items += len(files)
 
             # Master summary CSV
-            master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+            master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
             if os.path.exists(master_summary_path):
                 paths_to_remove.append(('master_summary', master_summary_path))
                 total_items += 1

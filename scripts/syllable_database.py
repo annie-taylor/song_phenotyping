@@ -108,8 +108,9 @@ class SyllableDatabase:
     def __init__(self, bird_path: str, feature_params: FeatureExtractionParams = None):
         self.bird_path = bird_path
         self.bird_name = os.path.basename(bird_path)
-        self.syllable_dir = os.path.join(bird_path, 'syllable_data', 'specs')
-        self.database_dir = os.path.join(bird_path, 'syllable_data', 'syllable_database')
+        from song_phenotyping.tools.pipeline_paths import SPECS_DIR, STAGES_DIR
+        self.syllable_dir = os.path.join(bird_path, SPECS_DIR)
+        self.database_dir = os.path.join(bird_path, STAGES_DIR, 'syllable_database')
         os.makedirs(self.database_dir, exist_ok=True)
 
         # Feature extraction parameters
@@ -553,7 +554,8 @@ class SyllableDatabase:
 
         try:
             # Load master summary to get clustering result paths
-            master_summary_path = os.path.join(self.bird_path, 'master_summary.csv')
+            from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
+            master_summary_path = os.path.join(self.bird_path, RESULTS_DIR, 'master_summary.csv')
             if not os.path.exists(master_summary_path):
                 logging.warning(f"No master summary found at {master_summary_path}")
                 return clustering_labels
@@ -1732,7 +1734,8 @@ if __name__ == '__main__':
                 item_path = os.path.join(dataset_path, item)
                 if os.path.isdir(item_path) and not item.startswith('.'):
                     # Check if it has syllable data
-                    syllable_dir = os.path.join(item_path, 'syllable_data', 'specs')
+                    from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+                    syllable_dir = os.path.join(item_path, SPECS_DIR)
                     if os.path.exists(syllable_dir):
                         bird_paths.append(item_path)
 

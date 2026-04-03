@@ -15,20 +15,67 @@ Examples
 
 >>> # Get the Macaw server root (auto-detected if not set in config)
 >>> macaw = cfg.macaw_root
+
+>>> # Access pipeline run settings
+>>> pipe = cfg.pipeline
+>>> pipe.save_path        # where outputs are written
+>>> pipe.evsong_source    # parent dir of evsonganaly bird folders
+>>> pipe.birds            # None = all, or list of bird IDs to process
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 try:
     import yaml
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# PipelineConfig
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PipelineConfig:
+    """Pipeline run settings loaded from the ``pipeline:`` block in config.yaml.
+
+    All fields have sensible defaults so that a minimal config.yaml (one that
+    only sets ``paths:``) still works — the pipeline will fall back to writing
+    outputs next to the source data and processing all discovered birds.
+    """
+
+    save_path: Optional[Path]       # Where to write pipeline outputs
+    evsong_source: Optional[Path]   # Parent dir containing evsonganaly bird folders
+    wseg_metadata: Optional[Path]   # wseg metadata dir; None = skip wseg
+    birds: Optional[List[str]]      # None = auto-discover all; or explicit list
+    songs_per_bird: Optional[int]   # None = all songs
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "PipelineConfig":
+        def _path(v) -> Optional[Path]:
+            return Path(os.path.expanduser(str(v))) if v is not None else None
+
+        return cls(
+            save_path      = _path(d.get('save_path')),
+            evsong_source  = _path(d.get('evsong_source')),
+            wseg_metadata  = _path(d.get('wseg_metadata')),
+            birds          = d.get('birds'),          # list or null
+            songs_per_bird = d.get('songs_per_bird'), # int or null
+        )
+
+    @classmethod
+    def empty(cls) -> "PipelineConfig":
+        """Return an all-None PipelineConfig for use when config.yaml lacks a pipeline: block."""
+        return cls(
+            save_path=None, evsong_source=None, wseg_metadata=None,
+            birds=None, songs_per_bird=None,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +107,7 @@ class ProjectConfig:
     local_cache: Path          # root of local data cache (external drive)
     macaw_root: Optional[Path] # Macaw server root; None = auto-detect
     run_registry: Path         # path to SQLite run registry
+    pipeline: PipelineConfig   # pipeline run settings (save_path, sources, birds, …)
 
     # ------------------------------------------------------------------
     # Loading
@@ -117,10 +165,13 @@ class ProjectConfig:
         if not registry_path.is_absolute():
             registry_path = path.parent / registry_path
 
+        pipeline = PipelineConfig.from_dict(raw.get('pipeline', {}))
+
         return cls(
             local_cache=local_cache,
             macaw_root=macaw_root,
             run_registry=registry_path,
+            pipeline=pipeline,
         )
 
     @staticmethod

@@ -1370,10 +1370,8 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            if params.slice_length:
-                syllables_dir = os.path.join(save_path, bird, 'slice_data', 'specs')
-            else:
-                syllables_dir = os.path.join(save_path, bird, 'syllable_data', 'specs')
+            from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+            syllables_dir = os.path.join(save_path, bird, SPECS_DIR)
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)
@@ -1503,10 +1501,8 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         logger.info(f"📊 Memory usage before {bird}: {get_memory_usage():.1f} MB")
 
         try:
-            if params.slice_length:
-                syllables_dir = os.path.join(save_path, bird, 'slice_data')
-            else:
-                syllables_dir = os.path.join(save_path, bird, 'syllable_data')
+            from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+            syllables_dir = os.path.join(save_path, bird, SPECS_DIR)
 
             if os.path.isdir(syllables_dir):
                 already_saved_files = os.listdir(syllables_dir)

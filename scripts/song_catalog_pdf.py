@@ -42,9 +42,10 @@ class BirdCatalogPDFGenerator:
         self.config = config or CatalogConfig()
 
         # Directory paths
-        self.syllable_dir = self.bird_path / 'syllable_data' / 'specs'
+        from song_phenotyping.tools.pipeline_paths import SPECS_DIR, PLOTS_DIR
+        self.syllable_dir = self.bird_path / SPECS_DIR
         self.spectrograms_dir = self.bird_path / 'spectrograms' / 'labelled'
-        self.pdf_output_dir = self.bird_path / 'syllable_data' / 'pdfs'
+        self.pdf_output_dir = self.bird_path / PLOTS_DIR
 
         # Create directories
         self.spectrograms_dir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +58,8 @@ class BirdCatalogPDFGenerator:
     def _load_syllable_database(self):
         """Load and cache the syllable database once."""
         try:
-            syllable_db_path = self.bird_path / 'syllable_data' / 'syllable_database' / 'syllable_features.csv'
+            from song_phenotyping.tools.pipeline_paths import STAGES_DIR
+            syllable_db_path = self.bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
             if syllable_db_path.exists():
                 self.syllable_db = pd.read_csv(syllable_db_path)
                 logging.info(f"Loaded syllable database: {len(self.syllable_db)} rows")
@@ -508,7 +510,8 @@ class BirdCatalogPDFGenerator:
             Sorted list of available rank numbers
         """
         try:
-            syllable_db_path = self.bird_path / 'data' / 'syllable_database' / 'syllable_features.csv'
+            from song_phenotyping.tools.pipeline_paths import STAGES_DIR
+            syllable_db_path = self.bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
             if not syllable_db_path.exists():
                 logging.warning(f"Syllable database not found: {syllable_db_path}")
                 return []
@@ -608,7 +611,8 @@ def get_bird_list(project_directory: str) -> List[str]:
                     not item.endswith('.csv')):
 
                 # Verify it has syllable data
-                syllable_dir = os.path.join(item_path, 'syllable_data', 'specs')
+                from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+                syllable_dir = os.path.join(item_path, SPECS_DIR)
                 if os.path.exists(syllable_dir):
                     syllable_files = [f for f in os.listdir(syllable_dir) if f.endswith('.h5')]
                     if syllable_files:

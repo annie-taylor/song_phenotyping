@@ -257,7 +257,8 @@ class PhenotypePDFGenerator:
 
         # Directory paths
         self.phenotype_plots_dir = self.bird_path / 'figures' / 'phenotyping'
-        self.pdf_output_dir = self.bird_path / 'syllable_data' / 'pdfs'
+        from song_phenotyping.tools.pipeline_paths import PLOTS_DIR
+        self.pdf_output_dir = self.bird_path / PLOTS_DIR
         self.spectrograms_dir = self.bird_path / 'spectrograms' / 'labelled'
 
         # Create directories
@@ -518,7 +519,8 @@ class PhenotypePDFGenerator:
 
         try:
             # Get syllable files
-            syllable_dir = self.bird_path / 'syllable_data' / 'syllables'
+            from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+            syllable_dir = self.bird_path / SPECS_DIR
             if not syllable_dir.exists():
                 logging.warning(f"No syllable directory found: {syllable_dir}")
                 return []
@@ -668,7 +670,8 @@ class PhenotypePDFGenerator:
                 return sorted(labels)
             else:
                 # For automated labels, try to get from syllable database
-                syllable_db_path = self.bird_path / 'syllable_data' / 'syllable_database' / 'syllable_features.csv'
+                from song_phenotyping.tools.pipeline_paths import STAGES_DIR
+                syllable_db_path = self.bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
                 if syllable_db_path.exists():
                     df = pd.read_csv(syllable_db_path)
                     cluster_col = f'cluster_rank{rank}_'
@@ -1095,8 +1098,9 @@ def generate_phenotype_pdfs_from_saved_data(bird_path: str,
         generated_pdfs = {}
 
         # Path to detailed phenotype data
-        detailed_data_dir = os.path.join(bird_path, 'syllable_data', 'phenotype_detailed')
-        syllable_db_path = os.path.join(bird_path, 'syllable_data', 'syllable_database', 'syllable_features.csv')
+        from song_phenotyping.tools.pipeline_paths import PHENOTYPE_DIR, STAGES_DIR
+        detailed_data_dir = os.path.join(bird_path, PHENOTYPE_DIR)
+        syllable_db_path = os.path.join(bird_path, STAGES_DIR, 'syllable_database', 'syllable_features.csv')
 
         if not os.path.exists(detailed_data_dir):
             logging.warning(f"No detailed phenotype data found: {detailed_data_dir}")
@@ -1230,7 +1234,8 @@ def load_detailed_phenotype_data(bird_path: str) -> Tuple[Optional[Dict], List[D
         Tuple of (manual_results, auto_results_list, clustering_results_list)
     """
     try:
-        detailed_data_dir = os.path.join(bird_path, 'syllable_data', 'phenotype_detailed')
+        from song_phenotyping.tools.pipeline_paths import PHENOTYPE_DIR
+        detailed_data_dir = os.path.join(bird_path, PHENOTYPE_DIR)
 
         if not os.path.exists(detailed_data_dir):
             logging.warning(f"No detailed phenotype data found: {detailed_data_dir}")

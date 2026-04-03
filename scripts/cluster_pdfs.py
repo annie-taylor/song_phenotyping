@@ -775,7 +775,8 @@ def create_cluster_pdfs_from_best_results(bird_path: str, bird_name: str,
         import pandas as pd
 
         # Load master summary to find best results
-        master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+        from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
+        master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
         if not os.path.exists(master_summary_path):
             return {'success': False, 'error': 'No master summary found'}
 
@@ -862,7 +863,7 @@ def batch_create_cluster_pdfs(project_directory: str, birds: List[str] = None) -
             if (item.is_dir() and
                     not item.name.startswith('.') and
                     item.name != 'copied_data' and
-                    (item / 'master_summary.csv').exists()):
+                    (item / 'results' / 'master_summary.csv').exists()):
                 birds.append(item.name)
 
     logger.info(f"Creating cluster PDFs for {len(birds)} birds")

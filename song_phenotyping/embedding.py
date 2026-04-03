@@ -244,7 +244,8 @@ def check_embedding_compatibility(embedding_path: str, current_n_samples: int,
 def inspect_existing_embeddings(bird_path: str) -> None:
     """Utility to inspect what embeddings already exist and their metadata"""
 
-    embeddings_path = os.path.join(bird_path, 'syllable_data', 'embeddings')
+    from song_phenotyping.tools.pipeline_paths import EMBEDDINGS_DIR
+    embeddings_path = os.path.join(bird_path, EMBEDDINGS_DIR)
 
     if not os.path.exists(embeddings_path):
         logger.info(f"📁 No embeddings directory found at {embeddings_path}")
@@ -756,14 +757,16 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
             n_neighbors_list = [5, 10, 20, 50, 100]
 
         # Setup paths
+        from song_phenotyping.tools.pipeline_paths import (
+            FEATURES_DIR, EMBEDDINGS_DIR, STAGES_DIR
+        )
         bird_path = os.path.join(save_path, bird)
-        data_path = os.path.join(bird_path, 'syllable_data')
 
         paths = {
-            'specs': os.path.join(data_path, 'flattened'),
-            'model': os.path.join(data_path, 'models'),
-            'embeddings': os.path.join(data_path, 'embeddings'),
-            'figures': os.path.join(bird_path, 'figures')
+            'specs':      os.path.join(bird_path, FEATURES_DIR),
+            'model':      os.path.join(bird_path, STAGES_DIR, 'models'),
+            'embeddings': os.path.join(bird_path, EMBEDDINGS_DIR),
+            'figures':    os.path.join(bird_path, 'figures'),
         }
 
         # Load data

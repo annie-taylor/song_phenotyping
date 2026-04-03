@@ -18,7 +18,7 @@ matplotlib.use('TkAgg')      # Cross-platform default
 
 def load_spectrogram_for_hash(hash_id: str, bird_path: str) -> np.ndarray:
     """Load spectrogram for a given hash ID."""
-    syllables_dir = os.path.join(bird_path, 'syllable_data', 'syllables')
+    syllables_dir = os.path.join(bird_path, 'stages', '01_specs')
 
     if not os.path.exists(syllables_dir):
         return None
@@ -75,7 +75,7 @@ def simple_interactive_umap(bird_path: str, color_by: str = 'auto'):
     print(f"🎨 Coloring by: {color_by}")
 
     # Load data
-    master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+    master_summary_path = os.path.join(bird_path, 'results', 'master_summary.csv')
     if not os.path.exists(master_summary_path):
         print(f"❌ No master summary found: {master_summary_path}")
         return False
@@ -88,7 +88,7 @@ def simple_interactive_umap(bird_path: str, color_by: str = 'auto'):
     metric = best_row['metric']
 
     embeddings_path = os.path.join(
-        bird_path, 'syllable_data', 'embeddings',
+        bird_path, 'stages', '03_embeddings',
         f'{metric}_{int(n_neighbors)}neighbors_{min_dist}dist.h5'
     )
 
@@ -101,7 +101,7 @@ def simple_interactive_umap(bird_path: str, color_by: str = 'auto'):
     cluster_filename = os.path.basename(str(best_row['label_path']))
     cluster_labels = None
 
-    for root, dirs, files in os.walk(os.path.join(bird_path, 'syllable_data', 'labelling')):
+    for root, dirs, files in os.walk(os.path.join(bird_path, 'stages', '04_labels')):
         if cluster_filename in files:
             with tables.open_file(os.path.join(root, cluster_filename), 'r') as f:
                 cluster_labels = f.root.labels.read()
@@ -261,7 +261,7 @@ def analyze_label_distribution(bird_path: str):
     print(f"📊 Label distribution analysis for {bird_name}")
 
     # Load data
-    master_summary_path = os.path.join(bird_path, 'master_summary.csv')
+    master_summary_path = os.path.join(bird_path, 'results', 'master_summary.csv')
     summary_df = pd.read_csv(master_summary_path)
     best_row = summary_df.iloc[0]
 
@@ -270,7 +270,7 @@ def analyze_label_distribution(bird_path: str):
     metric = best_row['metric']
 
     embeddings_path = os.path.join(
-        bird_path, 'syllable_data', 'embeddings',
+        bird_path, 'stages', '03_embeddings',
         f'{metric}_{int(n_neighbors)}neighbors_{min_dist}dist.h5'
     )
 
@@ -281,7 +281,7 @@ def analyze_label_distribution(bird_path: str):
     cluster_filename = os.path.basename(str(best_row['label_path']))
     cluster_labels = None
 
-    for root, dirs, files in os.walk(os.path.join(bird_path, 'syllable_data', 'labelling')):
+    for root, dirs, files in os.walk(os.path.join(bird_path, 'stages', '04_labels')):
         if cluster_filename in files:
             with tables.open_file(os.path.join(root, cluster_filename), 'r') as f:
                 cluster_labels = f.root.labels.read()

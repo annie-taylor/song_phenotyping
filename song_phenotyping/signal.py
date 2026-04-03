@@ -330,12 +330,14 @@ def split_long_syllables_with_mapping(onsets: np.ndarray, offsets: np.ndarray,
 
 def create_output_paths(save_path: str, bird: str) -> Dict[str, str]:
     """Create and return standardized output directory paths."""
+    from song_phenotyping.tools.pipeline_paths import SPECS_DIR, STAGES_DIR
+    bird_dir = os.path.join(save_path, bird)
     paths = {
-        'bird_dir': os.path.join(save_path, bird),
-        'syllables_dir': os.path.join(save_path, bird, 'syllable_data'),
-        'slices_dir': os.path.join(save_path, bird, 'slice_data'),
-        'syllable_specs_dir': os.path.join(save_path, bird, 'syllable_data', 'specs'),
-        'slice_specs_dir': os.path.join(save_path, bird, 'slice_data', 'specs'),
+        'bird_dir':          bird_dir,
+        'syllables_dir':     os.path.join(bird_dir, STAGES_DIR),
+        'slices_dir':        os.path.join(bird_dir, STAGES_DIR),
+        'syllable_specs_dir': os.path.join(bird_dir, SPECS_DIR),
+        'slice_specs_dir':   os.path.join(bird_dir, SPECS_DIR),
     }
 
     for path in paths.values():

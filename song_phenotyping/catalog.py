@@ -191,7 +191,8 @@ def _load_auto_labels_from_db(
 
 def _sorted_syllable_files(bird_path: Path) -> List[Tuple[Path, Dict]]:
     """Return syllable HDF5 files sorted chronologically."""
-    specs_dir = bird_path / 'syllable_data' / 'specs'
+    from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+    specs_dir = bird_path / SPECS_DIR
     if not specs_dir.exists():
         return []
     files = list(specs_dir.glob('syllables_*.h5'))
@@ -209,7 +210,8 @@ def _sorted_syllable_files(bird_path: Path) -> List[Tuple[Path, Dict]]:
 
 
 def _load_syllable_db(bird_path: Path) -> Optional[pd.DataFrame]:
-    csv = bird_path / 'syllable_data' / 'syllable_database' / 'syllable_features.csv'
+    from song_phenotyping.tools.pipeline_paths import STAGES_DIR
+    csv = bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
     if csv.exists():
         try:
             return pd.read_csv(csv)
@@ -410,9 +412,10 @@ def generate_song_catalog(
         Absolute path to the generated HTML file, or ``''`` on failure.
     """
     cfg = config or CatalogConfig()
+    from song_phenotyping.tools.pipeline_paths import CATALOG_DIR
     bird_path = Path(bird_path)
     bird_name = bird_path.name
-    out_dir = bird_path / 'syllable_data' / 'html'
+    out_dir = bird_path / CATALOG_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f'{bird_name}_song_catalog_rank{rank}.html'
 
@@ -570,9 +573,10 @@ def generate_syllable_type_catalog(
         Absolute path to the generated HTML file, or ``''`` on failure.
     """
     cfg = config or CatalogConfig()
+    from song_phenotyping.tools.pipeline_paths import CATALOG_DIR, SPECS_DIR
     bird_path = Path(bird_path)
     bird_name = bird_path.name
-    out_dir = bird_path / 'syllable_data' / 'html'
+    out_dir = bird_path / CATALOG_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
     src_tag = f'rank{rank}' if label_source == 'auto' else 'manual'
@@ -582,7 +586,7 @@ def generate_syllable_type_catalog(
         return str(out_path)
 
     syllable_db = _load_syllable_db(bird_path) if label_source == 'auto' else None
-    specs_dir   = bird_path / 'syllable_data' / 'specs'
+    specs_dir   = bird_path / SPECS_DIR
 
     if not specs_dir.exists():
         logger.warning(f'No specs directory for {bird_name}')
@@ -730,7 +734,8 @@ def generate_all_catalogs(
         results['syllable_types_auto'] = path
 
     # Manual labels only if they exist
-    specs_dir = Path(bird_path) / 'syllable_data' / 'specs'
+    from song_phenotyping.tools.pipeline_paths import SPECS_DIR
+    specs_dir = Path(bird_path) / SPECS_DIR
     has_manual = False
     for f in specs_dir.glob('syllables_*.h5') if specs_dir.exists() else []:
         try:
