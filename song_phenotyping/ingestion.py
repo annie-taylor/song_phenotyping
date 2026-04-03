@@ -305,6 +305,30 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                 logger.error(f"  💥 Error processing file {file}: {e}")
                 failed_files += 1
 
+    # Flat-directory fallback: handle data copied as <root>/<bird>/*.wav.not.mat
+    # without the <bird>/song/ subdirectory structure used on the server.
+    if not metadata_file_paths:
+        logger.info("  📂 No files found with song_or_call filter — "
+                    "trying flat-directory fallback (<root>/<bird>/*.wav.not.mat)")
+        _bird_pat = re.compile(r'\b[a-zA-Z]+\d+[a-zA-Z]*\d*\b')
+        for root, dirs, files in os.walk(seg_directory):
+            matching_files = [f for f in files if f.endswith(file_ext)]
+            if not matching_files:
+                continue
+            path_parts = root.split(os.sep)
+            bird = path_parts[-1]
+            if not _bird_pat.match(bird):
+                continue
+            if bird_subset is not None and bird not in bird_subset:
+                continue
+            if bird not in metadata_file_paths:
+                metadata_file_paths[bird] = []
+                audio_file_paths[bird] = []
+                logger.info(f"  🐦 [flat] bird: {bird}")
+            for f in matching_files:
+                metadata_file_paths[bird].append(os.path.join(root, f))
+            processed_files += len(matching_files)
+
     # Final summary
     total_birds = len(metadata_file_paths)
     total_files = sum(len(files) for files in metadata_file_paths.values())
@@ -452,6 +476,34 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     audio_file_paths = {}
     processed_files = 0
     failed_files = 0
+
+    # Flat-directory fallback: handle data copied as <root>/<bird>/*.wav + *.wav.not.mat
+    # without the batch.txt.keep structure used on the server.
+    if not batch_file_candidates:
+        logger.info("  📂 No batch files found — trying flat-directory fallback "
+                    "(<root>/<bird>/*.wav.not.mat)")
+        for root, dirs, files in os.walk(wav_directory):
+            not_mat_files = [f for f in files if f.endswith('.wav.not.mat')]
+            if not not_mat_files:
+                continue
+            path_parts = root.split(os.sep)
+            bird = next((p for p in path_parts if bird_pattern.match(p)), None)
+            if bird is None:
+                continue
+            if bird_subset is not None and bird not in bird_subset:
+                continue
+            for f in not_mat_files:
+                meta_path = os.path.join(root, f)
+                wav_path = meta_path.replace('.wav.not.mat', '.wav')
+                if os.path.isfile(wav_path):
+                    if bird not in birds:
+                        birds.append(bird)
+                        metadata_file_paths[bird] = []
+                        audio_file_paths[bird] = []
+                        logger.info(f"    🐦 Flat fallback — bird: {bird}")
+                    metadata_file_paths[bird].append(meta_path)
+                    audio_file_paths[bird].append(wav_path)
+                    processed_files += 1
 
     for batch_info in batch_file_candidates:
         try:
@@ -831,6 +883,11 @@ def resolve_audio_file_path(metadata_file_path: str, metadata_matfile: dict,
         try:
             fs = metadata_matfile.get('Fs', 32000.0)
             wseg_offset = (256 * 1000) / fs
+
+            # Prefer local copy: .wav file sitting next to the .wav.not.mat
+            local_sibling = metadata_file_path.replace('.wav.not.mat', '.wav')
+            if local_sibling != metadata_file_path and os.path.exists(local_sibling):
+                return local_sibling, wseg_offset
 
             # Try to get filename from metadata (handle both field names)
             fname = None
