@@ -285,16 +285,41 @@ def _run_catalog(bird_path: str, generate_catalog: bool, bird: str):
         print(f"[ Catalog ] Warning: catalog generation failed ({e}); pipeline output is still complete.")
 
 
-def _build_label_lookup(bird_path: str):
-    """Write stages/syllable_database/syllable_features.csv from Stage D output.
+def _build_label_lookup(bird_path: str, bird: str = None):
+    """Build syllable feature database at stages/syllable_database/.
 
-    Reads the rank-0 (best) label HDF5 via master_summary.csv, matches hashes
-    to each spec HDF5 file, and writes the minimal CSV that catalog.py needs
-    to render auto-label overlays.
+    Calls SyllableDatabase from scripts/syllable_database.py to produce the
+    full per-syllable acoustic feature set (~100 columns: temporal, spectral,
+    MFCC×26, F0, energy, context, clustering labels). Falls back to a minimal
+    2-column CSV if the full build fails, so the catalog keeps working.
+    """
+    import sys
+    scripts_dir = str(Path(__file__).parent / 'scripts')
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    try:
+        from syllable_database import SyllableDatabase
+        print("[ SyllableDB ] Building full acoustic feature database...")
+        db = SyllableDatabase(bird_path=bird_path, bird_name=bird)
+        success = db.build_database()
+        if success:
+            print("[ SyllableDB ] Done → stages/syllable_database/syllable_features.{csv,h5}")
+        else:
+            print("[ SyllableDB ] build_database() returned False; trying minimal fallback")
+            _build_label_lookup_minimal(bird_path)
+    except Exception as e:
+        print(f"[ SyllableDB ] Full build failed ({e}); falling back to minimal label lookup")
+        _build_label_lookup_minimal(bird_path)
+
+
+def _build_label_lookup_minimal(bird_path: str):
+    """Minimal fallback: write just song_file + cluster_rank0_label columns.
+
+    Used when the full SyllableDatabase build fails. Produces just enough for
+    catalog.py to render auto-label overlays.
     """
     import tables
     import pandas as pd
-    from pathlib import Path
     from song_phenotyping.tools.pipeline_paths import RESULTS_DIR, STAGES_DIR, SPECS_DIR
 
     master_csv = Path(bird_path) / RESULTS_DIR / 'master_summary.csv'
@@ -426,7 +451,7 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
     phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                    run_name=run_name)
 
-    _build_label_lookup(run_path)
+    _build_label_lookup(run_path, bird)
     _run_catalog(run_path, generate_catalog, bird)
     _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
@@ -506,7 +531,7 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
     phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                    run_name=run_name)
 
-    _build_label_lookup(run_path)
+    _build_label_lookup(run_path, bird)
     _run_catalog(run_path, generate_catalog, bird)
     _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
@@ -583,7 +608,7 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
-        _build_label_lookup(run_path)
+        _build_label_lookup(run_path, bird)
         _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 
@@ -676,7 +701,7 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
         phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
-        _build_label_lookup(run_path)
+        _build_label_lookup(run_path, bird)
         _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 
@@ -723,7 +748,7 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
         phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
-        _build_label_lookup(run_path)
+        _build_label_lookup(run_path, bird)
         _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 

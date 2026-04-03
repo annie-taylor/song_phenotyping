@@ -249,8 +249,6 @@ def _render_song_figure(
     ax.set_yticks([])
     ax.set_xlabel('Time (s)', fontsize=9)
 
-    used_manual, used_auto = set(), set()
-
     for i, (on, off) in enumerate(zip(onsets_ms, offsets_ms)):
         cx = (on + off) / 2 / 1000 - t_start_s
         if not (0 <= cx <= duration):
@@ -263,7 +261,6 @@ def _render_song_figure(
                         ha='center', va='bottom', color='black',
                         bbox=dict(facecolor=c, edgecolor='none', alpha=0.85,
                                   boxstyle='round,pad=0.15'))
-                used_manual.add(str(lbl))
         if auto_labels is not None and i < len(auto_labels):
             lbl = auto_labels[i]
             if int(lbl) >= 0:
@@ -272,24 +269,6 @@ def _render_song_figure(
                         ha='center', va='top', color='black',
                         bbox=dict(facecolor=c, edgecolor='none', alpha=0.85,
                                   boxstyle='round,pad=0.15'))
-                used_auto.add(str(lbl))
-
-    # Legend patches
-    legend_handles = []
-    if used_manual:
-        legend_handles += [
-            mpatches.Patch(color=_label_color(l), label=f'M:{l}')
-            for l in sorted(used_manual)
-        ]
-    if used_auto:
-        legend_handles += [
-            mpatches.Patch(color=_label_color(l), label=f'A:{l}')
-            for l in sorted(used_auto, key=lambda x: int(x))
-        ]
-    if legend_handles:
-        ax.legend(handles=legend_handles, loc='upper right',
-                  fontsize=7, ncol=min(len(legend_handles), 8),
-                  framealpha=0.7, handlelength=0.8)
 
     label_str = []
     if manual_labels is not None:

@@ -336,8 +336,8 @@ def create_output_paths(save_path: str, bird: str, run_name: str = "default") ->
     run_root_path = str(run_root(bird_root, run_name))
     paths = {
         'bird_dir':           bird_root,
-        'syllables_dir':      os.path.join(bird_root, STAGES_DIR),
-        'slices_dir':         os.path.join(bird_root, STAGES_DIR),
+        'syllables_dir':      os.path.join(run_root_path, STAGES_DIR),
+        'slices_dir':         os.path.join(run_root_path, STAGES_DIR),
         'syllable_specs_dir': specs_path,
         'slice_specs_dir':    specs_path,
         'run_root_dir':       run_root_path,

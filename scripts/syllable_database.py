@@ -105,9 +105,10 @@ class SyllableDatabase:
     and provides analysis tools for clustering validation.
     """
 
-    def __init__(self, bird_path: str, feature_params: FeatureExtractionParams = None):
+    def __init__(self, bird_path: str, feature_params: FeatureExtractionParams = None,
+                 bird_name: str = None):
         self.bird_path = bird_path
-        self.bird_name = os.path.basename(bird_path)
+        self.bird_name = bird_name if bird_name else os.path.basename(bird_path)
         from song_phenotyping.tools.pipeline_paths import SPECS_DIR, STAGES_DIR
         self.syllable_dir = os.path.join(bird_path, SPECS_DIR)
         self.database_dir = os.path.join(bird_path, STAGES_DIR, 'syllable_database')
