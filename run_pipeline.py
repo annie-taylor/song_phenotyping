@@ -58,12 +58,37 @@ MAX_WORKERS          = None   # None = all CPUs; int to cap Stage C + D parallel
 # Phenotyping / output (Stage E + catalog)
 GENERATE_CATALOG     = None   # None → True; False = skip HTML catalog generation
 GENERATE_PLOTS       = None   # None → True (phenotype summary figures)
+RUN_NAME             = None   # None = auto-compute from config hash; str to pin a name
 
 # ---------------------------------------------------------------------------
 # Config resolution helpers
 # ---------------------------------------------------------------------------
 
 _DEFAULT_METRICS = ['silhouette', 'dbi']   # ch removed from default
+
+
+def _compute_run_name(spec_cfg, emb_cfg, lab_cfg, pheno_cfg, songs_per_bird, songs_seed):
+    """Return an 8-char hex string (SHA256[:8]) that uniquely identifies the
+    computational configuration.  Non-computational knobs (max_workers,
+    generate_cluster_pdf, generate_plots) are excluded so that toggling them
+    does not produce a new run directory."""
+    import hashlib
+    import json
+
+    _EMB_SKIP  = {'max_workers'}
+    _LAB_SKIP  = {'max_workers', 'generate_cluster_pdf'}
+    _PHE_SKIP  = {'generate_plots'}
+
+    payload = {
+        'songs_per_bird': songs_per_bird,
+        'songs_seed':     songs_seed,
+        'spec':  dict(spec_cfg  or {}),
+        'emb':   {k: v for k, v in (emb_cfg  or {}).items() if k not in _EMB_SKIP},
+        'lab':   {k: v for k, v in (lab_cfg  or {}).items() if k not in _LAB_SKIP},
+        'pheno': {k: v for k, v in (pheno_cfg or {}).items() if k not in _PHE_SKIP},
+    }
+    serialized = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode()).hexdigest()[:8]
 
 
 def _load_pipeline_cfg():
@@ -117,6 +142,12 @@ def _load_pipeline_cfg():
         GENERATE_CATALOG if GENERATE_CATALOG is not None else p.generate_catalog
     )
 
+    # Run name: explicit override > config file > computed hash
+    run_name = RUN_NAME or getattr(p, 'run_name', None) or None
+    if run_name is None:
+        run_name = _compute_run_name(spec_cfg, emb_cfg, lab_cfg, pheno_cfg,
+                                     songs_per_bird, songs_seed)
+
     if save_path is None:
         raise ValueError(
             "save_path is not set. Add 'pipeline.save_path' to config.yaml "
@@ -130,6 +161,7 @@ def _load_pipeline_cfg():
         birds            = birds,
         songs_per_bird   = songs_per_bird,
         songs_seed       = songs_seed,
+        run_name         = run_name,
         spec_cfg         = spec_cfg,
         emb_cfg          = emb_cfg,
         lab_cfg          = lab_cfg,
@@ -298,77 +330,39 @@ def _build_label_lookup(bird_path: str):
     print(f"[ Catalog ] Label lookup: {len(rows)} syllables → stages/syllable_database/syllable_features.csv")
 
 
-def _migrate_legacy_outputs(bird_path: str):
-    """Move pre-existing out-of-place Stage D outputs into the canonical locations.
-
-    Moves ``figures/clusters/`` → ``results/plots/clusters/`` and the cluster
-    summary PDF from the bird root → ``results/plots/``.  Safe to call on every
-    run; does nothing when the legacy directories don't exist.
-    """
-    import shutil
-    from pathlib import Path
-    from song_phenotyping.tools.pipeline_paths import PLOTS_DIR
-
-    bird_root = Path(bird_path)
-
-    # Scatter plots: figures/clusters/ → results/plots/clusters/
-    old_clusters = bird_root / 'figures' / 'clusters'
-    new_clusters = bird_root / PLOTS_DIR / 'clusters'
-    if old_clusters.exists():
-        new_clusters.mkdir(parents=True, exist_ok=True)
-        moved = 0
-        for f in old_clusters.iterdir():
-            dest = new_clusters / f.name
-            if not dest.exists():
-                shutil.move(str(f), str(dest))
-                moved += 1
-        if moved:
-            print(f"[ Migrate ] Moved {moved} scatter plot(s): figures/clusters/ → results/plots/clusters/")
-        # Remove old dirs if now empty
-        try:
-            old_clusters.rmdir()
-            (bird_root / 'figures').rmdir()
-        except OSError:
-            pass
-
-    # Cluster summary PDF: bird root → results/plots/
-    bird_name = bird_root.name
-    old_pdf = bird_root / f'{bird_name}_cluster_summary.pdf'
-    if old_pdf.exists():
-        new_pdf = bird_root / PLOTS_DIR / old_pdf.name
-        new_pdf.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(old_pdf), str(new_pdf))
-        print(f"[ Migrate ] Moved cluster summary PDF → results/plots/")
-
-
 # ---------------------------------------------------------------------------
 # Single-bird pipeline runners
 # ---------------------------------------------------------------------------
 
 def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
                     songs_seed=None, spec_cfg=None, emb_cfg=None, lab_cfg=None,
-                    pheno_cfg=None, generate_catalog=True):
+                    pheno_cfg=None, generate_catalog=True, run_name=None):
     """Run stages A–E for a single evsonganaly bird."""
     from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
     from song_phenotyping.flattening import flatten_bird_spectrograms
     from song_phenotyping.embedding import explore_embedding_parameters_robust
     from song_phenotyping.labelling import label_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
 
     spec_cfg   = spec_cfg   or {}
     emb_cfg    = emb_cfg    or {}
     lab_cfg    = lab_cfg    or {}
     pheno_cfg  = pheno_cfg  or {}
 
+    if run_name is None:
+        run_name = _compute_run_name(spec_cfg, emb_cfg, lab_cfg, pheno_cfg,
+                                     songs_per_bird, songs_seed)
+
+    bird_root = str(Path(save_path) / bird)
+    run_path  = str(run_root(bird_root, run_name))
+
     print(f"\n{'='*60}")
     print(f"  Running pipeline for {bird} (evsonganaly)")
     print(f"  Source : {source_dir}")
-    print(f"  Output : {save_path}/{bird}")
+    print(f"  Run    : {run_name}  →  {run_path}")
     print(f"{'='*60}\n")
 
     spec_params = _build_spec_params(songs_per_bird, spec_cfg)
-    bird_path = str(Path(save_path) / bird)
-
-    _migrate_legacy_outputs(bird_path)
 
     print("[ A ] Saving spectrograms...")
     meta, audio = filepaths_from_evsonganaly(
@@ -381,14 +375,17 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
         songs_per_bird=songs_per_bird,
         params=spec_params,
         songs_seed=songs_seed,
+        run_name=run_name,
     )
 
     print("[ B ] Flattening spectrograms...")
-    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params)
+    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params,
+                              run_name=run_name)
 
     print("[ C ] Computing UMAP embeddings...")
     explore_embedding_parameters_robust(
         save_path=save_path, bird=bird,
+        run_name=run_name,
         max_workers=emb_cfg.get('max_workers'),
     )
 
@@ -396,6 +393,7 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
     label_bird(
         save_path=save_path,
         bird=bird,
+        run_name=run_name,
         metrics=lab_cfg.get('metrics', _DEFAULT_METRICS),
         metric_weights=lab_cfg.get('metric_weights'),
         replace_labels=lab_cfg.get('replace_labels', False),
@@ -406,40 +404,46 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
 
     print("[ E ] Phenotyping...")
     from song_phenotyping.phenotyping import phenotype_bird
-    phenotype_bird(bird_path=bird_path, config=_build_phenotype_config(pheno_cfg))
+    phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+                   run_name=run_name)
 
-    _build_label_lookup(bird_path)
-    _run_catalog(bird_path, generate_catalog)
-    _save_run_config(bird_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
+    _build_label_lookup(run_path)
+    _run_catalog(run_path, generate_catalog)
+    _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
-    print(f"\n[OK] Done. Outputs at: {bird_path}\n")
+    print(f"\n[OK] Done. Run outputs at: {run_path}\n")
 
 
 def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
              songs_seed=None, spec_cfg=None, emb_cfg=None, lab_cfg=None,
-             pheno_cfg=None, generate_catalog=True):
+             pheno_cfg=None, generate_catalog=True, run_name=None):
     """Run stages A–E for a single wseg bird."""
     from song_phenotyping.ingestion import filepaths_from_wseg, save_specs_for_wseg_birds
     from song_phenotyping.flattening import flatten_bird_spectrograms
     from song_phenotyping.embedding import explore_embedding_parameters_robust
     from song_phenotyping.labelling import label_bird
     from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
 
     spec_cfg   = spec_cfg   or {}
     emb_cfg    = emb_cfg    or {}
     lab_cfg    = lab_cfg    or {}
     pheno_cfg  = pheno_cfg  or {}
 
+    if run_name is None:
+        run_name = _compute_run_name(spec_cfg, emb_cfg, lab_cfg, pheno_cfg,
+                                     songs_per_bird, songs_seed)
+
+    bird_root = str(Path(save_path) / bird)
+    run_path  = str(run_root(bird_root, run_name))
+
     print(f"\n{'='*60}")
     print(f"  Running pipeline for {bird} (wseg)")
     print(f"  Metadata: {metadata_dir}")
-    print(f"  Output  : {save_path}/{bird}")
+    print(f"  Run     : {run_name}  →  {run_path}")
     print(f"{'='*60}\n")
 
     spec_params = _build_spec_params(songs_per_bird, spec_cfg)
-    bird_path = str(Path(save_path) / bird)
-
-    _migrate_legacy_outputs(bird_path)
 
     print("[ A ] Saving spectrograms...")
     meta, audio = filepaths_from_wseg(
@@ -452,14 +456,17 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
         songs_per_bird=songs_per_bird,
         params=spec_params,
         songs_seed=songs_seed,
+        run_name=run_name,
     )
 
     print("[ B ] Flattening spectrograms...")
-    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params)
+    flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params,
+                              run_name=run_name)
 
     print("[ C ] Computing UMAP embeddings...")
     explore_embedding_parameters_robust(
         save_path=save_path, bird=bird,
+        run_name=run_name,
         max_workers=emb_cfg.get('max_workers'),
     )
 
@@ -467,6 +474,7 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
     label_bird(
         save_path=save_path,
         bird=bird,
+        run_name=run_name,
         metrics=lab_cfg.get('metrics', _DEFAULT_METRICS),
         metric_weights=lab_cfg.get('metric_weights'),
         replace_labels=lab_cfg.get('replace_labels', False),
@@ -476,13 +484,14 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
     )
 
     print("[ E ] Phenotyping...")
-    phenotype_bird(bird_path=bird_path, config=_build_phenotype_config(pheno_cfg))
+    phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+                   run_name=run_name)
 
-    _build_label_lookup(bird_path)
-    _run_catalog(bird_path, generate_catalog)
-    _save_run_config(bird_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
+    _build_label_lookup(run_path)
+    _run_catalog(run_path, generate_catalog)
+    _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
-    print(f"\n[OK] Done. Outputs at: {bird_path}\n")
+    print(f"\n[OK] Done. Run outputs at: {run_path}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -490,12 +499,12 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
 # ---------------------------------------------------------------------------
 
 def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
-                       generate_catalog=True):
+                       generate_catalog=True, run_name: str = None):
     """Re-run Stages C→E from existing flattened features (stages/02_features/).
 
     Use when UMAP parameters have changed. Stages A and B are skipped.
 
-    Requires: ``stages/02_features/`` HDF5 files for each bird.
+    Requires: ``<bird>/runs/<run_name>/stages/02_features/`` HDF5 files.
 
     Parameters
     ----------
@@ -509,26 +518,32 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         Phenotyping overrides.
     generate_catalog : bool, optional
         Whether to regenerate HTML catalogs after Stage E.  Default ``True``.
+    run_name : str, optional
+        Run identifier to resume.  Must match the run whose features you want
+        to re-embed.  If ``None``, defaults to ``"default"``.
     """
     from song_phenotyping.embedding import explore_embedding_parameters_robust
     from song_phenotyping.labelling import label_bird
     from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
 
     lab_cfg   = lab_cfg   or {}
     pheno_cfg = pheno_cfg or {}
+    if run_name is None:
+        run_name = "default"
 
     if not birds:
         raise ValueError("run_from_embedding() requires an explicit birds list.")
 
     for bird in birds:
-        bird_path = str(Path(save_path) / bird)
-        print(f"\n[C→E] Re-running from embeddings for {bird}")
-
-        _migrate_legacy_outputs(bird_path)
+        bird_root = str(Path(save_path) / bird)
+        run_path  = str(run_root(bird_root, run_name))
+        print(f"\n[C→E] Re-running from embeddings for {bird}  (run={run_name})")
 
         print("[ C ] Computing UMAP embeddings...")
         explore_embedding_parameters_robust(
             save_path=save_path, bird=bird,
+            run_name=run_name,
             max_workers=lab_cfg.get('max_workers'),
         )
 
@@ -536,6 +551,7 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         label_bird(
             save_path=save_path,
             bird=bird,
+            run_name=run_name,
             metrics=lab_cfg.get('metrics', _DEFAULT_METRICS),
             metric_weights=lab_cfg.get('metric_weights'),
             replace_labels=lab_cfg.get('replace_labels', True),
@@ -545,17 +561,18 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         )
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=bird_path, config=_build_phenotype_config(pheno_cfg))
+        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+                       run_name=run_name)
 
-        _build_label_lookup(bird_path)
-        _run_catalog(bird_path, generate_catalog)
-        print(f"[OK] Done. Outputs at: {bird_path}")
+        _build_label_lookup(run_path)
+        _run_catalog(run_path, generate_catalog)
+        print(f"[OK] Done. Outputs at: {run_path}")
 
 
 def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
                        replace_labels=True, hdbscan_params=None,
                        generate_cluster_pdf=False, pheno_cfg=None,
-                       generate_catalog=True):
+                       generate_catalog=True, run_name: str = None):
     """Re-run Stages D→E from existing UMAP embeddings (stages/03_embeddings/).
 
     Use when clustering metrics or HDBSCAN parameters have changed.
@@ -598,6 +615,7 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
     """
     from song_phenotyping.labelling import label_bird
     from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
 
     if metrics is None:
         metrics = _DEFAULT_METRICS
@@ -613,15 +631,20 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
     if not birds:
         raise ValueError("run_from_labelling() requires an explicit birds list.")
 
+    if run_name is None:
+        run_name = "default"
+
     for bird in birds:
-        bird_path = str(Path(save_path) / bird)
-        print(f"\n[D→E] Re-running labelling + phenotyping for {bird}")
+        bird_root = str(Path(save_path) / bird)
+        run_path  = str(run_root(bird_root, run_name))
+        print(f"\n[D→E] Re-running labelling + phenotyping for {bird}  (run={run_name})")
         print(f"      metrics={metrics}  weights={metric_weights}  replace={replace_labels}")
 
         print("[ D ] Clustering / labelling...")
         label_bird(
             save_path=save_path,
             bird=bird,
+            run_name=run_name,
             metrics=metrics,
             metric_weights=metric_weights,
             replace_labels=replace_labels,
@@ -631,20 +654,23 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
         )
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=bird_path, config=_build_phenotype_config(pheno_cfg))
+        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+                       run_name=run_name)
 
-        _build_label_lookup(bird_path)
-        _run_catalog(bird_path, generate_catalog)
-        print(f"[OK] Done. Outputs at: {bird_path}")
+        _build_label_lookup(run_path)
+        _run_catalog(run_path, generate_catalog)
+        print(f"[OK] Done. Outputs at: {run_path}")
 
 
-def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog=True):
+def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog=True,
+                         run_name: str = None):
     """Re-run Stage E from existing cluster labels (stages/04_labels/).
 
     Use when phenotyping thresholds or plot settings have changed.
     Stages A through D are skipped.
 
-    Requires: ``stages/04_labels/`` and ``results/master_summary.csv`` for each bird.
+    Requires: ``<bird>/runs/<run_name>/stages/04_labels/`` and
+    ``<bird>/runs/<run_name>/results/master_summary.csv`` for each bird.
 
     Parameters
     ----------
@@ -656,24 +682,31 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
         Phenotyping overrides (min_syllable_proportion, dyad_threshold, etc.).
     generate_catalog : bool, optional
         Whether to regenerate HTML catalogs after Stage E.  Default ``True``.
+    run_name : str, optional
+        Run identifier to resume.  If ``None``, defaults to ``"default"``.
     """
     from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
 
     pheno_cfg = pheno_cfg or {}
+    if run_name is None:
+        run_name = "default"
 
     if not birds:
         raise ValueError("run_from_phenotyping() requires an explicit birds list.")
 
     for bird in birds:
-        bird_path = str(Path(save_path) / bird)
-        print(f"\n[E] Re-running phenotyping for {bird}")
+        bird_root = str(Path(save_path) / bird)
+        run_path  = str(run_root(bird_root, run_name))
+        print(f"\n[E] Re-running phenotyping for {bird}  (run={run_name})")
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=bird_path, config=_build_phenotype_config(pheno_cfg))
+        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+                       run_name=run_name)
 
-        _build_label_lookup(bird_path)
-        _run_catalog(bird_path, generate_catalog)
-        print(f"[OK] Done. Outputs at: {bird_path}")
+        _build_label_lookup(run_path)
+        _run_catalog(run_path, generate_catalog)
+        print(f"[OK] Done. Outputs at: {run_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +715,8 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
 
 def run_evsonganaly_cohort(save_path, evsong_source, birds, songs_per_bird,
                            songs_seed=None, spec_cfg=None, emb_cfg=None,
-                           lab_cfg=None, pheno_cfg=None, generate_catalog=True):
+                           lab_cfg=None, pheno_cfg=None, generate_catalog=True,
+                           run_name=None):
     """Run the full pipeline for all (or a filtered subset of) evsonganaly birds."""
     from song_phenotyping.ingestion import filepaths_from_evsonganaly
 
@@ -709,12 +743,14 @@ def run_evsonganaly_cohort(save_path, evsong_source, birds, songs_per_bird,
             lab_cfg=lab_cfg,
             pheno_cfg=pheno_cfg,
             generate_catalog=generate_catalog,
+            run_name=run_name,
         )
 
 
 def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
                     songs_seed=None, spec_cfg=None, emb_cfg=None,
-                    lab_cfg=None, pheno_cfg=None, generate_catalog=True):
+                    lab_cfg=None, pheno_cfg=None, generate_catalog=True,
+                    run_name=None):
     """Run the full pipeline for all (or a filtered subset of) wseg birds."""
     from song_phenotyping.ingestion import filepaths_from_wseg
 
@@ -741,6 +777,7 @@ def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
             lab_cfg=lab_cfg,
             pheno_cfg=pheno_cfg,
             generate_catalog=generate_catalog,
+            run_name=run_name,
         )
 
 
@@ -776,6 +813,7 @@ if __name__ == "__main__":
             lab_cfg          = cfg['lab_cfg'],
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
+            run_name         = cfg['run_name'],
         )
 
     if cfg['wseg_metadata']:
@@ -790,4 +828,5 @@ if __name__ == "__main__":
             lab_cfg          = cfg['lab_cfg'],
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
+            run_name         = cfg['run_name'],
         )
