@@ -697,7 +697,8 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
                                         memory_per_worker_gb: Optional[float] = None,
                                         auto_memory_management: bool = True,
                                         subsample_seed: int = 42,
-                                        run_name: str = "default") -> bool:
+                                        run_name: str = "default",
+                                        max_workers: Optional[int] = None) -> bool:
     """Compute UMAP embeddings over a parameter grid for one bird (Stage C entry point).
 
     Loads Stage B flattened spectrograms, optionally subsamples them to fit
@@ -820,7 +821,8 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
                 n_samples=len(labels),
                 n_features=specs.shape[0],
                 max_n_neighbors=max(n_neighbors_list),
-                memory_per_worker_gb=memory_per_worker_gb
+                memory_per_worker_gb=memory_per_worker_gb,
+                max_workers=max_workers,
             )
 
             # Additional safety check: if we have very few workers, consider sequential processing
