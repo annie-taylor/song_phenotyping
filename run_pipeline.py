@@ -113,7 +113,7 @@ def _load_pipeline_cfg():
     if DURATION_FEATURE_WEIGHT is not None:
         spec_cfg['duration_feature_weight'] = DURATION_FEATURE_WEIGHT
 
-    # Embedding overrides (Stage C)
+    # Embedding overrides (Stage C) -- shouldn't we also override parameter changes?
     emb_cfg = dict(p.embedding_params or {})
     if MAX_WORKERS is not None:
         emb_cfg['max_workers'] = MAX_WORKERS
@@ -253,14 +253,33 @@ def _save_run_config(bird_path: str, bird: str, spec_params, lab_cfg: dict,
     rc.save(json_path)
 
 
-def _run_catalog(bird_path: str, generate_catalog: bool):
-    """Call generate_all_catalogs() if requested."""
+def _run_catalog(bird_path: str, generate_catalog: bool, bird: str):
+    """Call generate_all_catalogs() if requested, then rename hash-named files to bird name.
+
+    ``catalog.py`` names output files using ``Path(bird_path).name``.  When
+    ``bird_path`` is a run directory (e.g. ``<bird>/d5dfde49/``), that
+    resolves to the hash rather than the bird name.  This function renames
+    any ``<hash>_*.html`` files to ``<bird>_*.html`` after generation.
+    """
     if not generate_catalog:
         return
     try:
         from song_phenotyping.catalog import generate_all_catalogs
+        from song_phenotyping.tools.pipeline_paths import CATALOG_DIR
         print("[ Catalog ] Generating HTML catalogs...")
         generate_all_catalogs(bird_path=str(bird_path))
+        # Rename hash-named HTML files to bird-named ones
+        run_path_obj = Path(bird_path)
+        hash_name = run_path_obj.name
+        if hash_name != bird:
+            catalog_dir = run_path_obj / CATALOG_DIR
+            if catalog_dir.exists():
+                renamed = 0
+                for f in catalog_dir.glob(f'{hash_name}_*.html'):
+                    f.rename(f.parent / f.name.replace(hash_name, bird, 1))
+                    renamed += 1
+                if renamed:
+                    print(f"[ Catalog ] Renamed {renamed} file(s): {hash_name}_* → {bird}_*")
         print(f"[ Catalog ] HTML catalogs written to {bird_path}/results/catalog/")
     except Exception as e:
         print(f"[ Catalog ] Warning: catalog generation failed ({e}); pipeline output is still complete.")
@@ -404,11 +423,11 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
 
     print("[ E ] Phenotyping...")
     from song_phenotyping.phenotyping import phenotype_bird
-    phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+    phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                    run_name=run_name)
 
     _build_label_lookup(run_path)
-    _run_catalog(run_path, generate_catalog)
+    _run_catalog(run_path, generate_catalog, bird)
     _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
     print(f"\n[OK] Done. Run outputs at: {run_path}\n")
@@ -484,11 +503,11 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
     )
 
     print("[ E ] Phenotyping...")
-    phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+    phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                    run_name=run_name)
 
     _build_label_lookup(run_path)
-    _run_catalog(run_path, generate_catalog)
+    _run_catalog(run_path, generate_catalog, bird)
     _save_run_config(run_path, bird, spec_params, lab_cfg, pheno_cfg, generate_catalog)
 
     print(f"\n[OK] Done. Run outputs at: {run_path}\n")
@@ -561,11 +580,11 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         )
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+        phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
         _build_label_lookup(run_path)
-        _run_catalog(run_path, generate_catalog)
+        _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 
 
@@ -654,11 +673,11 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
         )
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+        phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
         _build_label_lookup(run_path)
-        _run_catalog(run_path, generate_catalog)
+        _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 
 
@@ -701,11 +720,11 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
         print(f"\n[E] Re-running phenotyping for {bird}  (run={run_name})")
 
         print("[ E ] Phenotyping...")
-        phenotype_bird(bird_path=run_path, config=_build_phenotype_config(pheno_cfg),
+        phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
                        run_name=run_name)
 
         _build_label_lookup(run_path)
-        _run_catalog(run_path, generate_catalog)
+        _run_catalog(run_path, generate_catalog, bird)
         print(f"[OK] Done. Outputs at: {run_path}")
 
 

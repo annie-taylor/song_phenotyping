@@ -30,7 +30,8 @@ from conftest import (
 )
 from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 from song_phenotyping.tools.pipeline_paths import (
-    run_stage_path, run_root, SPECS_DIR, FEATURES_DIR, EMBEDDINGS_DIR, LABELS_DIR, PHENOTYPE_DIR
+    run_stage_path, run_root, SPECS_DIR, FEATURES_DIR, EMBEDDINGS_DIR,
+    LABELS_DIR, PHENOTYPE_DIR, CATALOG_DIR,
 )
 
 # Minimal params to keep smoke tests fast
@@ -317,3 +318,55 @@ class TestStageE:
         phenotype = data['phenotype_results']
         for key in ("bird_name", "vocabulary", "transition_matrix"):
             assert key in phenotype, f"Missing key '{key}' in phenotype_results"
+
+
+# ---------------------------------------------------------------------------
+# Catalog — label lookup + HTML generation
+# ---------------------------------------------------------------------------
+
+class TestCatalog:
+
+    def _run_abcd_evsong(self, evsong_source_dir, out_dir):
+        from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
+        from song_phenotyping.flattening import flatten_bird_spectrograms
+        from song_phenotyping.embedding import explore_embedding_parameters_robust
+        from song_phenotyping.labelling import label_bird, HDBSCANParams
+        meta, audio = filepaths_from_evsonganaly(
+            wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
+        )
+        save_specs_for_evsonganaly_birds(meta, audio, str(out_dir),
+                                         songs_per_bird=3, params=_SPEC_PARAMS, run_name=_RUN_NAME)
+        flatten_bird_spectrograms(str(out_dir), EVSONG_BIRD, run_name=_RUN_NAME)
+        explore_embedding_parameters_robust(str(out_dir), EVSONG_BIRD,
+                                            min_dists=_MIN_DISTS,
+                                            n_neighbors_list=_N_NEIGHBORS,
+                                            use_parallel=False,
+                                            run_name=_RUN_NAME)
+        label_bird(
+            save_path=str(out_dir),
+            bird=EVSONG_BIRD,
+            metrics=_METRICS,
+            hdbscan_params=[HDBSCANParams(min_cluster_size=5, min_samples=3).to_dict()],
+            run_name=_RUN_NAME,
+        )
+
+    @requires_evsong
+    def test_catalog_produces_html(self, evsong_source_dir, evsong_bird_dir):
+        """_build_label_lookup + _run_catalog write correctly named HTML files."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from run_pipeline import _build_label_lookup, _run_catalog
+
+        self._run_abcd_evsong(evsong_source_dir, evsong_bird_dir)
+
+        run_path = str(run_root(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME))
+        _build_label_lookup(run_path)
+        _run_catalog(run_path, generate_catalog=True, bird=EVSONG_BIRD)
+
+        catalog_dir = Path(run_path) / CATALOG_DIR
+        assert catalog_dir.exists(), f"Catalog directory not created: {catalog_dir}"
+        html_files = list(catalog_dir.glob(f'{EVSONG_BIRD}_*.html'))
+        assert html_files, (
+            f"No HTML files named '{EVSONG_BIRD}_*.html' in {catalog_dir}. "
+            f"Files present: {[f.name for f in catalog_dir.iterdir()]}"
+        )
