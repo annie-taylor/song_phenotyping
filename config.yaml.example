@@ -48,6 +48,12 @@ pipeline:
   # list  → process only the named birds, e.g. [or18or24, bu78bu77]
   birds: null
 
+  # Run name — the subdirectory under <bird>/runs/ that holds all stage outputs.
+  # null = auto-compute an 8-char hex hash from all computational parameters.
+  #        Changing any param produces a new directory; same params reuses it.
+  # str  = pin a fixed name (e.g. "baseline") across all runs regardless of params.
+  run_name: null
+
   # Maximum songs to process per bird (null = all songs).
   # Use a small number (e.g. 5–30) for quick smoke tests.
   songs_per_bird: 30
