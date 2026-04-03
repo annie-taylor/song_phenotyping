@@ -38,7 +38,7 @@ SETUP.md                   # machine setup + config reference + re-entry guide
 tests/test_smoke.py        # end-to-end smoke test with a synthetic bird
 docs/
   PROJECT_REFERENCE.md     # this file
-  HANDOFF.md               # current session handoff (update at end of each session)
+  HANDOFF_TEMPLATE.md      # blank handoff template — copy to history/ and fill in at end of session
   history/                 # archived handoffs, one per major session
 ```
 
@@ -96,18 +96,18 @@ docs/
 ## Session workflow
 
 **Start of session** — paste into your first message:
-> "Read `docs/HANDOFF.md` and `docs/PROJECT_REFERENCE.md` before we begin."
+> "Read `docs/HANDOFF_TEMPLATE.md` and `docs/PROJECT_REFERENCE.md` before we begin."
 
 **End of session** — four steps:
-1. Write the session summary into the blank `docs/HANDOFF.md`.
+1. Write the session summary into the blank `docs/HANDOFF_TEMPLATE.md`.
 2. Copy it to `docs/history/YYYY-MM-DD_short_description.md`.
-3. Reset `docs/HANDOFF.md` to the blank template (see below).
+3. Reset `docs/HANDOFF_TEMPLATE.md` to the blank template (see below).
 4. Update `docs/PROJECT_REFERENCE.md` if any architecture decisions changed.
 5. Commit all changes.
 
-`docs/HANDOFF.md` should always be the blank template between sessions — a filled-in file is a signal the end-of-session steps weren't completed.
+`docs/HANDOFF_TEMPLATE.md` should always be the blank template between sessions — a filled-in file is a signal the end-of-session steps weren't completed.
 
-**Blank template for `docs/HANDOFF.md`:**
+**Blank template for `docs/HANDOFF_TEMPLATE.md`:**
 ```markdown
 ## State as of [date]
 
