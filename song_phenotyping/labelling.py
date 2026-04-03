@@ -1656,7 +1656,8 @@ def remove_directory(path: str):
 
 def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = False,
                hdbscan_params: list = None, top_n_for_pdf: int = 20,
-               generate_cluster_pdf: bool = False, metric_weights: dict = None):
+               generate_cluster_pdf: bool = False, metric_weights: dict = None,
+               max_workers: int = None):
     """Run the complete Stage D labelling pipeline for one bird.
 
     Iterates over all UMAP embedding files produced by Stage C, searches a
@@ -1708,12 +1709,12 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         # Setup paths
         from song_phenotyping.tools.pipeline_paths import (
-            EMBEDDINGS_DIR, LABELS_DIR, RESULTS_DIR
+            EMBEDDINGS_DIR, LABELS_DIR, RESULTS_DIR, PLOTS_DIR
         )
         bird_path = os.path.join(save_path, bird)
         labelling_path = os.path.join(bird_path, LABELS_DIR)
         embedding_path = os.path.join(bird_path, EMBEDDINGS_DIR)
-        figure_path = os.path.join(bird_path, 'figures', 'clusters')
+        figure_path = os.path.join(bird_path, PLOTS_DIR, 'clusters')
 
         # Create directories
         os.makedirs(figure_path, exist_ok=True)
@@ -1785,7 +1786,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                     true_labels=labels,
                     metrics=metrics,
                     sample_size=sample_size,
-                    use_parallel=True
+                    use_parallel=True,
+                    max_workers=max_workers,
                 )
 
                 # Add UMAP parameters to summary
@@ -1802,51 +1804,51 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
                 logger.error(f"Error processing {embedding_file} for bird {bird}: {e}")
                 continue
 
-            if not all_summaries:
-                logger.error(f"No valid embeddings processed for bird {bird}")
-                return False
+        if not all_summaries:
+            logger.error(f"No valid embeddings processed for bird {bird}")
+            return False
 
-                # Combine all summaries
-            master_summary_df = pd.concat(all_summaries, ignore_index=True)
+        # Combine all summaries
+        master_summary_df = pd.concat(all_summaries, ignore_index=True)
 
-            # Compute composite scores across all parameter combinations
-            master_summary_df = compute_composite_score(
+        # Compute composite scores across all parameter combinations
+        master_summary_df = compute_composite_score(
+            master_summary_df,
+            metrics=metrics,
+            n_syls=master_summary_df['n_syls'].tolist(),
+            weights=metric_weights,
+            use_cluster_penalty=False,
+        )
+
+        # Reorder columns and sort by performance
+        master_summary_df = reorder_columns(master_summary_df, metrics)
+
+        # Sort by primary metric (NMI if available, otherwise composite score)
+        if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
+            master_summary_df = master_summary_df.sort_values('nmi', ascending=False)
+        else:
+            master_summary_df = master_summary_df.sort_values('composite_score', ascending=False)
+
+        master_summary_df = master_summary_df.reset_index(drop=True)
+
+        # Save master summary
+        if not save_master_summary(master_summary_df, bird_path):
+            logger.error(f"Failed to save master summary for bird {bird}")
+            return False
+
+        # Create PDF report (opt-in: set generate_cluster_pdf=True to enable)
+        if generate_cluster_pdf:
+            pdf_success = create_cluster_summary_pdf(
                 master_summary_df,
-                metrics=metrics,
-                n_syls=master_summary_df['n_syls'].tolist(),
-                weights=metric_weights,
-                use_cluster_penalty=False,
+                bird=bird,
+                save_path=os.path.join(bird_path, PLOTS_DIR),
+                top_n=top_n_for_pdf
             )
+            if not pdf_success:
+                logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
 
-            # Reorder columns and sort by performance
-            master_summary_df = reorder_columns(master_summary_df, metrics)
-
-            # Sort by primary metric (NMI if available, otherwise composite score)
-            if 'nmi' in metrics and 'nmi' in master_summary_df.columns:
-                master_summary_df = master_summary_df.sort_values('nmi', ascending=False)
-            else:
-                master_summary_df = master_summary_df.sort_values('composite_score', ascending=False)
-
-            master_summary_df = master_summary_df.reset_index(drop=True)
-
-            # Save master summary
-            if not save_master_summary(master_summary_df, bird_path):
-                logger.error(f"Failed to save master summary for bird {bird}")
-                return False
-
-            # Create PDF report (opt-in: set generate_cluster_pdf=True to enable)
-            if generate_cluster_pdf:
-                pdf_success = create_cluster_summary_pdf(
-                    master_summary_df,
-                    bird=bird,
-                    save_path=bird_path,
-                    top_n=top_n_for_pdf
-                )
-                if not pdf_success:
-                    logger.warning(f"PDF creation failed for bird {bird}, but pipeline completed")
-
-            logger.info(f"Successfully completed labeling pipeline for bird {bird}")
-            return True
+        logger.info(f"Successfully completed labeling pipeline for bird {bird}")
+        return True
 
     except Exception as e:
         logger.error(f"Error in labeling pipeline for bird {bird}: {e}")
@@ -1977,19 +1979,22 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
         for bird_name in birds_to_clear:
             bird_path = os.path.join(save_path, bird_name)
 
-            from song_phenotyping.tools.pipeline_paths import LABELS_DIR, RESULTS_DIR
+            from song_phenotyping.tools.pipeline_paths import LABELS_DIR, RESULTS_DIR, PLOTS_DIR
             # Labelling directory (contains all cluster labels)
             labelling_path = os.path.join(bird_path, LABELS_DIR)
             if os.path.exists(labelling_path):
                 paths_to_remove.append(('labelling', labelling_path))
                 for root, dirs, files in os.walk(labelling_path):
                     total_items += len(files)
-            # Cluster figures directory
-            cluster_figures_path = os.path.join(bird_path, 'figures', 'clusters')
-            if os.path.exists(cluster_figures_path):
-                paths_to_remove.append(('cluster_figures', cluster_figures_path))
-                for root, dirs, files in os.walk(cluster_figures_path):
-                    total_items += len(files)
+            # Cluster figures directory (check both new and legacy locations)
+            for cluster_figures_path in [
+                os.path.join(bird_path, PLOTS_DIR, 'clusters'),
+                os.path.join(bird_path, 'figures', 'clusters'),
+            ]:
+                if os.path.exists(cluster_figures_path):
+                    paths_to_remove.append(('cluster_figures', cluster_figures_path))
+                    for root, dirs, files in os.walk(cluster_figures_path):
+                        total_items += len(files)
 
             # Master summary CSV
             master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
@@ -1997,11 +2002,14 @@ def clear_clustering_outputs(save_path: str, bird: str = None, confirm: bool = T
                 paths_to_remove.append(('master_summary', master_summary_path))
                 total_items += 1
 
-            # PDF report
-            pdf_path = os.path.join(bird_path, f'{bird_name}_cluster_summary.pdf')
-            if os.path.exists(pdf_path):
-                paths_to_remove.append(('pdf_report', pdf_path))
-                total_items += 1
+            # PDF report (check both new and legacy locations)
+            for pdf_path in [
+                os.path.join(bird_path, PLOTS_DIR, f'{bird_name}_cluster_summary.pdf'),
+                os.path.join(bird_path, f'{bird_name}_cluster_summary.pdf'),
+            ]:
+                if os.path.exists(pdf_path):
+                    paths_to_remove.append(('pdf_report', pdf_path))
+                    total_items += 1
 
         if not paths_to_remove:
             logger.info("No clustering outputs found to clear")

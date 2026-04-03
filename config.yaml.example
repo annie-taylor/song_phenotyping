@@ -89,6 +89,10 @@ pipeline:
     # Grid-search values — all combinations are tried; best is selected
     n_neighbors_grid: [5, 10, 20, 50, 100]
     min_dist_grid: [0.01, 0.05, 0.1, 0.3, 0.5]
+    # Maximum parallel workers for Stage C UMAP grid search.
+    # null = let the memory-aware adaptive calculation decide (recommended).
+    # Set an integer (e.g. 4) to cap the worker count on machines with many CPUs.
+    max_workers: null
 
   # ---------------------------------------------------------------------------
   # Stage D — labelling / clustering parameters
@@ -110,6 +114,10 @@ pipeline:
     #   min_cluster_size: [10, 30]
     #   min_samples: [5, 10]
     generate_cluster_pdf: false # true = write a PDF report of top clusterings
+    # Maximum parallel workers for Stage D HDBSCAN parameter search.
+    # null = all available CPUs (capped at number of parameter combinations).
+    # Set an integer (e.g. 4) to limit CPU usage on shared machines.
+    max_workers: null
 
   # ---------------------------------------------------------------------------
   # Stage E — phenotyping parameters
