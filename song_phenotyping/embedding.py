@@ -696,7 +696,8 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
                                         max_samples: Optional[int] = None,
                                         memory_per_worker_gb: Optional[float] = None,
                                         auto_memory_management: bool = True,
-                                        subsample_seed: int = 42) -> bool:
+                                        subsample_seed: int = 42,
+                                        run_name: str = "default") -> bool:
     """Compute UMAP embeddings over a parameter grid for one bird (Stage C entry point).
 
     Loads Stage B flattened spectrograms, optionally subsamples them to fit
@@ -758,14 +759,14 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
 
         # Setup paths
         from song_phenotyping.tools.pipeline_paths import (
-            FEATURES_DIR, EMBEDDINGS_DIR, STAGES_DIR
+            FEATURES_DIR, EMBEDDINGS_DIR, STAGES_DIR, run_stage_path, run_root
         )
         bird_path = os.path.join(save_path, bird)
 
         paths = {
-            'specs':      os.path.join(bird_path, FEATURES_DIR),
-            'model':      os.path.join(bird_path, STAGES_DIR, 'models'),
-            'embeddings': os.path.join(bird_path, EMBEDDINGS_DIR),
+            'specs':      str(run_stage_path(bird_path, run_name, FEATURES_DIR)),
+            'model':      str(run_root(bird_path, run_name) / STAGES_DIR / 'models'),
+            'embeddings': str(run_stage_path(bird_path, run_name, EMBEDDINGS_DIR)),
             'figures':    os.path.join(bird_path, 'figures'),
         }
 

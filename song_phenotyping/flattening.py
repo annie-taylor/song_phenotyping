@@ -51,7 +51,7 @@ def extract_song_id(filepath: str) -> str:
     return stem.replace("syllables_", "")
 
 
-def create_flattened_output_path(bird_root: str, song_id: str) -> str:
+def create_flattened_output_path(bird_root: str, song_id: str, run_name: str = "default") -> str:
     """Build the output path for a flattened HDF5 file, creating the directory.
 
     Parameters
@@ -60,14 +60,16 @@ def create_flattened_output_path(bird_root: str, song_id: str) -> str:
         Bird root directory (e.g. ``<save_path>/<bird>``).
     song_id : str
         Song identifier (from :func:`extract_song_id`).
+    run_name : str, optional
+        Run identifier; output goes under ``runs/<run_name>/``.
 
     Returns
     -------
     str
-        Full path ``<bird_root>/stages/02_features/flattened_<song_id>.h5``.
+        Full path ``<bird_root>/runs/<run_name>/stages/02_features/flattened_<song_id>.h5``.
     """
-    from song_phenotyping.tools.pipeline_paths import FEATURES_DIR
-    flattened_dir = os.path.join(bird_root, FEATURES_DIR)
+    from song_phenotyping.tools.pipeline_paths import run_stage_path, FEATURES_DIR
+    flattened_dir = str(run_stage_path(bird_root, run_name, FEATURES_DIR))
     os.makedirs(flattened_dir, exist_ok=True)
     return os.path.join(flattened_dir, f"flattened_{song_id}.h5")
 
@@ -232,6 +234,7 @@ def process_single_syllable_file(
     filepath: str,
     bird_root: str,
     duration_feature_weight: float = 0.0,
+    run_name: str = "default",
 ) -> bool:
     """Flatten one Stage A HDF5 file and write the result.
 
@@ -258,7 +261,7 @@ def process_single_syllable_file(
         logging.debug(f"Processing {filepath} ({file_size:.1f} MB)")
 
         song_id = extract_song_id(filepath)
-        output_path = create_flattened_output_path(bird_root, song_id)
+        output_path = create_flattened_output_path(bird_root, song_id, run_name=run_name)
 
         if os.path.exists(output_path):
             logging.debug(f"Flattened file already exists, skipping: {output_path}")
@@ -309,7 +312,7 @@ def find_syllable_files(syllables_dir: str) -> List[str]:
 # Public API
 # ---------------------------------------------------------------------------
 
-def flatten_bird_spectrograms(directory: str, bird: str, params=None) -> bool:
+def flatten_bird_spectrograms(directory: str, bird: str, params=None, run_name: str = "default") -> bool:
     """Flatten all Stage A spectrograms for one bird (Stage B entry point).
 
     Reads every ``syllables_*.h5`` file from
@@ -353,10 +356,11 @@ def flatten_bird_spectrograms(directory: str, bird: str, params=None) -> bool:
     duration_feature_weight = getattr(params, "duration_feature_weight", 0.0) or 0.0
 
     try:
-        from song_phenotyping.tools.pipeline_paths import SPECS_DIR, FEATURES_DIR
+        from song_phenotyping.tools.pipeline_paths import run_stage_path, SPECS_DIR, FEATURES_DIR
         bird_folder = os.path.join(directory, bird)
-        syllables_path = os.path.join(bird_folder, SPECS_DIR)
-        os.makedirs(os.path.join(bird_folder, FEATURES_DIR), exist_ok=True)
+        syllables_path = str(run_stage_path(bird_folder, run_name, SPECS_DIR))
+        features_path = str(run_stage_path(bird_folder, run_name, FEATURES_DIR))
+        os.makedirs(features_path, exist_ok=True)
 
         syllable_files = find_syllable_files(syllables_path)
         if not syllable_files:
@@ -368,7 +372,7 @@ def flatten_bird_spectrograms(directory: str, bird: str, params=None) -> bool:
         logging.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
 
         success_count = sum(
-            process_single_syllable_file(fp, bird_folder, duration_feature_weight=duration_feature_weight)
+            process_single_syllable_file(fp, bird_folder, duration_feature_weight=duration_feature_weight, run_name=run_name)
             for fp in tqdm(syllable_files, desc=f"Flattening {bird}")
         )
 

@@ -29,6 +29,9 @@ from conftest import (
     requires_evsong, requires_wseg,
 )
 from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
+from song_phenotyping.tools.pipeline_paths import (
+    run_stage_path, run_root, SPECS_DIR, FEATURES_DIR, EMBEDDINGS_DIR, LABELS_DIR, PHENOTYPE_DIR
+)
 
 # Minimal params to keep smoke tests fast
 _SPEC_PARAMS  = SpectrogramParams(songs_per_bird=3)
@@ -36,6 +39,7 @@ _SPEC_PARAMS  = SpectrogramParams(songs_per_bird=3)
 _MIN_DISTS      = [0.3]
 _N_NEIGHBORS    = [5]
 _METRICS        = ['silhouette', 'dbi', 'ch']
+_RUN_NAME       = "test_run"
 
 
 # ---------------------------------------------------------------------------
@@ -85,9 +89,10 @@ class TestStageA:
             save_path=str(evsong_bird_dir),
             songs_per_bird=_SPEC_PARAMS.songs_per_bird,
             params=_SPEC_PARAMS,
+            run_name=_RUN_NAME,
         )
 
-        specs_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "01_specs"
+        specs_dir = run_stage_path(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME, SPECS_DIR)
         assert specs_dir.exists(), f"specs dir not created: {specs_dir}"
         h5_files = list(specs_dir.glob("syllables_*.h5"))
         assert len(h5_files) > 0, "No syllable HDF5 files produced"
@@ -122,9 +127,10 @@ class TestStageA:
             save_path=str(wseg_bird_dir),
             songs_per_bird=_SPEC_PARAMS.songs_per_bird,
             params=_SPEC_PARAMS,
+            run_name=_RUN_NAME,
         )
 
-        specs_dir = wseg_bird_dir / WSEG_BIRD / "stages" / "01_specs"
+        specs_dir = run_stage_path(wseg_bird_dir / WSEG_BIRD, _RUN_NAME, SPECS_DIR)
         assert specs_dir.exists(), f"specs dir not created: {specs_dir}"
         h5_files = list(specs_dir.glob("syllables_*.h5"))
         assert len(h5_files) > 0, "No syllable HDF5 files produced"
@@ -146,7 +152,7 @@ class TestStageB:
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
         save_specs_for_evsonganaly_birds(meta, audio, str(out_dir),
-                                         songs_per_bird=3, params=_SPEC_PARAMS)
+                                         songs_per_bird=3, params=_SPEC_PARAMS, run_name=_RUN_NAME)
 
     @requires_evsong
     def test_flatten_produces_h5(self, evsong_source_dir, evsong_bird_dir):
@@ -155,11 +161,11 @@ class TestStageB:
         self._run_a_evsong(evsong_source_dir, evsong_bird_dir)
 
         result = flatten_bird_spectrograms(
-            directory=str(evsong_bird_dir), bird=EVSONG_BIRD
+            directory=str(evsong_bird_dir), bird=EVSONG_BIRD, run_name=_RUN_NAME
         )
         assert result is True, "flatten_bird_spectrograms returned False"
 
-        flat_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "02_features"
+        flat_dir = run_stage_path(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME, FEATURES_DIR)
         assert flat_dir.exists()
         h5_files = list(flat_dir.glob("flattened_*.h5"))
         assert len(h5_files) > 0, "No flattened HDF5 files produced"
@@ -186,8 +192,8 @@ class TestStageC:
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
         save_specs_for_evsonganaly_birds(meta, audio, str(out_dir),
-                                         songs_per_bird=3, params=_SPEC_PARAMS)
-        flatten_bird_spectrograms(str(out_dir), EVSONG_BIRD)
+                                         songs_per_bird=3, params=_SPEC_PARAMS, run_name=_RUN_NAME)
+        flatten_bird_spectrograms(str(out_dir), EVSONG_BIRD, run_name=_RUN_NAME)
 
     @requires_evsong
     def test_embedding_produces_pkl(self, evsong_source_dir, evsong_bird_dir):
@@ -201,9 +207,10 @@ class TestStageC:
             min_dists=_MIN_DISTS,
             n_neighbors_list=_N_NEIGHBORS,
             use_parallel=False,
+            run_name=_RUN_NAME,
         )
 
-        embed_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "03_embeddings"
+        embed_dir = run_stage_path(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME, EMBEDDINGS_DIR)
         assert embed_dir.exists(), f"Embeddings dir not created: {embed_dir}"
         h5_files = list(embed_dir.glob("*.h5"))
         assert len(h5_files) > 0, "No embedding files produced"
@@ -229,12 +236,13 @@ class TestStageD:
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
         save_specs_for_evsonganaly_birds(meta, audio, str(out_dir),
-                                         songs_per_bird=3, params=_SPEC_PARAMS)
-        flatten_bird_spectrograms(str(out_dir), EVSONG_BIRD)
+                                         songs_per_bird=3, params=_SPEC_PARAMS, run_name=_RUN_NAME)
+        flatten_bird_spectrograms(str(out_dir), EVSONG_BIRD, run_name=_RUN_NAME)
         explore_embedding_parameters_robust(str(out_dir), EVSONG_BIRD,
                                             min_dists=_MIN_DISTS,
                                             n_neighbors_list=_N_NEIGHBORS,
-                                            use_parallel=False)
+                                            use_parallel=False,
+                                            run_name=_RUN_NAME)
 
     @requires_evsong
     def test_labelling_produces_cluster_files(self, evsong_source_dir, evsong_bird_dir):
@@ -247,10 +255,11 @@ class TestStageD:
             bird=EVSONG_BIRD,
             metrics=_METRICS,
             hdbscan_params=[HDBSCANParams(min_cluster_size=5, min_samples=3).to_dict()],
+            run_name=_RUN_NAME,
         )
         assert result is True, "label_bird returned False"
 
-        labelling_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "04_labels"
+        labelling_dir = run_stage_path(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME, LABELS_DIR)
         assert labelling_dir.exists(), f"Labelling dir not created: {labelling_dir}"
         assert any(labelling_dir.rglob("*.h5")), "No cluster label files produced"
 
@@ -274,28 +283,31 @@ class TestStageE:
             wav_directory=evsong_source_dir, bird_subset=[EVSONG_BIRD]
         )
         save_specs_for_evsonganaly_birds(meta, audio, str(evsong_bird_dir),
-                                         songs_per_bird=3, params=_SPEC_PARAMS)
-        flatten_bird_spectrograms(str(evsong_bird_dir), EVSONG_BIRD)
+                                         songs_per_bird=3, params=_SPEC_PARAMS, run_name=_RUN_NAME)
+        flatten_bird_spectrograms(str(evsong_bird_dir), EVSONG_BIRD, run_name=_RUN_NAME)
         explore_embedding_parameters_robust(str(evsong_bird_dir), EVSONG_BIRD,
                                             min_dists=_MIN_DISTS,
                                             n_neighbors_list=_N_NEIGHBORS,
-                                            use_parallel=False)
+                                            use_parallel=False,
+                                            run_name=_RUN_NAME)
         label_bird(
             save_path=str(evsong_bird_dir),
             bird=EVSONG_BIRD,
             metrics=_METRICS,
             hdbscan_params=[HDBSCANParams(min_cluster_size=5, min_samples=3).to_dict()],
+            run_name=_RUN_NAME,
         )
 
         bird_path = str(evsong_bird_dir / EVSONG_BIRD)
         result = phenotype_bird(
             bird_path=bird_path,
             config=PhenotypingConfig(generate_plots=False),
+            run_name=_RUN_NAME,
         )
         assert result is True, "phenotype_bird returned False"
 
         # Check phenotype pickle output
-        phenotype_dir = evsong_bird_dir / EVSONG_BIRD / "stages" / "05_phenotype"
+        phenotype_dir = run_stage_path(evsong_bird_dir / EVSONG_BIRD, _RUN_NAME, PHENOTYPE_DIR)
         assert phenotype_dir.exists(), f"Phenotype dir not created: {phenotype_dir}"
         pkl_files = list(phenotype_dir.glob("automated_phenotype_data_rank*.pkl"))
         assert pkl_files, "No automated phenotype pickle files produced"

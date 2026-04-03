@@ -97,10 +97,12 @@ class TestExtractSongId:
 class TestCreateFlattenedOutputPath:
     def test_creates_flattened_subdir(self):
         from song_phenotyping.flattening import create_flattened_output_path
+        from song_phenotyping.tools.pipeline_paths import run_stage_path, FEATURES_DIR
         with tempfile.TemporaryDirectory() as tmpdir:
-            out = create_flattened_output_path(tmpdir, "or18or24_20230101")
+            out = create_flattened_output_path(tmpdir, "or18or24_20230101", run_name="default")
             assert out.endswith("flattened_or18or24_20230101.h5")
-            assert os.path.isdir(os.path.join(tmpdir, "flattened"))
+            expected_dir = str(run_stage_path(tmpdir, "default", FEATURES_DIR))
+            assert os.path.isdir(expected_dir)
 
 
 # ---------------------------------------------------------------------------

@@ -1655,7 +1655,7 @@ def remove_directory(path: str):
 
 
 def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = False,
-               hdbscan_params: list = None, top_n_for_pdf: int = 20):
+               hdbscan_params: list = None, top_n_for_pdf: int = 20, run_name: str = "default"):
     """Run the complete Stage D labelling pipeline for one bird.
 
     Iterates over all UMAP embedding files produced by Stage C, searches a
@@ -1700,16 +1700,18 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
         # Setup paths
         from song_phenotyping.tools.pipeline_paths import (
-            EMBEDDINGS_DIR, LABELS_DIR, RESULTS_DIR
+            EMBEDDINGS_DIR, LABELS_DIR, RESULTS_DIR, run_stage_path, run_root
         )
         bird_path = os.path.join(save_path, bird)
-        labelling_path = os.path.join(bird_path, LABELS_DIR)
-        embedding_path = os.path.join(bird_path, EMBEDDINGS_DIR)
+        labelling_path = str(run_stage_path(bird_path, run_name, LABELS_DIR))
+        embedding_path = str(run_stage_path(bird_path, run_name, EMBEDDINGS_DIR))
+        results_dir = str(run_stage_path(bird_path, run_name, RESULTS_DIR))
         figure_path = os.path.join(bird_path, 'figures', 'clusters')
 
         # Create directories
         os.makedirs(figure_path, exist_ok=True)
         os.makedirs(labelling_path, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
 
         # Handle replacement of existing labels
         if replace_labels and os.path.exists(labelling_path):
@@ -1719,7 +1721,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
             os.makedirs(labelling_path, exist_ok=True)
 
             # Remove existing master summary
-            master_summary_path = os.path.join(bird_path, RESULTS_DIR, 'master_summary.csv')
+            master_summary_path = os.path.join(results_dir, 'master_summary.csv')
             if os.path.exists(master_summary_path):
                 os.remove(master_summary_path)
 
@@ -1820,8 +1822,10 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
 
             master_summary_df = master_summary_df.reset_index(drop=True)
 
-            # Save master summary
-            if not save_master_summary(master_summary_df, bird_path):
+            # Save master summary (pass run root so save_master_summary writes to run results dir)
+            from song_phenotyping.tools.pipeline_paths import run_root as _run_root
+            run_root_path = str(_run_root(bird_path, run_name))
+            if not save_master_summary(master_summary_df, run_root_path):
                 logger.error(f"Failed to save master summary for bird {bird}")
                 return False
 

@@ -137,6 +137,30 @@ class SpectrogramParams:
     # Validation
     # ------------------------------------------------------------------
 
+    def run_hash(self) -> str:
+        """Return an 8-character hex digest of the parameters that affect Stage A output.
+
+        Used to auto-generate a unique run name when ``RUN_NAME`` is not set
+        in ``run_pipeline.py``.  Different param combinations produce different
+        hashes, ensuring stale HDF5 files are never silently reused.
+        """
+        import hashlib
+        import json
+        key = {
+            "nfft": self.nfft,
+            "hop": self.hop,
+            "min_freq": self.min_freq,
+            "max_freq": self.max_freq,
+            "max_dur": self.max_dur,
+            "target_shape": list(self.target_shape),
+            "save_inst_freq": self.save_inst_freq,
+            "save_group_delay": self.save_group_delay,
+            "duration_feature_weight": self.duration_feature_weight,
+        }
+        return hashlib.sha256(
+            json.dumps(key, sort_keys=True).encode()
+        ).hexdigest()[:8]
+
     def validate_params(self):
         """Raise ``ValueError`` if any parameter is out of range.
 
