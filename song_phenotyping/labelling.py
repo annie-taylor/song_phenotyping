@@ -681,8 +681,12 @@ def save_labels(label_save_path: str, labels, hashes, scores):
 
             # Save each score as separate array
             for key, value in scores.items():
-                if value is not None and not np.isnan(value):
-                    f.create_array('/', key, obj=np.array(value))
+                try:
+                    scalar = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if not np.isnan(scalar):
+                    f.create_array('/', key, obj=np.array(scalar))
 
         return True
 
