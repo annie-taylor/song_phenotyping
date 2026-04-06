@@ -497,7 +497,7 @@ def generate_song_catalog(
             n_rendered += 1
 
         except Exception as e:
-            logger.error(f'Error rendering {syl_file.name}: {e}')
+            logger.error(f'Error rendering {syl_file.name}: {e}', exc_info=True)
             continue
 
     if not sections:
@@ -609,7 +609,7 @@ def generate_syllable_type_catalog(
                 label_to_specs.setdefault(lbl, []).append(spec)
 
         except Exception as e:
-            logger.error(f'Error loading {syl_file.name}: {e}')
+            logger.error(f'Error loading {syl_file.name}: {e}', exc_info=True)
             continue
 
     if not label_to_specs:
@@ -715,7 +715,7 @@ def generate_sequencing_catalog(
     try:
         data = pd.read_pickle(str(pkl_path))
     except Exception as e:
-        logger.warning(f'Sequencing catalog: failed to load pkl ({e})')
+        logger.warning(f'Sequencing catalog: failed to load pkl ({e})', exc_info=True)
         return ''
 
     pheno = data.get('phenotype_results', data)
@@ -787,7 +787,7 @@ def generate_sequencing_catalog(
                 f'<img src="data:image/png;base64,{b64}"></div>'
             )
         except Exception as e:
-            logger.warning(f'Sequencing catalog: proportions plot failed ({e})')
+            logger.warning(f'Sequencing catalog: proportions plot failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # 3 & 4. Transition matrices
@@ -827,7 +827,7 @@ def generate_sequencing_catalog(
                 f'<img src="data:image/png;base64,{b64}"></div>'
             )
         except Exception as e:
-            logger.warning(f'Sequencing catalog: {matrix_key} plot failed ({e})')
+            logger.warning(f'Sequencing catalog: {matrix_key} plot failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # 5. Repeat counts heatmap
@@ -855,7 +855,7 @@ def generate_sequencing_catalog(
                 f'<img src="data:image/png;base64,{b64}"></div>'
             )
         except Exception as e:
-            logger.warning(f'Sequencing catalog: repeat counts plot failed ({e})')
+            logger.warning(f'Sequencing catalog: repeat counts plot failed ({e})', exc_info=True)
 
     if not sections:
         logger.warning(f'Sequencing catalog: no sections generated for {bird_name} rank {rank}')
