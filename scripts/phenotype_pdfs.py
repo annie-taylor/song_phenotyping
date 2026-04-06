@@ -251,15 +251,16 @@ class PhenotypePDFGenerator:
     Creates separate PDFs for manual and automated results with dual-labeled spectrograms.
     """
 
-    def __init__(self, bird_path: str):
+    def __init__(self, bird_path: str, run_name: str = "default"):
         self.bird_path = Path(bird_path)
         self.bird_name = self.bird_path.name
 
-        # Directory paths
-        self.phenotype_plots_dir = self.bird_path / 'figures' / 'phenotyping'
-        from song_phenotyping.tools.pipeline_paths import PLOTS_DIR
-        self.pdf_output_dir = self.bird_path / PLOTS_DIR
-        self.spectrograms_dir = self.bird_path / 'spectrograms' / 'labelled'
+        # Directory paths — all output lands inside the run folder
+        from song_phenotyping.tools.pipeline_paths import PLOTS_DIR, run_root
+        _run_path = run_root(bird_path, run_name)
+        self.phenotype_plots_dir = _run_path / PLOTS_DIR / 'phenotyping'
+        self.pdf_output_dir = _run_path / PLOTS_DIR
+        self.spectrograms_dir = _run_path / 'results' / 'spectrograms' / 'labelled'
 
         # Create directories
         self.pdf_output_dir.mkdir(parents=True, exist_ok=True)
@@ -1088,13 +1089,14 @@ class PhenotypePDFGenerator:
 def generate_phenotype_pdfs_from_saved_data(bird_path: str,
                                             overwrite: bool = True,
                                             overwrite_spectrograms: bool = False,
-                                            rank: int = 0) -> Dict[str, str]:
+                                            rank: int = 0,
+                                            run_name: str = "default") -> Dict[str, str]:
     """
     Generate phenotype PDFs from saved detailed phenotype data.
     Simplified to focus on rank 0 by default with option for other ranks.
     """
     try:
-        generator = PhenotypePDFGenerator(bird_path)
+        generator = PhenotypePDFGenerator(bird_path, run_name=run_name)
         generated_pdfs = {}
 
         # Path to detailed phenotype data
@@ -1148,7 +1150,7 @@ def generate_phenotype_pdfs_from_saved_data(bird_path: str,
         return {}
 
 
-def integrate_with_phenotyping_pipeline(bird_path: str, config, rank: int = 0) -> Dict[str, str]:
+def integrate_with_phenotyping_pipeline(bird_path: str, config, rank: int = 0, run_name: str = "default") -> Dict[str, str]:
     """
     Integration function to be called from the main phenotyping pipeline.
     Simplified to focus on best rank (rank 0) by default.
@@ -1168,7 +1170,7 @@ def integrate_with_phenotyping_pipeline(bird_path: str, config, rank: int = 0) -
 
         # Generate PDFs from saved detailed data for specified rank
         generated_pdfs = generate_phenotype_pdfs_from_saved_data(
-            bird_path, overwrite=True, overwrite_spectrograms=False, rank=rank
+            bird_path, overwrite=True, overwrite_spectrograms=False, rank=rank, run_name=run_name
         )
 
         if generated_pdfs:

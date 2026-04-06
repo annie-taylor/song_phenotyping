@@ -845,7 +845,7 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
             logger.warning(f"Metric {metric} not found in DataFrame, skipping")
             continue
 
-        metric_values = df[metric]
+        metric_values = pd.to_numeric(df[metric], errors='coerce')
 
         # Skip if all values are NaN
         if metric_values.isna().all():
