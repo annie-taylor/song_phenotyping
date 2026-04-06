@@ -1041,7 +1041,8 @@ def create_empty_segmented_data() -> Dict[str, Any]:
 
 
 def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dict[str, Any],
-                           params: SpectrogramParams, split_syllables: bool = False, verbose: bool = False) -> bool:
+                           params: SpectrogramParams, split_syllables: bool = False, verbose: bool = False,
+                           save_manual: bool = True) -> bool:
     """
     Process audio file and save segmented data with progress tracking.
     Updated to use consolidated ProcessingResult.
@@ -1091,7 +1092,7 @@ def process_and_save_audio(audio_file_path: str, output_path: str, metadata: Dic
 
         # Save to HDF5 file
         logger.debug(f" 💾 Saving to {os.path.basename(output_path)}")
-        save_segmented_audio_data(output_path, audio_file_path, segmented_audio_data)
+        save_segmented_audio_data(output_path, audio_file_path, segmented_audio_data, save_manual=save_manual)
 
         # Clean up large data structures
         del segmented_audio_data, specs, wavs, ts
@@ -1240,7 +1241,8 @@ def select_wseg_file_pairs_from_metadata(metadata_files: List[str],
 
 def process_single_file(metadata_file_path: str, audio_file_path: str, save_path: str, params: SpectrogramParams,
                         read_songpath_from_metadata: bool, verbose: bool,
-                        prefer_local: bool = True, run_name: str = "default") -> Dict[str, str]:
+                        prefer_local: bool = True, run_name: str = "default",
+                        save_manual: bool = True) -> Dict[str, str]:
     """
     Process a single metadata file and save spectrograms if conditions are met.
 
@@ -1310,7 +1312,7 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
     # Process the audio
     try:
         success = process_and_save_audio(
-            audio_file_path, output_path, metadata, params, verbose
+            audio_file_path, output_path, metadata, params, verbose, save_manual=save_manual
         )
 
         if success:
@@ -1325,7 +1327,8 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
 
 def save_data_specs(candidate_files: List[str], save_path: str,
                     params: SpectrogramParams, verbose: bool = False, read_songpath_from_metadata: bool = True,
-                    prefer_local: bool = True, run_name: str = "default") -> Dict[str, List[str]]:
+                    prefer_local: bool = True, run_name: str = "default",
+                    save_manual: bool = True) -> Dict[str, List[str]]:
     """
     Process metadata files and save spectrograms to HDF5 files with detailed progress tracking.
     """
@@ -1346,7 +1349,7 @@ def save_data_specs(candidate_files: List[str], save_path: str,
             result = process_single_file(
                 metadata_file_path, audio_file_path, save_path, params,
                 read_songpath_from_metadata, verbose, prefer_local,
-                run_name=run_name,
+                run_name=run_name, save_manual=save_manual,
             )
 
             results[result['status']].append(metadata_file_path)
@@ -1625,6 +1628,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     read_songpath_from_metadata=True,
                     prefer_local=prefer_local,
                     run_name=run_name,
+                    save_manual=False,
                 )
 
                 # Report detailed results

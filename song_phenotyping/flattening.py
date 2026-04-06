@@ -111,7 +111,10 @@ def load_syllable_data(filepath: str) -> tuple:
     try:
         with tables.open_file(filepath, mode="r") as f:
             specs = f.root.spectrograms.read()
-            labels = f.root.manual[:]
+            if hasattr(f.root, 'manual'):
+                labels = f.root.manual[:]
+            else:
+                labels = np.array([''] * len(specs), dtype='U1')
             position_idxs = f.root.position_idxs[:]
             hashes = f.root.hashes[:]
             durations = f.root.durations[:] if hasattr(f.root, "durations") else None
