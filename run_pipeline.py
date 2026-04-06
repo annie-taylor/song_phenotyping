@@ -301,7 +301,7 @@ def _build_label_lookup(bird_path: str, bird: str = None):
         from syllable_database import SyllableDatabase
         print("[ SyllableDB ] Building full acoustic feature database...")
         db = SyllableDatabase(bird_path=bird_path, bird_name=bird)
-        success = db.build_database()
+        success = db.build_database(force_rebuild=True)
         if success:
             print("[ SyllableDB ] Done → stages/syllable_database/syllable_features.{csv,h5}")
         else:

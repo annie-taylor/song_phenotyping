@@ -667,6 +667,219 @@ def generate_syllable_type_catalog(
 
 
 # ---------------------------------------------------------------------------
+# Sequencing catalog (transition matrices, repeat counts, syllable proportions)
+# ---------------------------------------------------------------------------
+
+def generate_sequencing_catalog(
+    bird_path: str,
+    rank: int = 0,
+    config: Optional[CatalogConfig] = None,
+) -> str:
+    """Generate an HTML sequencing catalog for one bird.
+
+    Reads the automated phenotype pickle from Stage E and renders transition
+    matrices, repeat counts, syllable proportions, and summary statistics as
+    embedded base64 PNGs inside a single HTML file.
+
+    Parameters
+    ----------
+    bird_path : str
+        Path to the bird's root directory (must contain
+        ``stages/05_phenotype/`` from Stage E).
+    rank : int, optional
+        Clustering rank to use (0 = best-ranked result).  Default is ``0``.
+    config : CatalogConfig or None, optional
+        Display parameters.  Uses default :class:`CatalogConfig` when ``None``.
+
+    Returns
+    -------
+    str
+        Absolute path to the generated HTML file, or ``''`` on failure.
+    """
+    cfg = config or CatalogConfig()
+    from song_phenotyping.tools.pipeline_paths import CATALOG_DIR, PHENOTYPE_DIR
+    bird_path = Path(bird_path)
+    bird_name = bird_path.name
+    out_dir = bird_path / CATALOG_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f'{bird_name}_sequencing_rank{rank}.html'
+
+    if out_path.exists() and not cfg.overwrite:
+        return str(out_path)
+
+    pkl_path = bird_path / PHENOTYPE_DIR / f'automated_phenotype_data_rank{rank}.pkl'
+    if not pkl_path.exists():
+        logger.warning(f'Sequencing catalog: pkl not found: {pkl_path}')
+        return ''
+
+    try:
+        data = pd.read_pickle(str(pkl_path))
+    except Exception as e:
+        logger.warning(f'Sequencing catalog: failed to load pkl ({e})')
+        return ''
+
+    pheno = data.get('phenotype_results', data)
+    sections = []
+
+    # ------------------------------------------------------------------
+    # 1. Summary stats table
+    # ------------------------------------------------------------------
+    stat_keys = [
+        ('repertoire_size', 'Repertoire size'),
+        ('n_songs', 'Songs'),
+        ('n_syllables_total', 'Total syllables'),
+        ('entropy', 'Transition entropy'),
+        ('entropy_scaled', 'Entropy (scaled)'),
+        ('repeat_bool', 'Has repeats'),
+        ('dyad_bool', 'Has dyads'),
+        ('num_dyad', 'Dyad count'),
+        ('num_longer_reps', 'Longer repeats'),
+        ('mean_repeat_syls', 'Mean repeat length'),
+        ('median_repeat_syls', 'Median repeat length'),
+        ('var_repeat_syls', 'Repeat length variance'),
+    ]
+    rows_html = []
+    for key, label in stat_keys:
+        val = pheno.get(key)
+        if val is None:
+            continue
+        if isinstance(val, float):
+            val_str = f'{val:.4f}'
+        else:
+            val_str = str(val)
+        rows_html.append(
+            f'<tr><td style="padding:4px 12px;color:#aaa;">{label}</td>'
+            f'<td style="padding:4px 12px;">{val_str}</td></tr>'
+        )
+    if rows_html:
+        tbl = (
+            '<div class="type-section"><h2>Summary Statistics</h2>'
+            '<table style="border-collapse:collapse;font-size:0.9em;">'
+            + ''.join(rows_html)
+            + '</table></div>'
+        )
+        sections.append(tbl)
+
+    # ------------------------------------------------------------------
+    # 2. Syllable proportions bar chart
+    # ------------------------------------------------------------------
+    syllable_counts = pheno.get('syllable_counts')
+    if syllable_counts:
+        try:
+            labels_list = sorted(syllable_counts.keys(),
+                                 key=lambda k: -syllable_counts[k])
+            counts = [syllable_counts[k] for k in labels_list]
+            total = sum(counts) or 1
+            proportions = [c / total for c in counts]
+            colors = [_label_color(lbl) for lbl in labels_list]
+
+            fig, ax = plt.subplots(figsize=(8, max(3, len(labels_list) * 0.4)))
+            bars = ax.barh(range(len(labels_list)), proportions, color=colors)
+            ax.set_yticks(range(len(labels_list)))
+            ax.set_yticklabels([str(l) for l in labels_list])
+            ax.set_xlabel('Proportion')
+            ax.set_title(f'Syllable Proportions — {bird_name} (rank {rank})')
+            ax.invert_yaxis()
+            fig.tight_layout()
+            b64 = _fig_to_b64(fig, cfg.dpi)
+            sections.append(
+                f'<div class="type-section"><h2>Syllable Proportions</h2>'
+                f'<img src="data:image/png;base64,{b64}"></div>'
+            )
+        except Exception as e:
+            logger.warning(f'Sequencing catalog: proportions plot failed ({e})')
+
+    # ------------------------------------------------------------------
+    # 3 & 4. Transition matrices
+    # ------------------------------------------------------------------
+    for matrix_key, title, cmap in [
+        ('transition_counts', 'Transition Counts', 'Blues'),
+        ('transition_matrix', 'Transition Probabilities (1st order)', 'viridis'),
+    ]:
+        matrix = pheno.get(matrix_key)
+        if matrix is None or (hasattr(matrix, 'empty') and matrix.empty):
+            continue
+        try:
+            arr = matrix.values if hasattr(matrix, 'values') else np.array(matrix)
+            tick_labels = list(matrix.index) if hasattr(matrix, 'index') else []
+            n = arr.shape[0]
+            fig, ax = plt.subplots(figsize=(max(6, n * 0.6), max(5, n * 0.6)))
+            im = ax.imshow(arr, cmap=cmap, aspect='auto')
+            plt.colorbar(im, ax=ax, shrink=0.8)
+            if tick_labels:
+                ax.set_xticks(range(n))
+                ax.set_xticklabels([str(t) for t in tick_labels], rotation=45, ha='right', fontsize=8)
+                ax.set_yticks(range(n))
+                ax.set_yticklabels([str(t) for t in tick_labels], fontsize=8)
+            # Annotate cells for small matrices
+            if n <= 12 and matrix_key == 'transition_counts':
+                for i in range(n):
+                    for j in range(n):
+                        ax.text(j, i, int(arr[i, j]), ha='center', va='center',
+                                fontsize=7, color='white' if arr[i, j] > arr.max() * 0.5 else 'black')
+            ax.set_title(f'{title} — {bird_name} (rank {rank})')
+            ax.set_xlabel('To syllable')
+            ax.set_ylabel('From syllable')
+            fig.tight_layout()
+            b64 = _fig_to_b64(fig, cfg.dpi)
+            sections.append(
+                f'<div class="type-section"><h2>{title}</h2>'
+                f'<img src="data:image/png;base64,{b64}"></div>'
+            )
+        except Exception as e:
+            logger.warning(f'Sequencing catalog: {matrix_key} plot failed ({e})')
+
+    # ------------------------------------------------------------------
+    # 5. Repeat counts heatmap
+    # ------------------------------------------------------------------
+    repeat_counts = pheno.get('repeat_counts')
+    if repeat_counts is not None and hasattr(repeat_counts, 'empty') and not repeat_counts.empty:
+        try:
+            arr = repeat_counts.values.T.astype(float)
+            syls = list(repeat_counts.columns)
+            repeat_lens = list(repeat_counts.index)
+            fig, ax = plt.subplots(figsize=(max(6, len(syls) * 0.6), max(3, len(repeat_lens) * 0.5)))
+            im = ax.imshow(arr, cmap='Reds', aspect='auto')
+            plt.colorbar(im, ax=ax, shrink=0.8)
+            ax.set_xticks(range(len(syls)))
+            ax.set_xticklabels([str(s) for s in syls], rotation=45, ha='right', fontsize=8)
+            ax.set_yticks(range(len(repeat_lens)))
+            ax.set_yticklabels([str(r) for r in repeat_lens], fontsize=8)
+            ax.set_title(f'Repeat Counts — {bird_name} (rank {rank})')
+            ax.set_xlabel('Syllable')
+            ax.set_ylabel('Repeat length')
+            fig.tight_layout()
+            b64 = _fig_to_b64(fig, cfg.dpi)
+            sections.append(
+                f'<div class="type-section"><h2>Repeat Counts</h2>'
+                f'<img src="data:image/png;base64,{b64}"></div>'
+            )
+        except Exception as e:
+            logger.warning(f'Sequencing catalog: repeat counts plot failed ({e})')
+
+    if not sections:
+        logger.warning(f'Sequencing catalog: no sections generated for {bird_name} rank {rank}')
+        return ''
+
+    n_clusters = pheno.get('repertoire_size', '?')
+    html_parts = [
+        _HTML_HEAD.format(
+            title=f'{bird_name} — Sequencing (rank {rank})',
+            generated=datetime.now().strftime('%Y-%m-%d %H:%M'),
+            bird=bird_name,
+            params=f'rank={rank}',
+            summary=f'{n_clusters} syllable types',
+        )
+    ]
+    html_parts.extend(sections)
+    html_parts.append(_HTML_FOOT)
+
+    out_path.write_text(''.join(html_parts), encoding='utf-8')
+    logger.info(f'Sequencing catalog written: {out_path}')
+    return str(out_path)
+
+
+# ---------------------------------------------------------------------------
 # Convenience: generate both catalogs for a bird
 # ---------------------------------------------------------------------------
 
@@ -731,6 +944,10 @@ def generate_all_catalogs(
         )
         if path:
             results['syllable_types_manual'] = path
+
+    path = generate_sequencing_catalog(bird_path, rank=rank, config=cfg)
+    if path:
+        results['sequencing'] = path
 
     return results
 

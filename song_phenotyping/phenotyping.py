@@ -1372,13 +1372,13 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
         # Generate plots if requested
         if config.generate_plots:
             _generate_phenotype_plots(bird_path, syllable_data, manual_results, auto_results, clustering_results,
-                                      config)
+                                      config, run_name=run_name)
 
         # Generate PDFs if requested
         if config.generate_plots:  # Use same flag for now
             try:
                 from phenotype_pdfs import integrate_with_phenotyping_pipeline
-                pdf_results = integrate_with_phenotyping_pipeline(bird_path, config)
+                pdf_results = integrate_with_phenotyping_pipeline(bird_path, config, run_name=run_name)
                 if pdf_results:
                     logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
             except ImportError:
@@ -1455,7 +1455,8 @@ def _generate_phenotype_plots(
         manual_results: Dict[str, Any],
         auto_results: List[Dict[str, Any]],
         clustering_results: List[Dict[str, Any]],
-        config: PhenotypingConfig
+        config: PhenotypingConfig,
+        run_name: str = "default"
 ) -> None:
     """
     Generate all phenotype visualization plots for a bird.
@@ -1463,7 +1464,8 @@ def _generate_phenotype_plots(
     """
     try:
         # Create plots directory
-        plots_dir = os.path.join(bird_path, 'figures', 'phenotyping')
+        from song_phenotyping.tools.pipeline_paths import PLOTS_DIR, run_root
+        plots_dir = os.path.join(str(run_root(bird_path, run_name)), PLOTS_DIR, 'phenotyping')
         os.makedirs(plots_dir, exist_ok=True)
 
         bird_name = os.path.basename(bird_path)
@@ -1503,7 +1505,7 @@ def _generate_phenotype_plots(
         if (manual_results.get('vocabulary') and
             clustering_results and
             syllable_data.get('manual_syllables')):
-            generate_manual_umap_plot(bird_path, syllable_data, manual_results, clustering_results[0], config)
+            generate_manual_umap_plot(bird_path, syllable_data, manual_results, clustering_results[0], config, run_name=run_name)
 
         logging.info(f"Generated phenotype plots for {bird_name} in {plots_dir}")
 
@@ -1516,7 +1518,8 @@ def generate_manual_umap_plot(
         syllable_data: Dict[str, Any],
         manual_results: Dict[str, Any],
         clustering_result: Dict[str, Any],
-        config: PhenotypingConfig
+        config: PhenotypingConfig,
+        run_name: str = "default"
 ) -> str:
     """
     Generate UMAP plot colored by manual labels to match automated clustering plots.
@@ -1589,7 +1592,8 @@ def generate_manual_umap_plot(
         plt.tight_layout()
 
         # Save plot
-        clusters_dir = os.path.join(bird_path, 'figures', 'clusters')
+        from song_phenotyping.tools.pipeline_paths import PLOTS_DIR, run_root
+        clusters_dir = os.path.join(str(run_root(bird_path, run_name)), PLOTS_DIR, 'clusters')
         os.makedirs(clusters_dir, exist_ok=True)
 
         plot_path = os.path.join(clusters_dir, 'manual_labels_umap.jpg')

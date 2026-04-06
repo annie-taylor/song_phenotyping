@@ -679,7 +679,7 @@ def verify_save(filepath):
     return specs
 
 
-def save_segmented_audio_data(h5file_save_path, song_file_path, segmented_audio_data):
+def save_segmented_audio_data(h5file_save_path, song_file_path, segmented_audio_data, save_manual: bool = True):
     """
     Save segmented audio data to HDF5 file.
     Updated with better logging and validation.
@@ -698,7 +698,8 @@ def save_segmented_audio_data(h5file_save_path, song_file_path, segmented_audio_
             h5file.create_array(h5file.root, 'spectrograms', obj=np.array(segmented_audio_data['spectrograms'],
                                                                           dtype=np.float64), atom=atom)
             h5file.create_array(h5file.root, 'spec_t', obj=np.array(segmented_audio_data['spec_t']))
-            h5file.create_array(h5file.root, 'manual', obj=np.array(segmented_audio_data['manual'], dtype=np.str_))
+            if save_manual:
+                h5file.create_array(h5file.root, 'manual', obj=np.array(segmented_audio_data['manual'], dtype=np.str_))
             h5file.create_array(h5file.root, 'onsets', obj=np.array(segmented_audio_data['onsets']))
             h5file.create_array(h5file.root, 'offsets', obj=np.array(segmented_audio_data['offsets']))
             h5file.create_array(h5file.root, 'position_idxs', obj=np.array(segmented_audio_data['position_idxs']))
