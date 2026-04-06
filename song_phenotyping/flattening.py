@@ -16,6 +16,8 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 import tables
 from tqdm import tqdm
@@ -121,13 +123,13 @@ def load_syllable_data(filepath: str) -> tuple:
             inst_freq = f.root.inst_freq.read() if hasattr(f.root, "inst_freq") else None
             group_delay = f.root.group_delay.read() if hasattr(f.root, "group_delay") else None
     except (tables.NoSuchNodeError, AttributeError) as e:
-        logging.error(f"Missing required data in {filepath}: {e}")
+        logger.error(f"Missing required data in {filepath}: {e}")
         raise ValueError(f"Invalid HDF5 structure in {filepath}")
     except (OSError, IOError) as e:
-        logging.error(f"File access error for {filepath}: {e}")
+        logger.error(f"File access error for {filepath}: {e}")
         raise
     except Exception as e:
-        logging.error(f"Failed to load syllable data from {filepath}: {e}")
+        logger.error(f"Failed to load syllable data from {filepath}: {e}", exc_info=True)
         raise
 
     if not (len(specs) == len(labels) == len(position_idxs) == len(hashes)):
@@ -229,7 +231,7 @@ def save_flattened_data(
             if durations is not None:
                 f.create_array(f.root, "durations", durations)
     except Exception as e:
-        logging.error(f"Failed to save flattened data to {output_path}: {e}")
+        logger.error(f"Failed to save flattened data to {output_path}: {e}", exc_info=True)
         raise
 
 
@@ -261,13 +263,13 @@ def process_single_syllable_file(
     """
     try:
         file_size = os.path.getsize(filepath) / (1024 * 1024)
-        logging.debug(f"Processing {filepath} ({file_size:.1f} MB)")
+        logger.debug(f"Processing {filepath} ({file_size:.1f} MB)")
 
         song_id = extract_song_id(filepath)
         output_path = create_flattened_output_path(bird_root, song_id, run_name=run_name)
 
         if os.path.exists(output_path):
-            logging.debug(f"Flattened file already exists, skipping: {output_path}")
+            logger.debug(f"Flattened file already exists, skipping: {output_path}")
             return True
 
         specs, labels, position_idxs, hashes, durations, inst_freq, group_delay = load_syllable_data(filepath)
@@ -280,11 +282,11 @@ def process_single_syllable_file(
         )
         save_flattened_data(output_path, flattened_specs, labels, position_idxs, hashes, durations=durations)
 
-        logging.info(f"Successfully flattened {len(specs)} syllables from {filepath}")
+        logger.info(f"Successfully flattened {len(specs)} syllables from {filepath}")
         return True
 
     except Exception as e:
-        logging.error(f"Failed to process syllable file {filepath}: {e}")
+        logger.error(f"Failed to process syllable file {filepath}: {e}", exc_info=True)
         return False
 
 
@@ -367,23 +369,23 @@ def flatten_bird_spectrograms(directory: str, bird: str, params=None, run_name: 
 
         syllable_files = find_syllable_files(syllables_path)
         if not syllable_files:
-            logging.warning(
+            logger.warning(
                 f"No syllable files found for bird {bird} in {syllables_path}"
             )
             return True
 
-        logging.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
+        logger.info(f"Found {len(syllable_files)} syllable files for bird {bird}")
 
         success_count = sum(
             process_single_syllable_file(fp, bird_folder, duration_feature_weight=duration_feature_weight, run_name=run_name)
             for fp in tqdm(syllable_files, desc=f"Flattening {bird}")
         )
 
-        logging.info(
+        logger.info(
             f"Bird {bird}: {success_count}/{len(syllable_files)} files processed"
         )
         return success_count > 0
 
     except Exception as e:
-        logging.error(f"Error processing bird {bird}: {e}")
+        logger.error(f"Error processing bird {bird}: {e}", exc_info=True)
         return False

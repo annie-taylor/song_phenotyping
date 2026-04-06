@@ -829,6 +829,11 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
     Returns:
         pd.DataFrame: DataFrame with added normalized scores and composite score
     """
+    logger.debug(
+        f"compute_composite_score | rows={len(summary_df)} | metrics={metrics} | "
+        f"weights_type={type(weights).__name__} | weights={weights} | "
+        f"use_cluster_penalty={use_cluster_penalty}"
+    )
     df = summary_df.copy()
 
     # Get cluster counts
@@ -1713,7 +1718,12 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
     song_phenotyping.phenotyping.phenotype_bird : Stage E (consumes output).
     """
     try:
-        logger.info(f"Starting labeling pipeline for bird {bird}")
+        logger.info(
+            f"Starting labeling pipeline for bird {bird} | run={run_name} | "
+            f"metrics={metrics} | weights_type={type(weights).__name__} | "
+            f"weights={weights} | n_hdbscan_params={len(hdbscan_params) if hdbscan_params else 'default'} | "
+            f"replace_labels={replace_labels} | max_workers={max_workers}"
+        )
 
         # Setup paths
         from song_phenotyping.tools.pipeline_paths import (
@@ -1860,7 +1870,7 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
         return True
 
     except Exception as e:
-        logger.error(f"Error in labeling pipeline for bird {bird}: {e}")
+        logger.error(f"Error in labeling pipeline for bird {bird}: {e}", exc_info=True)
     return False
 
 def main(save_path: str) -> None:

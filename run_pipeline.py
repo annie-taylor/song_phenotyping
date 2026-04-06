@@ -29,7 +29,11 @@ To re-run labelling from existing embeddings with different metrics::
 See SETUP.md for a full stage re-entry guide.
 """
 
+import logging
+import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Optional in-script overrides — set to None to use config.yaml values
@@ -59,6 +63,67 @@ MAX_WORKERS          = None   # None = all CPUs; int to cap Stage C + D parallel
 GENERATE_CATALOG     = None   # None → True; False = skip HTML catalog generation
 GENERATE_PLOTS       = None   # None → True (phenotype summary figures)
 RUN_NAME             = None   # None = auto-compute from config hash; str to pin a name
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+
+def _setup_pipeline_logging(save_path: str, run_name: str = None) -> None:
+    """Configure the root logger to capture all library logs to a timestamped file.
+
+    Creates ``<save_path>/logs/pipeline[_<run_name>]_<YYYYMMDD_HHMMSS>.log``.
+
+    The file handler captures INFO and above from every ``song_phenotyping.*``
+    sub-module logger (as well as any other library loggers).  The console
+    handler is set to WARNING only — ``print()`` statements continue to handle
+    the normal stage-progress console output so there is no duplication.
+
+    Noisy third-party loggers (matplotlib, numba, umap) are silenced to WARNING.
+    """
+    from datetime import datetime
+    try:
+        from song_phenotyping.tools.logging_utils import UTF8StreamHandler
+    except ImportError:
+        UTF8StreamHandler = logging.StreamHandler
+
+    log_dir = Path(save_path) / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_tag = f'_{run_name}' if run_name else ''
+    log_path = log_dir / f'pipeline{run_tag}_{ts}.log'
+
+    root = logging.getLogger()
+    # Only configure once (guard against repeated calls in multi-bird cohort runs)
+    if any(isinstance(h, logging.FileHandler) for h in root.handlers):
+        return
+
+    root.setLevel(logging.DEBUG)
+
+    # File handler — everything INFO and above, full tracebacks included
+    try:
+        fh = logging.FileHandler(str(log_path), encoding='utf-8')
+    except Exception:
+        fh = logging.FileHandler(str(log_path))
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter(
+        '%(asctime)s  %(levelname)-8s  %(name)s: %(message)s'
+    ))
+    root.addHandler(fh)
+
+    # Console handler — WARNING and above only (avoids duplicating print() progress)
+    ch = UTF8StreamHandler(sys.stdout)
+    ch.setLevel(logging.WARNING)
+    ch.setFormatter(logging.Formatter('%(levelname)s %(name)s: %(message)s'))
+    root.addHandler(ch)
+
+    # Silence noisy third-party loggers
+    for noisy in ('matplotlib', 'numba', 'umap', 'PIL', 'numexpr'):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+    logger.info(f'Pipeline logging initialised → {log_path}')
+    print(f'[ Log ] Detailed log → {log_path}')
+
 
 # ---------------------------------------------------------------------------
 # Config resolution helpers
@@ -282,6 +347,7 @@ def _run_catalog(bird_path: str, generate_catalog: bool, bird: str):
                     print(f"[ Catalog ] Renamed {renamed} file(s): {hash_name}_* → {bird}_*")
         print(f"[ Catalog ] HTML catalogs written to {bird_path}/results/catalog/")
     except Exception as e:
+        logger.error(f"Catalog generation failed for {bird}: {e}", exc_info=True)
         print(f"[ Catalog ] Warning: catalog generation failed ({e}); pipeline output is still complete.")
 
 
@@ -308,6 +374,7 @@ def _build_label_lookup(bird_path: str, bird: str = None):
             print("[ SyllableDB ] build_database() returned False; trying minimal fallback")
             _build_label_lookup_minimal(bird_path)
     except Exception as e:
+        logger.error(f"SyllableDB full build failed for {bird_path}: {e}", exc_info=True)
         print(f"[ SyllableDB ] Full build failed ({e}); falling back to minimal label lookup")
         _build_label_lookup_minimal(bird_path)
 
@@ -831,6 +898,7 @@ def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
 
 if __name__ == "__main__":
     cfg = _load_pipeline_cfg()
+    _setup_pipeline_logging(cfg['save_path'], cfg['run_name'])
 
     # -------------------------------------------------------------------
     # Full pipeline (default)
