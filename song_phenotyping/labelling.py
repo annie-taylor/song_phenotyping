@@ -839,6 +839,10 @@ def compute_composite_score(summary_df, metrics, n_syls: list = None, weights=No
     if weights is None:
         weights = [1.0] * len(metrics)
 
+    # If weights is a dict, convert to an ordered list aligned with metrics
+    if isinstance(weights, dict):
+        weights = [float(weights.get(m, 1.0)) for m in metrics]
+
     if len(weights) != len(metrics):
         raise ValueError("Number of weights must match number of metrics")
 
