@@ -27,6 +27,8 @@ import traceback
 from typing import Dict, List, Any, Tuple, Optional, Union
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 import pandas as pd
 import pickle as pkl
@@ -135,7 +137,7 @@ def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[s
     specs_dir = str(run_stage_path(bird_path, run_name, SPECS_DIR))
 
     if not os.path.exists(specs_dir):
-        logging.warning(f"No specs directory found at {specs_dir} for {bird_name}")
+        logger.warning(f"No specs directory found at {specs_dir} for {bird_name}")
         return {
             'manual_syllables': [],
             'song_paths': [],
@@ -147,7 +149,7 @@ def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[s
     spec_files = [f for f in os.listdir(specs_dir) if f.endswith('.h5') and f.startswith('syllables_')]
 
     if not spec_files:
-        logging.warning(f"No syllable spec files found in {specs_dir} for {bird_name}")
+        logger.warning(f"No syllable spec files found in {specs_dir} for {bird_name}")
         return {
             'manual_syllables': [],
             'song_paths': [],
@@ -155,7 +157,7 @@ def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[s
             'syllables_dir': specs_dir
         }
 
-    logging.info(f"Found {len(spec_files)} syllable spec files for {bird_name}")
+    logger.info(f"Found {len(spec_files)} syllable spec files for {bird_name}")
 
     # Initialize data containers
     all_manual_syllables = []
@@ -169,11 +171,11 @@ def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[s
         try:
             with tables.open_file(file_path, 'r') as f:
                 available_nodes = [node._v_name for node in f.list_nodes(f.root)]
-                logging.debug(f"Available nodes in {filename}: {available_nodes}")
+                logger.debug(f"Available nodes in {filename}: {available_nodes}")
 
                 if 'manual' in available_nodes:
                     raw_labels = f.root._f_get_child('manual').read()
-                    logging.debug(f"Found {len(raw_labels)} manual labels in {filename}")
+                    logger.debug(f"Found {len(raw_labels)} manual labels in {filename}")
 
                     if len(raw_labels) > 0:
                         # Create handler for manual labels
@@ -186,16 +188,16 @@ def load_bird_syllable_data(bird_path: str, run_name: str = "default") -> Dict[s
                         # Add to collection
                         all_manual_syllables.extend(song_with_tokens)
                 else:
-                    logging.debug(f"No 'manual' node found in {filename}")
+                    logger.debug(f"No 'manual' node found in {filename}")
 
         except Exception as e:
-            logging.error(f'Error processing {file_path}: {e}')
+            logger.error(f'Error processing {file_path}: {e}')
             continue
 
     if all_manual_syllables:
-        logging.info(f"Loaded {len(all_manual_syllables)} manual syllable labels for {bird_name}")
+        logger.info(f"Loaded {len(all_manual_syllables)} manual syllable labels for {bird_name}")
     else:
-        logging.info(f"No manual labels found in spec files for {bird_name}")
+        logger.info(f"No manual labels found in spec files for {bird_name}")
 
     return {
         'manual_syllables': all_manual_syllables,
@@ -230,7 +232,7 @@ def load_clustering_results(bird_path: str, top_n: int = 5, run_name: str = "def
     master_summary_path = os.path.join(str(run_root(bird_path, run_name)), RESULTS_DIR, 'master_summary.csv')
 
     if not os.path.exists(master_summary_path):
-        logging.warning(f"No master summary found: {master_summary_path}")
+        logger.warning(f"No master summary found: {master_summary_path}")
         return []
 
     try:
@@ -266,7 +268,7 @@ def load_clustering_results(bird_path: str, top_n: int = 5, run_name: str = "def
         return clustering_results
 
     except Exception as e:
-        logging.error(f"Error loading clustering results from {master_summary_path}: {e}")
+        logger.error(f"Error loading clustering results from {master_summary_path}: {e}")
         return []
 
 
@@ -279,18 +281,18 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
     try:
         # Load clustering labels from HDF5 file
         label_path = clustering_result['label_path']
-        logging.info(f"Loading clustering labels from: {label_path}")
+        logger.info(f"Loading clustering labels from: {label_path}")
         resolved_path = _resolve_file_path(label_path)
-        logging.info(f"Resolved path: {resolved_path}")
+        logger.info(f"Resolved path: {resolved_path}")
 
         if not os.path.exists(resolved_path):
-            logging.error(f"Clustering label file does not exist: {resolved_path}")
+            logger.error(f"Clustering label file does not exist: {resolved_path}")
             return []
 
         with tables.open_file(resolved_path, mode='r') as f:
             cluster_labels = f.root.labels.read()
             cluster_hashes = f.root.hashes.read()
-            logging.info(f"Loaded {len(cluster_labels)} cluster labels and {len(cluster_hashes)} hashes")
+            logger.info(f"Loaded {len(cluster_labels)} cluster labels and {len(cluster_hashes)} hashes")
 
         # Convert hashes to strings (fix for numpy bytes)
         cluster_hashes = [
@@ -300,14 +302,14 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
 
         # Create hash to label mapping
         hash_to_label = dict(zip(cluster_hashes, cluster_labels))
-        logging.info(f"Created hash-to-label mapping with {len(hash_to_label)} entries")
+        logger.info(f"Created hash-to-label mapping with {len(hash_to_label)} entries")
 
         # Map labels to syllable sequences
         mapped_labels = []
         song_paths = syllable_data['song_paths']
         specs_dir = syllable_data['syllables_dir']  # This now points to specs directory
 
-        logging.info(f"Processing {len(song_paths)} song files from {specs_dir}")
+        logger.info(f"Processing {len(song_paths)} song files from {specs_dir}")
 
         # Load syllable hashes from spec files and map to clustering labels
         total_syllables_processed = 0
@@ -325,39 +327,39 @@ def load_clustering_labels_for_syllables(clustering_result: Dict[str, Any], syll
                             for h in song_hashes
                         ]
 
-                        logging.debug(f"Found {len(song_hashes)} hashes in {song_path}")
+                        logger.debug(f"Found {len(song_hashes)} hashes in {song_path}")
                         total_syllables_processed += len(song_hashes)
 
                         # Map each syllable hash to its cluster label
                         for hash_id in song_hashes:
                             mapped_labels.append(hash_to_label.get(hash_id, -1))  # -1 for missing
                     else:
-                        logging.warning(f"No 'hashes' node found in {full_song_path}")
-                        logging.warning(f"Available nodes: {available_nodes}")
+                        logger.warning(f"No 'hashes' node found in {full_song_path}")
+                        logger.warning(f"Available nodes: {available_nodes}")
 
             except Exception as e:
-                logging.error(f"Error loading hashes from {full_song_path}: {e}")
+                logger.error(f"Error loading hashes from {full_song_path}: {e}")
                 continue
 
-        logging.info(f"Processed {total_syllables_processed} syllables, mapped {len(mapped_labels)} labels")
+        logger.info(f"Processed {total_syllables_processed} syllables, mapped {len(mapped_labels)} labels")
 
         # Count successful mappings
         successful_mappings = sum(1 for label in mapped_labels if label != -1)
-        logging.info(f"Successfully mapped {successful_mappings}/{len(mapped_labels)} syllables to cluster labels")
+        logger.info(f"Successfully mapped {successful_mappings}/{len(mapped_labels)} syllables to cluster labels")
 
         if mapped_labels:
             # Add sequence tokens
             handler = LabelHandler(LabelType.AUTO)
             result = handler.add_sequence_tokens(mapped_labels)
-            logging.info(f"Final sequence length with tokens: {len(result)}")
+            logger.info(f"Final sequence length with tokens: {len(result)}")
             return result
         else:
-            logging.warning("No clustering labels could be mapped to syllables")
+            logger.warning("No clustering labels could be mapped to syllables")
             return []
 
     except Exception as e:
-        logging.error(f"Error loading clustering labels: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error loading clustering labels: {e}")
+        logger.error(traceback.format_exc())
         return []
 
 def _resolve_file_path(file_path: str) -> str:
@@ -392,7 +394,7 @@ def _resolve_file_path(file_path: str) -> str:
         return file_path
 
     except Exception as e:
-        logging.warning(f"Error resolving path {file_path}: {e}")
+        logger.warning(f"Error resolving path {file_path}: {e}")
         return file_path
 
 
@@ -449,7 +451,7 @@ def calculate_phenotypes_for_label_type(
         return phenotype_results
 
     except Exception as e:
-        logging.error(f"Error calculating phenotypes for {label_type} labels in {bird_name}: {e}")
+        logger.error(f"Error calculating phenotypes for {label_type} labels in {bird_name}: {e}")
         return _create_empty_phenotype_results()
 
 
@@ -508,7 +510,7 @@ def analyze_vocabulary_and_entropy(syllables: List[Union[str, int]], handler: La
         }
 
     except Exception as e:
-        logging.error(f"Error in vocabulary analysis: {e}")
+        logger.error(f"Error in vocabulary analysis: {e}")
         return {
             'repertoire_size': np.nan,
             'vocabulary': [],
@@ -542,7 +544,7 @@ def analyze_transitions(syllables: List[Union[str, int]], handler: LabelHandler)
         }
 
     except Exception as e:
-        logging.error(f"Error in transition analysis: {e}")
+        logger.error(f"Error in transition analysis: {e}")
         return {
             'transition_counts': pd.DataFrame(),
             'transition_matrix': pd.DataFrame(),
@@ -581,7 +583,7 @@ def analyze_repeats(syllables: List[Union[str, int]], handler: LabelHandler, con
         }
 
     except Exception as e:
-        logging.error(f"Error in repeat analysis: {e}")
+        logger.error(f"Error in repeat analysis: {e}")
         return {
             'repeat_counts': pd.DataFrame(),
             'repeat_bool': False,
@@ -630,7 +632,7 @@ def _generate_vocabulary(syllables: List[Union[str, int]], handler: LabelHandler
     # Calculate total syllables and proportions
     n_syls_total = sum(syl_counts.values())
     if n_syls_total == 0:
-        logging.warning("No syllables found after filtering tokens")
+        logger.warning("No syllables found after filtering tokens")
         return [], 0, {}, 0, np.array([])
 
     syl_proportions = np.array(list(syl_counts.values())) / n_syls_total
@@ -654,7 +656,7 @@ def _calculate_transition_counts(syllables: List[Union[str, int]], handler: Labe
         Tuple of (transition_counts_df, t_mat_df, t2_mat_df, t3_mat_df)
     """
     if len(syllables) < 2:
-        logging.warning("Sequence too short for transition analysis")
+        logger.warning("Sequence too short for transition analysis")
         empty_df = pd.DataFrame()
         return empty_df, empty_df, empty_df, empty_df
 
@@ -749,7 +751,7 @@ def _calculate_entropy(t_mat_df: pd.DataFrame, syl_proportions: np.ndarray, hand
     """
     # Exclude start/stop tokens (first and last rows/columns)
     if len(t_mat_df) < 3:  # Need at least start, one syllable, stop
-        logging.warning("Transition matrix too small for entropy calculation")
+        logger.warning("Transition matrix too small for entropy calculation")
         return 0.0, 0.0
 
     # Get core transition matrix (excluding start/stop tokens)
@@ -780,7 +782,7 @@ def _calculate_entropy(t_mat_df: pd.DataFrame, syl_proportions: np.ndarray, hand
         else:
             entropy_scaled = entropy
     else:
-        logging.warning(f"Syllable proportions ({len(syl_proportions)}) don't match core matrix size ({n_core_syls})")
+        logger.warning(f"Syllable proportions ({len(syl_proportions)}) don't match core matrix size ({n_core_syls})")
         entropy_scaled = entropy
 
     return entropy, entropy_scaled
@@ -1270,7 +1272,10 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
         config = PhenotypingConfig()
 
     bird_name = os.path.basename(bird_path)
-    logging.info(f"Starting phenotyping for bird: {bird_name}")
+    logger.info(
+        f"Starting phenotyping for bird: {bird_name} | run={run_name} | "
+        f"generate_plots={config.generate_plots} | use_top_n={config.use_top_n_clusterings}"
+    )
 
     try:
         # Load syllable data
@@ -1278,57 +1283,57 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
 
         # Check if manual labels are available
         has_manual = has_manual_labels(syllable_data)
-        logging.info(f"Manual labels available for {bird_name}: {has_manual}")
+        logger.info(f"Manual labels available for {bird_name}: {has_manual}")
 
         # Load clustering results
         clustering_results = load_clustering_results(bird_path, config.use_top_n_clusterings, run_name=run_name)
         has_clustering = len(clustering_results) > 0
-        logging.info(
+        logger.info(
             f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
 
         # Process manual labels if available
         manual_results = {}
         if has_manual:
-            logging.info(f"Processing manual labels for {bird_name}")
+            logger.info(f"Processing manual labels for {bird_name}")
             manual_syllables = syllable_data['manual_syllables']
-            logging.info(f"Manual syllables sequence length: {len(manual_syllables)}")
+            logger.info(f"Manual syllables sequence length: {len(manual_syllables)}")
             manual_results = calculate_phenotypes_for_label_type(
                 manual_syllables, 'manual', bird_name, config
             )
-            logging.info(f"Manual results: repertoire_size={manual_results.get('repertoire_size', 'N/A')}")
+            logger.info(f"Manual results: repertoire_size={manual_results.get('repertoire_size', 'N/A')}")
         else:
-            logging.info(f"No manual labels found for {bird_name}")
+            logger.info(f"No manual labels found for {bird_name}")
             manual_results = _create_empty_phenotype_results()
 
         # Process automated labels for each clustering result
         auto_results = []
         for i, cluster_result in enumerate(clustering_results):
-            logging.info(f"Processing automated labels for {bird_name}, rank {i}")
-            logging.info(f"Cluster result metadata: {cluster_result}")
+            logger.info(f"Processing automated labels for {bird_name}, rank {i}")
+            logger.info(f"Cluster result metadata: {cluster_result}")
 
             # Load clustering labels mapped to syllables
             try:
                 auto_syllables = load_clustering_labels_for_syllables(cluster_result, syllable_data)
-                logging.info(f"Auto syllables sequence length for rank {i}: {len(auto_syllables)}")
+                logger.info(f"Auto syllables sequence length for rank {i}: {len(auto_syllables)}")
 
                 if auto_syllables:
                     auto_result = calculate_phenotypes_for_label_type(
                         auto_syllables, 'hdbscan', bird_name, config
                     )
-                    logging.info(f"Auto results rank {i}: repertoire_size={auto_result.get('repertoire_size', 'N/A')}")
+                    logger.info(f"Auto results rank {i}: repertoire_size={auto_result.get('repertoire_size', 'N/A')}")
                 else:
-                    logging.warning(f"No auto syllables loaded for rank {i}")
+                    logger.warning(f"No auto syllables loaded for rank {i}")
                     auto_result = _create_empty_phenotype_results()
             except Exception as e:
-                logging.error(f"Error processing clustering rank {i} for {bird_name}: {e}")
-                logging.error(traceback.format_exc())
+                logger.error(f"Error processing clustering rank {i} for {bird_name}: {e}")
+                logger.error(traceback.format_exc())
                 auto_result = _create_empty_phenotype_results()
 
             auto_results.append(auto_result)
 
         # If no clustering results, create empty auto results
         if not auto_results:
-            logging.info("No clustering results found, creating empty auto results")
+            logger.info("No clustering results found, creating empty auto results")
             auto_results = [_create_empty_phenotype_results()]
             clustering_results = [{
                 'rank': 0,
@@ -1359,15 +1364,15 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
         os.makedirs(results_dir, exist_ok=True)
         output_path = os.path.join(results_dir, 'phenotype_results.csv')
         results_df.to_csv(output_path, index=False)
-        logging.info(f"Saved phenotype results to: {output_path}")
+        logger.info(f"Saved phenotype results to: {output_path}")
 
         # Log summary of results
-        logging.info(f"Results summary for {bird_name}:")
+        logger.info(f"Results summary for {bird_name}:")
         for idx, row in results_df.iterrows():
             rank = row['rank']
             rep_size = row['repertoire_size']
             entropy = row['entropy']
-            logging.info(f"  Rank {rank}: repertoire_size={rep_size}, entropy={entropy}")
+            logger.info(f"  Rank {rank}: repertoire_size={rep_size}, entropy={entropy}")
 
         # Generate plots if requested
         if config.generate_plots:
@@ -1380,16 +1385,15 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
                 from phenotype_pdfs import integrate_with_phenotyping_pipeline
                 pdf_results = integrate_with_phenotyping_pipeline(bird_path, config, run_name=run_name)
                 if pdf_results:
-                    logging.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
+                    logger.info(f"Generated phenotype PDFs for {bird_name}: {list(pdf_results.keys())}")
             except ImportError:
-                logging.warning("phenotype_pdfs module not available, skipping PDF generation")
+                logger.warning("phenotype_pdfs module not available, skipping PDF generation")
 
-        logging.info(f"Successfully completed phenotyping for bird: {bird_name}")
+        logger.info(f"Successfully completed phenotyping for bird: {bird_name}")
         return True
 
     except Exception as e:
-        logging.error(f"Error in phenotyping pipeline for {bird_name}: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error in phenotyping pipeline for {bird_name}: {e}", exc_info=True)
         return False
 
 def save_detailed_phenotype_data(bird_path: str,
@@ -1429,7 +1433,7 @@ def save_detailed_phenotype_data(bird_path: str,
             manual_path = os.path.join(detailed_data_dir, 'manual_phenotype_data.pkl')
             with open(manual_path, 'wb') as f:
                 pkl.dump(manual_results, f)
-            logging.info(f"Saved detailed manual phenotype data to: {manual_path}")
+            logger.info(f"Saved detailed manual phenotype data to: {manual_path}")
 
         # Save automated results for each rank
         for i, (auto_result, cluster_result) in enumerate(zip(auto_results, clustering_results)):
@@ -1440,12 +1444,12 @@ def save_detailed_phenotype_data(bird_path: str,
             auto_path = os.path.join(detailed_data_dir, f'automated_phenotype_data_rank{i}.pkl')
             with open(auto_path, 'wb') as f:
                 pkl.dump(auto_data, f)
-            logging.info(f"Saved detailed automated phenotype data rank {i} to: {auto_path}")
+            logger.info(f"Saved detailed automated phenotype data rank {i} to: {auto_path}")
 
         return True
 
     except Exception as e:
-        logging.error(f"Error saving detailed phenotype data: {e}")
+        logger.error(f"Error saving detailed phenotype data: {e}")
         return False
 
 
@@ -1507,10 +1511,10 @@ def _generate_phenotype_plots(
             syllable_data.get('manual_syllables')):
             generate_manual_umap_plot(bird_path, syllable_data, manual_results, clustering_results[0], config, run_name=run_name)
 
-        logging.info(f"Generated phenotype plots for {bird_name} in {plots_dir}")
+        logger.info(f"Generated phenotype plots for {bird_name} in {plots_dir}")
 
     except Exception as e:
-        logging.error(f"Error generating plots for {bird_name}: {e}")
+        logger.error(f"Error generating plots for {bird_name}: {e}")
 
 
 def generate_manual_umap_plot(
@@ -1531,7 +1535,7 @@ def generate_manual_umap_plot(
         # Load syllable features for UMAP
         syllable_db_path = os.path.join(bird_path, 'syllable_data', 'syllable_database', 'syllable_features.csv')
         if not os.path.exists(syllable_db_path):
-            logging.warning(f"No syllable database found for manual UMAP plot: {syllable_db_path}")
+            logger.warning(f"No syllable database found for manual UMAP plot: {syllable_db_path}")
             return ""
 
         df = pd.read_csv(syllable_db_path)
@@ -1541,7 +1545,7 @@ def generate_manual_umap_plot(
                         not col.startswith(('manual_label', 'cluster_', 'song_file', 'hash'))]
 
         if not feature_cols:
-            logging.warning("No feature columns found for UMAP")
+            logger.warning("No feature columns found for UMAP")
             return ""
 
         # Prepare features and labels
@@ -1551,7 +1555,7 @@ def generate_manual_umap_plot(
         # Filter out samples without manual labels
         valid_mask = manual_labels.notna() & (manual_labels != '') & (manual_labels != 'unknown')
         if not valid_mask.any():
-            logging.warning("No valid manual labels found for UMAP")
+            logger.warning("No valid manual labels found for UMAP")
             return ""
 
         features_clean = features[valid_mask]
@@ -1600,11 +1604,11 @@ def generate_manual_umap_plot(
         plt.savefig(plot_path, dpi=config.figure_dpi, bbox_inches='tight')
         plt.close()
 
-        logging.info(f"Generated manual UMAP plot: {plot_path}")
+        logger.info(f"Generated manual UMAP plot: {plot_path}")
         return plot_path
 
     except Exception as e:
-        logging.error(f"Error generating manual UMAP plot: {e}")
+        logger.error(f"Error generating manual UMAP plot: {e}")
         plt.close()
         return ""
 
@@ -1677,7 +1681,7 @@ def plot_transition_matrices(
             saved_plots.append(plot_path)
 
     except Exception as e:
-        logging.error(f"Error creating transition plots: {e}")
+        logger.error(f"Error creating transition plots: {e}")
         plt.close('all')  # Clean up any open figures
 
     return saved_plots
@@ -1744,7 +1748,7 @@ def plot_repeat_patterns(
         return plot_path
 
     except Exception as e:
-        logging.error(f"Error creating repeat plot: {e}")
+        logger.error(f"Error creating repeat plot: {e}")
         plt.close()
         return ""
 
@@ -1797,7 +1801,7 @@ def plot_vocabulary_comparison(
                 })
 
         if not comparison_data:
-            logging.warning(f"No vocabulary data available for comparison plot for {bird_name}")
+            logger.warning(f"No vocabulary data available for comparison plot for {bird_name}")
             return ""
 
         # Create DataFrame and plot
@@ -1857,7 +1861,7 @@ def plot_vocabulary_comparison(
         return plot_path
 
     except Exception as e:
-        logging.error(f"Error creating vocabulary comparison plot: {e}")
+        logger.error(f"Error creating vocabulary comparison plot: {e}")
         plt.close()
         return ""
 
@@ -1902,7 +1906,7 @@ def _format_transition_annotations(matrix: pd.DataFrame) -> np.ndarray:
         return annot_array
 
     except Exception as e:
-        logging.error(f"Error formatting transition annotations: {e}")
+        logger.error(f"Error formatting transition annotations: {e}")
         return np.array([[''] * matrix.shape[1]] * matrix.shape[0])
 
 
@@ -1914,10 +1918,10 @@ def _get_available_birds(save_path: str) -> List[str]:
     try:
         birds = []
         if not os.path.exists(save_path):
-            logging.error(f"Save path does not exist: {save_path}")
+            logger.error(f"Save path does not exist: {save_path}")
             return birds
 
-        logging.info(f"Scanning directory: {save_path}")
+        logger.info(f"Scanning directory: {save_path}")
 
         for item in os.listdir(save_path):
             item_path = os.path.join(save_path, item)
@@ -1926,7 +1930,7 @@ def _get_available_birds(save_path: str) -> List[str]:
             if not os.path.isdir(item_path) or item.startswith('.'):
                 continue
 
-            logging.info(f"Checking potential bird: {item}")
+            logger.info(f"Checking potential bird: {item}")
 
             # Check if this looks like a bird directory
             # Look for either:
@@ -1941,28 +1945,28 @@ def _get_available_birds(save_path: str) -> List[str]:
             if os.path.exists(specs_dir):
                 spec_files = [f for f in os.listdir(specs_dir) if f.endswith('.h5') and f.startswith('syllables_')]
                 if spec_files:
-                    logging.info(f"  Found {len(spec_files)} syllable spec files for {item}")
+                    logger.info(f"  Found {len(spec_files)} syllable spec files for {item}")
                     is_valid_bird = True
 
             # Method 2: Check for master_summary.csv (clustering results)
             from song_phenotyping.tools.pipeline_paths import RESULTS_DIR
             master_summary_path = os.path.join(item_path, RESULTS_DIR, 'master_summary.csv')
             if os.path.exists(master_summary_path):
-                logging.info(f"  Found master_summary.csv for {item}")
+                logger.info(f"  Found master_summary.csv for {item}")
                 is_valid_bird = True
 
             if is_valid_bird:
                 birds.append(item)
-                logging.info(f"  ✅ Added {item} as valid bird")
+                logger.info(f"  ✅ Added {item} as valid bird")
             else:
-                logging.info(f"  ❌ Skipping {item}: no syllable specs or master_summary.csv found")
+                logger.info(f"  ❌ Skipping {item}: no syllable specs or master_summary.csv found")
 
-        logging.info(f"Found {len(birds)} valid birds: {birds}")
+        logger.info(f"Found {len(birds)} valid birds: {birds}")
         return sorted(birds)
 
     except Exception as e:
-        logging.error(f"Error getting available birds from {save_path}: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error getting available birds from {save_path}: {e}")
+        logger.error(traceback.format_exc())
         return []
 
 
@@ -1977,10 +1981,10 @@ def main(save_path: str) -> None:
         # Get available birds
         birds = _get_available_birds(save_path)
         if not birds:
-            logging.error("No birds found for processing")
+            logger.error("No birds found for processing")
             return
 
-        logging.info(f"Found {len(birds)} birds for processing: {birds}")
+        logger.info(f"Found {len(birds)} birds for processing: {birds}")
 
         # Create configuration
         config = PhenotypingConfig()
@@ -1999,15 +2003,15 @@ def main(save_path: str) -> None:
                 failed_birds.append(bird)
 
         # Report results
-        logging.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
+        logger.info(f"Processing complete. Success: {len(successful_birds)}, Failed: {len(failed_birds)}")
         if failed_birds:
-            logging.warning(f"Failed birds: {failed_birds}")
+            logger.warning(f"Failed birds: {failed_birds}")
 
-        logging.info("Unified phenotyping pipeline execution complete!")
+        logger.info("Unified phenotyping pipeline execution complete!")
 
     except Exception as e:
-        logging.error(f"Error in main phenotyping pipeline: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error in main phenotyping pipeline: {e}")
+        logger.error(traceback.format_exc())
         raise
 
 if __name__ == '__main__':
@@ -2024,7 +2028,7 @@ if __name__ == '__main__':
         ]
     )
 
-    logging.info("Starting unified phenotyping pipeline")
+    logger.info("Starting unified phenotyping pipeline")
 
     # Process test datasets
     test_paths = [
@@ -2039,9 +2043,9 @@ if __name__ == '__main__':
     for save_path in test_paths:
         if os.path.exists(save_path):
             dataset_name = os.path.basename(save_path)
-            logging.info(f"Processing {dataset_name} dataset...")
+            logger.info(f"Processing {dataset_name} dataset...")
             main(save_path=save_path)
         else:
-            logging.warning(f"Path does not exist: {save_path}")
+            logger.warning(f"Path does not exist: {save_path}")
 
-    logging.info("All datasets processed!")
+    logger.info("All datasets processed!")
