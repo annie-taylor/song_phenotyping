@@ -23,6 +23,19 @@ pip install -e ".[docs]"   # build docs locally
 pip install -e ".[dev]"    # pytest
 ```
 
+## Documentation
+
+Full documentation is available at **https://annie-taylor.github.io/song_phenotyping/**.
+
+To build locally:
+
+```bash
+pip install -e ".[docs]"
+cd docs && make html
+```
+
+For machine setup, config reference, and git workflow see [`SETUP.md`](SETUP.md).
+
 ## Configuration
 
 Copy the example config and edit paths for your machine:
@@ -163,16 +176,3 @@ from song_phenotyping.catalog import generate_all_catalogs
 
 results = generate_all_catalogs(bird_path="/data/pipeline_runs/or18or24", rank=0)
 ```
-
-## Documentation
-
-Full documentation is available at **https://annie-taylor.github.io/song_phenotyping/**.
-
-To build locally:
-
-```bash
-pip install -e ".[docs]"
-cd docs && make html
-```
-
-For machine setup, config reference, and git workflow see [`SETUP.md`](SETUP.md).
