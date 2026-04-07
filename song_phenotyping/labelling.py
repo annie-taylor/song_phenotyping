@@ -1720,8 +1720,8 @@ def label_bird(save_path: str, bird: str, metrics: list, replace_labels: bool = 
     try:
         logger.info(
             f"Starting labeling pipeline for bird {bird} | run={run_name} | "
-            f"metrics={metrics} | weights_type={type(weights).__name__} | "
-            f"weights={weights} | n_hdbscan_params={len(hdbscan_params) if hdbscan_params else 'default'} | "
+            f"metrics={metrics} | weights_type={type(metric_weights).__name__} | "
+            f"weights={metric_weights} | n_hdbscan_params={len(hdbscan_params) if hdbscan_params else 'default'} | "
             f"replace_labels={replace_labels} | max_workers={max_workers}"
         )
 
