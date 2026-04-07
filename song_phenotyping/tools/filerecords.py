@@ -10,6 +10,13 @@ from song_phenotyping.signal import parse_audio_filename
 
 @dataclass
 class FileRecord:
+    """Resolved paths and parsed metadata for a single audio recording.
+
+    Populated by :func:`audio_paths_txt_to_filerecords` or constructed
+    directly.  Holds the canonical metadata path, the resolved audio path
+    (local copy or server path), and parsed filename fields (bird, day, time).
+    """
+
     # Canonical absolute path to the metadata file (expected: .wav.not.mat or .not.mat)
     metadata_path: Path
 

@@ -132,12 +132,37 @@ class UMAPParams:
 
 
 def complex_spectrogram_distance(spec1, spec2):
-    # spec1, spec2 are complex spectrograms (magnitude + phase)
+    """L2 distance between two complex spectrograms.
+
+    Parameters
+    ----------
+    spec1, spec2 : np.ndarray
+        Complex-valued spectrogram arrays of the same shape.
+
+    Returns
+    -------
+    float
+        Frobenius norm of the element-wise difference.
+    """
     return np.linalg.norm(spec1 - spec2)
 
 
 def phase_aware_spectrogram_distance(spec1, spec2):
-    # Magnitude component (cosine-like)
+    """Distance metric combining magnitude cosine similarity and phase coherence.
+
+    Computes ``1 - (0.8 * mag_sim + 0.2 * phase_coherence)`` so that more
+    similar spectrograms yield smaller distances.
+
+    Parameters
+    ----------
+    spec1, spec2 : np.ndarray
+        Complex-valued spectrogram arrays of the same shape.
+
+    Returns
+    -------
+    float
+        Distance in [0, 1]; lower = more similar.
+    """
     mag1, mag2 = np.abs(spec1), np.abs(spec2)
     mag_sim = np.dot(mag1.flatten(), mag2.flatten()) / (
             np.linalg.norm(mag1) * np.linalg.norm(mag2))
@@ -161,14 +186,42 @@ def phase_aware_spectrogram_distance(spec1, spec2):
 #     return alpha * mag_dist + beta * phase_dist
 
 def group_delay_distance(spec1, spec2):
-    # Group delay = -d(phase)/d(frequency)
+    """L2 distance between the group-delay representations of two spectrograms.
+
+    Group delay is computed as ``-d(phase)/d(frequency)`` along the frequency
+    axis (axis 0) after phase unwrapping.
+
+    Parameters
+    ----------
+    spec1, spec2 : np.ndarray
+        Complex-valued spectrogram arrays of the same shape.
+
+    Returns
+    -------
+    float
+        L2 norm of the group-delay difference.
+    """
     gd1 = -np.diff(np.unwrap(np.angle(spec1)), axis=0)
     gd2 = -np.diff(np.unwrap(np.angle(spec2)), axis=0)
 
     return np.linalg.norm(gd1 - gd2)
 
 def instantaneous_freq_distance(spec1, spec2):
-    # Compute instantaneous frequency from phase derivatives
+    """L2 distance between the instantaneous-frequency representations of two spectrograms.
+
+    Instantaneous frequency is computed as ``d(phase)/d(time)`` along the time
+    axis (axis 1) after phase unwrapping.
+
+    Parameters
+    ----------
+    spec1, spec2 : np.ndarray
+        Complex-valued spectrogram arrays of the same shape.
+
+    Returns
+    -------
+    float
+        L2 norm of the instantaneous-frequency difference.
+    """
     if1 = np.diff(np.unwrap(np.angle(spec1)), axis=1)
     if2 = np.diff(np.unwrap(np.angle(spec2)), axis=1)
 
@@ -430,6 +483,22 @@ def save_umap_embeddings(embedding_path: str, embeddings: np.ndarray, hashes: li
 
 
 def save_umap_model(model_path: str, umap_model: umap.UMAP, params: UMAPParams) -> bool:
+    """Pickle a fitted UMAP model and its parameters to disk.
+
+    Parameters
+    ----------
+    model_path : str
+        Destination ``.pkl`` file path.
+    umap_model : umap.UMAP
+        A fitted UMAP model instance.
+    params : UMAPParams
+        The hyperparameters used to fit the model.
+
+    Returns
+    -------
+    bool
+        ``True`` on success, ``False`` if an exception was raised.
+    """
     try:
         data = {'model': umap_model, 'params': params}
         with open(model_path, 'wb') as f:
