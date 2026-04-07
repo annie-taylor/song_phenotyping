@@ -490,11 +490,21 @@ def get_song_specs(audio_filename: str, onsets: np.ndarray, offsets: np.ndarray,
             onsets, offsets, max_dur_ms
         )
     else:
-        # Filter out long syllables
-        if hasattr(params, 'max_dur') and params.max_dur:
+        # When warping is active, max_dur is the target warp length — every syllable
+        # is scaled to fit regardless of its original duration, so no pre-filtering
+        # is needed or correct.  Only filter when warping is off, where syllables
+        # longer than max_dur cannot be meaningfully represented.
+        use_warping = getattr(params, 'use_warping', False)
+        if not use_warping and hasattr(params, 'max_dur') and params.max_dur:
             max_dur_ms = params.max_dur * 1000
             durations = offsets - onsets
             valid_mask = durations <= max_dur_ms
+            n_dropped = int(np.sum(~valid_mask))
+            if n_dropped:
+                logger.debug(
+                    f"max_dur filter (use_warping=False): dropping {n_dropped} syllable(s) "
+                    f"longer than {params.max_dur * 1000:.0f} ms"
+                )
             processed_onsets = onsets[valid_mask]
             processed_offsets = offsets[valid_mask]
             syllable_to_original_mapping = np.where(valid_mask)[0]
