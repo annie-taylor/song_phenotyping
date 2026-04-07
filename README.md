@@ -166,7 +166,9 @@ results = generate_all_catalogs(bird_path="/data/pipeline_runs/or18or24", rank=0
 
 ## Documentation
 
-Full documentation (installation, usage guide, and API reference) is in [`docs/`](docs/). To build locally:
+Full documentation is available at **https://annie-taylor.github.io/song_phenotyping/**.
+
+To build locally:
 
 ```bash
 pip install -e ".[docs]"

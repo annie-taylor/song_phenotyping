@@ -11,4 +11,5 @@ API Reference
    phenotyping
    catalog
    slicing
+   signal
    tools

@@ -36,3 +36,19 @@ Project configuration
    :members:
    :undoc-members: False
    :show-inheritance:
+
+Pipeline paths
+--------------
+
+.. automodule:: song_phenotyping.tools.pipeline_paths
+   :members:
+   :undoc-members: False
+   :show-inheritance:
+
+File records
+------------
+
+.. automodule:: song_phenotyping.tools.filerecords
+   :members:
+   :undoc-members: False
+   :show-inheritance:
