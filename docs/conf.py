@@ -46,6 +46,8 @@ autodoc_mock_imports = [
     "umap",
     "hdbscan",
     "pyfftw",
+    "seaborn",
+    "psutil",
 ]
 
 # intersphinx: link to upstream docs

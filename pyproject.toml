@@ -30,6 +30,8 @@ dependencies = [
     "scikit-learn",
     "pyyaml",
     "tqdm",
+    "seaborn",
+    "psutil",
 ]
 
 [project.optional-dependencies]
