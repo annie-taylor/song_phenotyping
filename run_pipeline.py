@@ -45,6 +45,7 @@ WSEG_METADATA  = None    # wseg metadata dir; None = skip wseg
 BIRDS          = None    # None = all discovered; or e.g. ['or18or24', 'bu78bu77']
 SONGS_PER_BIRD = None    # None = use config.yaml value (or all songs if unset there)
 SONGS_SEED     = None    # None = non-deterministic; int for reproducible subset
+COPY_LOCALLY   = None    # None → use config.yaml; True = copy audio to save_path and use local files
 
 # Spectrogram flags (Stage A)
 SAVE_INST_FREQ          = None   # None → use config.yaml; True/False to override
@@ -168,6 +169,7 @@ def _load_pipeline_cfg():
     birds          = BIRDS          if BIRDS is not None else p.birds
     songs_per_bird = SONGS_PER_BIRD if SONGS_PER_BIRD is not None else p.songs_per_bird
     songs_seed     = SONGS_SEED     if SONGS_SEED is not None else p.songs_seed
+    copy_locally   = COPY_LOCALLY   if COPY_LOCALLY is not None else getattr(p, 'copy_locally', False)
 
     # Spectrogram overrides
     spec_cfg = dict(p.spectrogram_params or {})
@@ -226,6 +228,7 @@ def _load_pipeline_cfg():
         birds            = birds,
         songs_per_bird   = songs_per_bird,
         songs_seed       = songs_seed,
+        copy_locally     = copy_locally,
         run_name         = run_name,
         spec_cfg         = spec_cfg,
         emb_cfg          = emb_cfg,
@@ -447,7 +450,8 @@ def _build_label_lookup_minimal(bird_path: str):
 
 def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
                     songs_seed=None, spec_cfg=None, emb_cfg=None, lab_cfg=None,
-                    pheno_cfg=None, generate_catalog=True, run_name=None):
+                    pheno_cfg=None, generate_catalog=True, run_name=None,
+                    copy_locally=False):
     """Run stages A–E for a single evsonganaly bird."""
     from song_phenotyping.ingestion import filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds
     from song_phenotyping.flattening import flatten_bird_spectrograms
@@ -477,7 +481,8 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
 
     print("[ A ] Saving spectrograms...")
     meta, audio = filepaths_from_evsonganaly(
-        wav_directory=source_dir, bird_subset=[bird]
+        wav_directory=source_dir, bird_subset=[bird],
+        save_path=save_path, copy_locally=copy_locally,
     )
     save_specs_for_evsonganaly_birds(
         metadata_file_paths=meta,
@@ -527,7 +532,8 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
 
 def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
              songs_seed=None, spec_cfg=None, emb_cfg=None, lab_cfg=None,
-             pheno_cfg=None, generate_catalog=True, run_name=None):
+             pheno_cfg=None, generate_catalog=True, run_name=None,
+             copy_locally=False):
     """Run stages A–E for a single wseg bird."""
     from song_phenotyping.ingestion import filepaths_from_wseg, save_specs_for_wseg_birds
     from song_phenotyping.flattening import flatten_bird_spectrograms
@@ -558,7 +564,8 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
 
     print("[ A ] Saving spectrograms...")
     meta, audio = filepaths_from_wseg(
-        seg_directory=metadata_dir, bird_subset=[bird]
+        seg_directory=metadata_dir, bird_subset=[bird],
+        save_path=save_path, copy_locally=copy_locally,
     )
     save_specs_for_wseg_birds(
         metadata_file_paths=meta,
@@ -567,6 +574,7 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
         songs_per_bird=songs_per_bird,
         params=spec_params,
         songs_seed=songs_seed,
+        copy_locally=copy_locally,
         run_name=run_name,
     )
 
@@ -827,13 +835,15 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
 def run_evsonganaly_cohort(save_path, evsong_source, birds, songs_per_bird,
                            songs_seed=None, spec_cfg=None, emb_cfg=None,
                            lab_cfg=None, pheno_cfg=None, generate_catalog=True,
-                           run_name=None):
+                           run_name=None, copy_locally=False):
     """Run the full pipeline for all (or a filtered subset of) evsonganaly birds."""
     from song_phenotyping.ingestion import filepaths_from_evsonganaly
 
     meta, audio = filepaths_from_evsonganaly(
         wav_directory=evsong_source,
         bird_subset=birds,
+        save_path=save_path,
+        copy_locally=copy_locally,
     )
 
     discovered = sorted(meta.keys())
@@ -855,19 +865,22 @@ def run_evsonganaly_cohort(save_path, evsong_source, birds, songs_per_bird,
             pheno_cfg=pheno_cfg,
             generate_catalog=generate_catalog,
             run_name=run_name,
+            copy_locally=copy_locally,
         )
 
 
 def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
                     songs_seed=None, spec_cfg=None, emb_cfg=None,
                     lab_cfg=None, pheno_cfg=None, generate_catalog=True,
-                    run_name=None):
+                    run_name=None, copy_locally=False):
     """Run the full pipeline for all (or a filtered subset of) wseg birds."""
     from song_phenotyping.ingestion import filepaths_from_wseg
 
     meta, audio = filepaths_from_wseg(
         seg_directory=wseg_metadata,
         bird_subset=birds,
+        save_path=save_path,
+        copy_locally=copy_locally,
     )
 
     discovered = sorted(meta.keys())
@@ -889,6 +902,7 @@ def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
             pheno_cfg=pheno_cfg,
             generate_catalog=generate_catalog,
             run_name=run_name,
+            copy_locally=copy_locally,
         )
 
 
@@ -926,6 +940,7 @@ if __name__ == "__main__":
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
             run_name         = cfg['run_name'],
+            copy_locally     = cfg['copy_locally'],
         )
 
     if cfg['wseg_metadata']:
@@ -941,4 +956,5 @@ if __name__ == "__main__":
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
             run_name         = cfg['run_name'],
+            copy_locally     = cfg['copy_locally'],
         )
