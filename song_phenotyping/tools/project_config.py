@@ -60,6 +60,7 @@ class PipelineConfig:
     birds: Optional[List[str]]          # None = auto-discover all; or explicit list
     songs_per_bird: Optional[int]       # None = all songs
     songs_seed: Optional[int]           # None = non-deterministic; int = reproducible subset
+    copy_locally: bool                  # Copy audio to save_path and use local files
     spectrogram_params: Optional[dict]  # Merged into SpectrogramParams at call site
     embedding_params: Optional[dict]    # Merged into UMAPParams / grid at call site
     labelling_params: Optional[dict]    # metrics, weights, HDBSCAN grid, flags
@@ -78,6 +79,7 @@ class PipelineConfig:
             birds               = d.get('birds'),
             songs_per_bird      = d.get('songs_per_bird'),
             songs_seed          = d.get('songs_seed'),
+            copy_locally        = bool(d.get('copy_locally', False)),
             spectrogram_params  = d.get('spectrograms') or {},
             embedding_params    = d.get('embedding') or {},
             labelling_params    = d.get('labelling') or {},
@@ -91,6 +93,7 @@ class PipelineConfig:
         return cls(
             save_path=None, evsong_source=None, wseg_metadata=None,
             birds=None, songs_per_bird=None, songs_seed=None,
+            copy_locally=False,
             spectrogram_params={}, embedding_params={},
             labelling_params={}, phenotyping_params={},
             generate_catalog=True,

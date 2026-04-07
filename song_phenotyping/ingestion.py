@@ -61,23 +61,43 @@ from song_phenotyping.tools.logging_utils import setup_logger
 logger = setup_logger(__name__, 'spectrogram_saving.log')
 
 
-def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[str | None, str | None]:
+def _files_appear_different(src: Path, dst: Path) -> bool:
+    """Return True if *src* and *dst* appear to differ in content.
+
+    Compares file size and modification time.  A 1-second tolerance is used
+    for mtime comparison to accommodate filesystem precision differences
+    (e.g. FAT32 2-second granularity, SMB rounding).  Returns ``True``
+    (treat as different → copy) when either file cannot be stat'd.
     """
-    Copy the audio file to `copied_data_dir` (if not already copied) and also try to
-    find & copy the matching .rec file (same recording base). Returns (local_audio_path, local_rec_path).
-    If the .rec file is not found, local_rec_path is None.
+    try:
+        ss = src.stat()
+        ds = dst.stat()
+        return ss.st_size != ds.st_size or ss.st_mtime > ds.st_mtime + 1.0
+    except OSError:
+        return True
+
+
+def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[str | None, str | None]:
+    """Copy the audio file to *copied_data_dir* and also find/copy its .rec partner.
+
+    An existing local copy is reused if it appears identical to the source
+    (same size and source mtime not newer than local mtime by more than 1 s).
+    If the local copy looks stale or is missing it is overwritten.
+
+    Returns ``(local_audio_path, local_rec_path)``.  *local_rec_path* is
+    ``None`` when no matching .rec file can be found.
     """
     p = Path(audio_path)
     copied_data_dir = Path(copied_data_dir)
     copied_data_dir.mkdir(parents=True, exist_ok=True)
 
     filename = p.name
-    local_audio_path = copied_data_dir / filename  # Keep as Path object
+    local_audio_path = copied_data_dir / filename
 
-    # Copy audio if not already present
-    if not local_audio_path.exists():  # Use Path methods directly
+    # Copy audio only if missing or source is newer/different
+    if not local_audio_path.exists() or _files_appear_different(p, local_audio_path):
         try:
-            shutil.copy2(str(p), str(local_audio_path))  # Convert to str only for shutil
+            shutil.copy2(str(p), str(local_audio_path))
             logger.debug(" 📋 Copied audio: %s -> %s", p, local_audio_path)
         except Exception as e:
             logger.error(" ❌ Failed to copy audio %s: %s", p, e)
@@ -111,7 +131,7 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
         if cand.exists():
             try:
                 local_rec_path = copied_data_dir / cand.name
-                if not local_rec_path.exists():
+                if not local_rec_path.exists() or _files_appear_different(cand, local_rec_path):
                     shutil.copy2(str(cand), str(local_rec_path))
                     logger.debug("  📋 Copied rec: %s -> %s", cand, local_rec_path)
                 return str(local_audio_path), str(local_rec_path)
@@ -129,7 +149,7 @@ def copy_audio_and_partner_rec(audio_path: str, copied_data_dir: str) -> tuple[s
             if g.exists():
                 try:
                     local_rec_path = copied_data_dir / g.name
-                    if not local_rec_path.exists():
+                    if not local_rec_path.exists() or _files_appear_different(g, local_rec_path):
                         shutil.copy2(str(g), str(local_rec_path))
                         logger.debug("  📋 Copied rec by glob: %s -> %s", g, local_rec_path)
                     return str(local_audio_path), str(local_rec_path)
@@ -144,14 +164,20 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                         song_or_call: str = 'song',
                         file_ext: str = '.wav.not.mat',
                         bird_subset: None | list = None,
-                        copy_locally: bool = False,
-                        prefer_local: bool = False) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+                        copy_locally: bool = False) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """Discover WhisperSeg metadata file paths organised by bird ID.
 
     Walks *seg_directory* recursively, collecting ``.wav.not.mat`` metadata
     files from subdirectories whose path contains *song_or_call*. Bird IDs
     are inferred from the directory two levels above the ``song/`` folder
     (i.e. the structure ``<seg_directory>/<bird>/song/*.wav.not.mat``).
+
+    When *copy_locally* is ``True`` the function first checks whether a
+    populated local cache already exists under *save_path*.  If so, it uses
+    that directly (no server access needed).  Otherwise it scans
+    *seg_directory*, copies audio and metadata to *save_path*, and returns
+    the local paths.  Existing local files are only overwritten when the
+    source appears to have changed (different size or newer mtime).
 
     Parameters
     ----------
@@ -168,11 +194,10 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     bird_subset : list of str, optional
         Restrict discovery to these bird IDs. ``None`` returns all birds.
     copy_locally : bool, optional
-        If ``True``, copy audio and metadata files to *save_path*.
-        Requires Macaw to be mounted. Default is ``False``.
-    prefer_local : bool, optional
-        If ``True``, attempt to read from the local cache in *save_path*
-        before scanning *seg_directory*. Default is ``False``.
+        If ``True``, copy audio and metadata files to *save_path* and use
+        those local paths for all downstream processing.  On subsequent
+        runs with the same *save_path* the local cache is reused
+        automatically.  Default is ``False``.
 
     Returns
     -------
@@ -187,18 +212,17 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     save_specs_for_wseg_birds : Run Stage A using paths returned by this function.
     """
 
-    # If prefer_local is True, try local cache first (avoids server scanning)
-    if prefer_local and save_path and os.path.exists(save_path):
-        logger.info("🔄 prefer_local=True, using local cache (no server access)")
-
-        metadata_file_paths, audio_file_paths = filepaths_from_local_cache(save_path, bird_subset)
-
-        if metadata_file_paths:
-            logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
-            return metadata_file_paths, audio_file_paths
-        else:
-            logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
-            return {}
+    # When copy_locally is requested, check for an existing local cache first.
+    # This avoids unnecessary server access on subsequent runs.
+    if copy_locally and save_path and os.path.exists(save_path):
+        cached_meta, cached_audio = filepaths_from_local_cache(save_path, bird_subset)
+        if cached_meta:
+            logger.info(
+                f"copy_locally=True: found existing local cache with "
+                f"{len(cached_meta)} bird(s) — skipping server scan"
+            )
+            return cached_meta, cached_audio
+        logger.info("copy_locally=True: no local cache found; scanning server and copying files")
 
     logger.info(f"🔍 Scanning wseg directory: {seg_directory}")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
@@ -263,7 +287,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
                             metadata_filename = os.path.basename(file_path)
                             local_metadata_path = copied_data_dir / metadata_filename
 
-                            if not local_metadata_path.exists():
+                            if not local_metadata_path.exists() or _files_appear_different(Path(file_path), local_metadata_path):
                                 try:
                                     shutil.copy2(file_path, str(local_metadata_path))
                                     logger.debug(f" 📋 Copied metadata: {metadata_filename}")
@@ -350,7 +374,6 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                batch_file_naming: str = 'batch.txt.keep',
                                bird_subset: None | list = None,
                                copy_locally: bool = False,
-                               prefer_local: bool = False,
                                preferred_subdirs: list = None) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Discover file paths from evsonganaly ``batch.txt.keep`` files.
 
@@ -358,6 +381,13 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     extracts paired metadata (``.wav.not.mat``) and audio (``.wav``) paths
     for each bird. Bird IDs are detected via a letter–digit pattern applied
     to the directory path components.
+
+    When *copy_locally* is ``True`` the function first checks whether a
+    populated local cache already exists under *save_path*.  If so, it uses
+    that directly (no server access needed).  Otherwise it scans
+    *wav_directory*, copies audio and metadata to *save_path*, and returns
+    the local paths.  Existing local files are only overwritten when the
+    source appears to have changed (different size or newer mtime).
 
     Parameters
     ----------
@@ -372,10 +402,10 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     bird_subset : list of str, optional
         Restrict discovery to these bird IDs. ``None`` returns all birds.
     copy_locally : bool, optional
-        Copy audio and metadata files to *save_path*. Default is ``False``.
-    prefer_local : bool, optional
-        Attempt to read from the local cache in *save_path* before
-        scanning *wav_directory*. Default is ``False``.
+        If ``True``, copy audio and metadata files to *save_path* and use
+        those local paths for all downstream processing.  On subsequent
+        runs with the same *save_path* the local cache is reused
+        automatically.  Default is ``False``.
     preferred_subdirs : list of str, optional
         If given, only scan directories whose name matches one of these
         values. ``None`` scans all subdirectories.
@@ -392,19 +422,17 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     save_specs_for_evsonganaly_birds : Run Stage A using paths returned by this function.
     """
 
-    # If prefer_local is True, try local cache first (avoids server scanning)
-    if prefer_local and save_path and os.path.exists(save_path):
-        logger.info("🔄 prefer_local=True, using local cache (no server access)")
-
-        metadata_file_paths, audio_file_paths = filepaths_from_local_cache(save_path, bird_subset)
-
-        if metadata_file_paths:
-            logger.info(f"✅ Using local cache with {len(metadata_file_paths)} birds")
-            # For evsonganaly, derive audio_file_paths from metadata paths
-            return metadata_file_paths, audio_file_paths
-        else:
-            logger.warning("⚠️ No local cache found but prefer_local=True. Set prefer_local=False to scan server.")
-            return {}, {}
+    # When copy_locally is requested, check for an existing local cache first.
+    # This avoids unnecessary server access on subsequent runs.
+    if copy_locally and save_path and os.path.exists(save_path):
+        cached_meta, cached_audio = filepaths_from_local_cache(save_path, bird_subset)
+        if cached_meta:
+            logger.info(
+                f"copy_locally=True: found existing local cache with "
+                f"{len(cached_meta)} bird(s) — skipping server scan"
+            )
+            return cached_meta, cached_audio
+        logger.info("copy_locally=True: no local cache found; scanning server and copying files")
 
     logger.info(f"🔍 Scanning evsonganaly directory: {wav_directory}")
     logger.info(f"📊 Initial memory usage: {get_memory_usage():.1f} MB")
@@ -559,7 +587,7 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
                                     metadata_filename = os.path.basename(song_metadata_path)
                                     local_metadata_path = copied_data_dir / metadata_filename
 
-                                    if not local_metadata_path.exists():
+                                    if not local_metadata_path.exists() or _files_appear_different(Path(song_metadata_path), local_metadata_path):
                                         try:
                                             shutil.copy2(song_metadata_path, str(local_metadata_path))
                                             logger.debug(f" 📋 Copied metadata: {metadata_filename}")
@@ -1384,7 +1412,7 @@ def save_data_specs(candidate_files: List[str], save_path: str,
 
 def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths: dict | None, save_path: str = None,
                                      songs_per_bird: int = 5, params: 'SpectrogramParams' = None,
-                                     verbose: bool = False, prefer_local: bool = True,
+                                     verbose: bool = False,
                                      songs_seed: int = None, run_name: str = "default"):
     """Run Stage A for evsonganaly birds: extract and save syllable spectrograms.
 
@@ -1410,9 +1438,6 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
         :class:`~song_phenotyping.tools.spectrogram_configs.SpectrogramParams`.
     verbose : bool, optional
         Enable verbose per-file logging. Default is ``False``.
-    prefer_local : bool, optional
-        Try to resolve audio from the local cache before the server.
-        Default is ``True``.
     songs_seed : int or None, optional
         Random seed for song subset selection.  ``None`` (default) gives
         non-deterministic selection; set an integer for reproducible subsets.
@@ -1481,7 +1506,6 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                     params=params,
                     verbose=verbose,
                     read_songpath_from_metadata=False,
-                    prefer_local=prefer_local,
                     run_name=run_name,
                 )
 
@@ -1519,7 +1543,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                               save_path: str,
                               songs_per_bird: int = 20,
                               params: SpectrogramParams = None,
-                              verbose: bool = False, prefer_local: bool = True, copy_locally: bool = False,
+                              verbose: bool = False, copy_locally: bool = False,
                               songs_seed: int = None, run_name: str = "default"):
     """Run Stage A for WhisperSeg birds: extract and save syllable spectrograms.
 
@@ -1549,11 +1573,10 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
         :class:`~song_phenotyping.tools.spectrogram_configs.SpectrogramParams`.
     verbose : bool, optional
         Enable verbose per-file logging. Default is ``False``.
-    prefer_local : bool, optional
-        Try to resolve audio from the local cache before the server.
-        Default is ``True``.
     copy_locally : bool, optional
-        Copy audio to *save_path* before processing. Default is ``False``.
+        If ``True``, *audio_file_paths* contains local copies (as populated
+        by :func:`filepaths_from_wseg` with ``copy_locally=True``) and those
+        paths are used directly.  Default is ``False``.
     songs_seed : int or None, optional
         Random seed for song subset selection.  ``None`` (default) gives
         non-deterministic selection; set an integer for reproducible subsets.
@@ -1626,7 +1649,6 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     params=params,
                     verbose=verbose,
                     read_songpath_from_metadata=True,
-                    prefer_local=prefer_local,
                     run_name=run_name,
                     save_manual=False,
                 )
