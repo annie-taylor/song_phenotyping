@@ -6,6 +6,8 @@
 *.ipynb_checkpoints*
 *.iml
 *.git*
+!.github/
+!.github/**
 *.json
 *.pkl
 *.tmp
