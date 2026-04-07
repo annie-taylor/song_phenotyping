@@ -29,10 +29,11 @@ from song_phenotyping.tools.audio_utils import read_audio_file
 from song_phenotyping.tools.signal_utils import smooth, butter_bandpass_filter_sos
 from song_phenotyping.tools.system_utils import fix_mixture_of_separators
 
-import pyfftw.interfaces.scipy_fft
-
-# Set globally when module is imported
-scipy.fft.set_global_backend(pyfftw.interfaces.scipy_fft)
+try:
+    import pyfftw.interfaces.scipy_fft
+    scipy.fft.set_global_backend(pyfftw.interfaces.scipy_fft)
+except (ImportError, ValueError):
+    pass  # pyfftw unavailable; fall back to default scipy FFT backend
 
 EPSILON = 1e-9  # small constant to avoid log(0)
 # Tempo estimation parameters

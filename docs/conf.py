@@ -40,6 +40,14 @@ autodoc_default_options = {
 autodoc_typehints = "description"
 autosummary_generate = True
 
+# Mock heavy C-extension / versioned imports so the docs build doesn't
+# require a full scientific Python stack with exact pinned versions.
+autodoc_mock_imports = [
+    "umap",
+    "hdbscan",
+    "pyfftw",
+]
+
 # intersphinx: link to upstream docs
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),

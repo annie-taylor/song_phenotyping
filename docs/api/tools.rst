@@ -1,9 +1,7 @@
 Tools
 =====
 
-.. automodule:: song_phenotyping.tools
-   :members:
-   :undoc-members: False
+Shared utilities used across pipeline stages.
 
 Label handling
 --------------

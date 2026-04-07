@@ -63,12 +63,17 @@ def audio_paths_txt_to_filerecords(
     bird_subset: Optional[List[str]] = None,
 ) -> Dict[str, List[FileRecord]]:
     """
-    Read audio_paths.txt lines of the form:
-      bird_id|local_path|server_path
-    and return Dict[bird_id, List[FileRecord]].
+    Read ``audio_paths.txt`` lines of the form ``bird_id|local_path|server_path``
+    and return ``Dict[bird_id, List[FileRecord]]``.
 
-    - metadata_ext: how to derive metadata filename from an audio path if needed.
-      (evsonganaly usually keeps metadata alongside audio; this default mirrors your module)
+    Parameters
+    ----------
+    audio_paths_txt : str
+        Path to the ``audio_paths.txt`` file.
+    metadata_ext : str
+        Extension used to derive the metadata filename from an audio path.
+    bird_subset : list of str, optional
+        If given, only records for these bird IDs are returned.
     """
     records_by_bird: Dict[str, List[FileRecord]] = {}
 
