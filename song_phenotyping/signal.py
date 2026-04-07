@@ -919,9 +919,10 @@ def get_song_spec(t1: float, t2: float, audio: np.ndarray, params: SpectrogramPa
     Extract and normalize spectrogram from a birdsong syllable segment.
     Updated with better logging and error handling.
     """
-    # warn if the segment duration exceeds max_dur
-    if t2 - t1 > params.max_dur + 1e-4:
-        logger.warning(f"⚠️ Segment longer than max_dur: {t2 - t1}s, max_dur = {params.max_dur}s")
+    # warn if the segment duration exceeds max_dur (only relevant when not warping;
+    # with use_warping=True the syllable is scaled to max_dur, so no truncation occurs)
+    if t2 - t1 > params.max_dur + 1e-4 and not getattr(params, 'use_warping', False):
+        logger.warning(f"⚠️ Segment longer than max_dur (will be truncated): {t2 - t1}s, max_dur = {params.max_dur}s")
 
     # convert onset and offset times to sample indices
     s1, s2 = int(round(t1 * fs)), int(round(t2 * fs))
