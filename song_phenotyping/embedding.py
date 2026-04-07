@@ -287,7 +287,7 @@ def load_embedding_from_file(embedding_path: str) -> Optional[np.ndarray]:
         logger.warning(f"Could not load embedding from {embedding_path}: {e}")
         return None
 
-def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load all Stage B flattened spectrogram files from a directory.
 
     Concatenates all ``flattened_*.h5`` files found in *paths_to_specs* into
@@ -310,14 +310,18 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
         Position indices within the original recording.
     hashes : numpy.ndarray, shape (n_syllables,)
         Per-syllable hash strings for cross-stage tracking.
+    song_file_ids : numpy.ndarray, shape (n_syllables,)
+        Integer index of the source HDF5 file for each syllable.  All
+        syllables from the same song file share the same value, enabling
+        song-level subsampling.
 
     Raises
     ------
     ValueError
         If no flattened files are found or no valid syllables can be loaded.
     """
-    flattened_syl_filenames = [f for f in os.listdir(paths_to_specs)
-                               if f.endswith('.h5') and 'flattened' in f]
+    flattened_syl_filenames = sorted([f for f in os.listdir(paths_to_specs)
+                                      if f.endswith('.h5') and 'flattened' in f])
 
     if not flattened_syl_filenames:
         raise ValueError(f"No flattened spectrogram files found in {paths_to_specs}")
@@ -346,10 +350,11 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
     labels = np.empty(total_syllables, dtype=object)
     position_idxs = np.empty(total_syllables, dtype=np.int32)
     hashes = np.empty(total_syllables, dtype=object)
+    song_file_ids = np.empty(total_syllables, dtype=np.int32)
 
     # Load data from all files
     current_idx = 0
-    for filename in flattened_syl_filenames:
+    for file_idx, filename in enumerate(flattened_syl_filenames):
         file_path = os.path.join(paths_to_specs, filename)
         try:
             with tables.open_file(file_path, mode='r') as f:
@@ -360,6 +365,7 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
                 labels[current_idx:end_idx] = [label.decode('utf-8') for label in f.root.labels[:]]
                 position_idxs[current_idx:end_idx] = f.root.position_idxs[:]
                 hashes[current_idx:end_idx] = [hash_id.decode('utf-8') for hash_id in f.root.hashes[:]]
+                song_file_ids[current_idx:end_idx] = file_idx
                 current_idx = end_idx
 
         except Exception as e:
@@ -372,8 +378,9 @@ def load_flattened_specs(paths_to_specs: str) -> Tuple[np.ndarray, np.ndarray, n
         labels = labels[:current_idx]
         position_idxs = position_idxs[:current_idx]
         hashes = hashes[:current_idx]
+        song_file_ids = song_file_ids[:current_idx]
 
-    return flattened_specs, labels, position_idxs, hashes
+    return flattened_specs, labels, position_idxs, hashes, song_file_ids
 
 
 def save_umap_embeddings(embedding_path: str, embeddings: np.ndarray, hashes: list,
@@ -458,6 +465,76 @@ def subsample_data(specs: np.ndarray, labels: np.ndarray, position_idxs: np.ndar
 
     return (specs[:, indices], labels[indices],
             position_idxs[indices], hashes[indices])
+
+
+def subsample_by_song(specs: np.ndarray, labels: np.ndarray, position_idxs: np.ndarray,
+                      hashes: np.ndarray, song_file_ids: np.ndarray,
+                      max_samples: int, random_seed: int = 42) -> Tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Subsample by selecting whole songs (files) until *max_samples* is reached.
+
+    Sampling whole songs preserves within-song syllable-type distributions far
+    better than uniform random syllable sampling.  Songs are shuffled with
+    *random_seed*, then greedily added in that order until the next song would
+    push the total over *max_samples*.  If *max_samples* is already satisfied
+    by the data, the arrays are returned unchanged.
+
+    Parameters
+    ----------
+    specs : numpy.ndarray, shape (n_features, n_syllables)
+        Feature matrix (columns = syllables).
+    labels, position_idxs, hashes : numpy.ndarray, shape (n_syllables,)
+        Per-syllable annotation arrays.
+    song_file_ids : numpy.ndarray, shape (n_syllables,)
+        Integer file-index for each syllable (from :func:`load_flattened_specs`).
+    max_samples : int
+        Target syllable budget.
+    random_seed : int, optional
+        Seed for reproducible song shuffling.  Default 42.
+
+    Returns
+    -------
+    specs, labels, position_idxs, hashes : numpy.ndarray
+        Subsampled arrays containing only syllables from selected songs,
+        sorted in their original chronological order.
+    """
+    if len(labels) <= max_samples:
+        return specs, labels, position_idxs, hashes
+
+    unique_songs = np.unique(song_file_ids)
+    rng = np.random.default_rng(random_seed)
+    song_order = rng.permutation(unique_songs)
+
+    selected_indices = []
+    total = 0
+    for song_id in song_order:
+        song_mask = song_file_ids == song_id
+        count = int(np.sum(song_mask))
+        if total + count > max_samples and total > 0:
+            # Skip this song if it would exceed budget (but always include at least one)
+            continue
+        selected_indices.append(np.where(song_mask)[0])
+        total += count
+        if total >= max_samples:
+            break
+
+    if not selected_indices:
+        # Pathological case: single song already exceeds max_samples
+        logger.warning(
+            f"subsample_by_song: single song ({len(labels)} syllables) exceeds "
+            f"max_samples={max_samples}; falling back to random syllable sampling"
+        )
+        return subsample_data(specs, labels, position_idxs, hashes, max_samples, random_seed)
+
+    indices = np.sort(np.concatenate(selected_indices))
+    n_songs_selected = len(selected_indices)
+    n_songs_total = len(unique_songs)
+    logger.info(
+        f"Song-level subsampling: {n_songs_selected}/{n_songs_total} songs → "
+        f"{len(indices)}/{len(labels)} syllables (target max_samples={max_samples})"
+    )
+
+    return specs[:, indices], labels[indices], position_idxs[indices], hashes[indices]
 
 
 def estimate_umap_memory_usage(n_samples: int, n_features: int, n_neighbors: int) -> float:
@@ -772,36 +849,38 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
         }
 
         # Load data
-        specs, labels, position_idxs, hashes = load_flattened_specs(paths_to_specs=paths['specs'])
-        logger.info(f"🐦 Loaded {len(labels)} samples for bird {bird}")
+        specs, labels, position_idxs, hashes, song_file_ids = load_flattened_specs(
+            paths_to_specs=paths['specs']
+        )
+        logger.info(f"🐦 Loaded {len(labels)} syllables across "
+                    f"{len(np.unique(song_file_ids))} songs for bird {bird}")
 
-        # Dynamic memory management
+        # Dynamic memory management: governs worker count only — NOT sample size.
+        # All syllables are embedded by default; set max_samples in config only when
+        # a hard cap is genuinely needed (e.g. exploratory runs on very large datasets).
         if auto_memory_management:
-            # Calculate safe batch size based on largest n_neighbors
             max_n_neighbors = max(n_neighbors_list)
             available_memory_gb = psutil.virtual_memory().available / (1024 ** 3)
-
             safe_batch_size = calculate_safe_batch_size(
                 available_memory_gb, specs.shape[0], max_n_neighbors
             )
+            logger.info(
+                f"Memory: {available_memory_gb:.1f} GB available, "
+                f"safe_batch_size={safe_batch_size} (worker-count guidance only); "
+                f"embedding all {len(labels)} syllables"
+            )
 
-            if max_samples is None:
-                max_samples = safe_batch_size
-            else:
-                max_samples = min(max_samples, safe_batch_size)
-
-            logger.info(f"🎯 Safe batch size: {safe_batch_size}, using max_samples: {max_samples}")
-
-        # Apply subsampling if needed
+        # Apply song-level subsampling only when the user has set an explicit cap
         was_subsampled = False
         original_n_samples = len(labels)
 
         if max_samples is not None and len(labels) > max_samples:
-            specs, labels, position_idxs, hashes = subsample_data(
-                specs, labels, position_idxs, hashes, max_samples, subsample_seed
+            specs, labels, position_idxs, hashes = subsample_by_song(
+                specs, labels, position_idxs, hashes, song_file_ids,
+                max_samples, subsample_seed
             )
             was_subsampled = True
-            logger.info(f"📉 Subsampled from {original_n_samples} to {len(labels)} samples")
+            logger.info(f"📉 Song-level subsample: {original_n_samples} → {len(labels)} syllables")
 
         # Create processing metadata
         processing_metadata = {
