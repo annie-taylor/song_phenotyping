@@ -141,14 +141,15 @@ def _compute_run_name(spec_cfg, emb_cfg, lab_cfg, pheno_cfg, songs_per_bird, son
     import hashlib
     import json
 
-    _EMB_SKIP  = {'max_workers'}
+    _SPEC_SKIP = {'overwrite_existing'}
+    _EMB_SKIP  = {'max_workers', 'overwrite'}
     _LAB_SKIP  = {'max_workers', 'generate_cluster_pdf'}
     _PHE_SKIP  = {'generate_plots'}
 
     payload = {
         'songs_per_bird': songs_per_bird,
         'songs_seed':     songs_seed,
-        'spec':  dict(spec_cfg  or {}),
+        'spec':  {k: v for k, v in (spec_cfg  or {}).items() if k not in _SPEC_SKIP},
         'emb':   {k: v for k, v in (emb_cfg  or {}).items() if k not in _EMB_SKIP},
         'lab':   {k: v for k, v in (lab_cfg  or {}).items() if k not in _LAB_SKIP},
         'pheno': {k: v for k, v in (pheno_cfg or {}).items() if k not in _PHE_SKIP},
@@ -503,6 +504,7 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
         save_path=save_path, bird=bird,
         run_name=run_name,
         max_workers=emb_cfg.get('max_workers'),
+        overwrite=emb_cfg.get('overwrite', False),
     )
 
     print("[ D ] Clustering / labelling...")
@@ -587,6 +589,7 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
         save_path=save_path, bird=bird,
         run_name=run_name,
         max_workers=emb_cfg.get('max_workers'),
+        overwrite=emb_cfg.get('overwrite', False),
     )
 
     print("[ D ] Clustering / labelling...")
@@ -617,7 +620,7 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
 # Stage re-entry runners
 # ---------------------------------------------------------------------------
 
-def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
+def run_from_embedding(save_path: str, birds, emb_cfg=None, lab_cfg=None, pheno_cfg=None,
                        generate_catalog=True, run_name: str = None):
     """Re-run Stages C→E from existing flattened features (stages/02_features/).
 
@@ -631,6 +634,8 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         Pipeline output root (same value as the original full run).
     birds : list of str or None
         Birds to process.  ``None`` is not valid here — provide an explicit list.
+    emb_cfg : dict, optional
+        Embedding overrides (overwrite, max_workers, grid params, etc.).
     lab_cfg : dict, optional
         Labelling overrides (metrics, weights, HDBSCAN grid, etc.).
     pheno_cfg : dict, optional
@@ -646,6 +651,7 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
     from song_phenotyping.phenotyping import phenotype_bird
     from song_phenotyping.tools.pipeline_paths import run_root
 
+    emb_cfg   = emb_cfg   or {}
     lab_cfg   = lab_cfg   or {}
     pheno_cfg = pheno_cfg or {}
     if run_name is None:
@@ -663,7 +669,8 @@ def run_from_embedding(save_path: str, birds, lab_cfg=None, pheno_cfg=None,
         explore_embedding_parameters_robust(
             save_path=save_path, bird=bird,
             run_name=run_name,
-            max_workers=lab_cfg.get('max_workers'),
+            max_workers=emb_cfg.get('max_workers'),
+            overwrite=emb_cfg.get('overwrite', False),
         )
 
         print("[ D ] Clustering / labelling...")

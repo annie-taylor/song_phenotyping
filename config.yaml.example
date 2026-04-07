@@ -63,6 +63,23 @@ pipeline:
   # Set an integer (e.g. 42) to always select the same subset.
   songs_seed: 42
 
+  # Copy audio and metadata files from the source directory to save_path
+  # before processing (true = local copy; false = read from source in place).
+  #
+  # Use true when:
+  #   - Source audio lives on a network server (e.g. Macaw) and you want to
+  #     process locally for speed or to work offline.
+  #   - You are on a PC and the server drive may disconnect mid-run.
+  #
+  # On the first run with copy_locally: true, Stage A copies every file to
+  # <save_path>/copied_data/<bird>/.  On subsequent runs with the same
+  # save_path, the local cache is reused automatically — no server needed.
+  #
+  # Use false (default) when:
+  #   - Source audio is already local (e.g. an external SSD mounted as evsong_source).
+  #   - You are processing from a fast, reliable network share and copying is unnecessary.
+  copy_locally: false
+
   # ---------------------------------------------------------------------------
   # Stage A — spectrogram parameters
   # ---------------------------------------------------------------------------
@@ -80,6 +97,10 @@ pipeline:
     save_group_delay: false     # append group-delay channel
     duration_feature_weight: 0.0  # 0 = disabled; ~1.0 weights duration as one time bin
     use_warping: false          # frequency-warping augmentation
+    # Recompute and overwrite Stage A HDF5 files that already exist on disk.
+    # false (default) skips files that are already present, making re-runs fast.
+    # Set to true if source audio has changed or you need to force a clean rebuild.
+    overwrite_existing: false
 
   # ---------------------------------------------------------------------------
   # Stage C — UMAP embedding parameters
@@ -99,6 +120,11 @@ pipeline:
     # null = let the memory-aware adaptive calculation decide (recommended).
     # Set an integer (e.g. 4) to cap the worker count on machines with many CPUs.
     max_workers: null
+    # Recompute and overwrite UMAP embedding files that already exist on disk.
+    # false (default) skips parameter combinations whose .h5 file is already
+    # present and compatible with the current data, making re-runs much faster.
+    # Set to true if flattened features have changed or you want a clean rebuild.
+    overwrite: false
 
   # ---------------------------------------------------------------------------
   # Stage D — labelling / clustering parameters
