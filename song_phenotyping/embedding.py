@@ -924,19 +924,20 @@ def explore_embedding_parameters_robust(save_path: str, bird: str,
         logger.info(f"🐦 Loaded {len(labels)} syllables across "
                     f"{len(np.unique(song_file_ids))} songs for bird {bird}")
 
-        # Dynamic memory management: governs worker count only — NOT sample size.
-        # All syllables are embedded by default; set max_samples in config only when
-        # a hard cap is genuinely needed (e.g. exploratory runs on very large datasets).
+        # Dynamic memory management: cap max_samples at safe_batch_size, and govern worker count.
         if auto_memory_management:
             max_n_neighbors = max(n_neighbors_list)
             available_memory_gb = psutil.virtual_memory().available / (1024 ** 3)
             safe_batch_size = calculate_safe_batch_size(
                 available_memory_gb, specs.shape[0], max_n_neighbors
             )
+            if max_samples is None:
+                max_samples = safe_batch_size
+            else:
+                max_samples = min(max_samples, safe_batch_size)
             logger.info(
                 f"Memory: {available_memory_gb:.1f} GB available, "
-                f"safe_batch_size={safe_batch_size} (worker-count guidance only); "
-                f"embedding all {len(labels)} syllables"
+                f"safe_batch_size={safe_batch_size}, using max_samples={max_samples}"
             )
 
         # Apply song-level subsampling only when the user has set an explicit cap
