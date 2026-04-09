@@ -30,4 +30,6 @@ Modules
     FileRecord dataclass and helpers for building per-bird file records.
 :mod:`~song_phenotyping.tools.dbquery`
     SQLite database queries for bird band/genetic/expression data.
+:mod:`~song_phenotyping.tools.bird_name`
+    Bird name normalization: expand color abbreviations to canonical 2-letter codes.
 """

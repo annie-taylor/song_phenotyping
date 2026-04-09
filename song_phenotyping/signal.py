@@ -28,6 +28,7 @@ from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 from song_phenotyping.tools.audio_utils import read_audio_file
 from song_phenotyping.tools.signal_utils import smooth, butter_bandpass_filter_sos
 from song_phenotyping.tools.system_utils import fix_mixture_of_separators
+from song_phenotyping.tools.bird_name import normalize_bird_name
 
 try:
     import pyfftw.interfaces.scipy_fft
@@ -121,7 +122,7 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
             # Convert YYMMDD to full date format if needed
             if len(day) == 6:
                 day = '20' + day  # Convert YY to 20YY
-            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+            return {'bird': normalize_bird_name(bird), 'day': day, 'time': time, 'filename': filename, 'success': True}
 
         # Pattern 2: bk1bk3.20081118-10.wav (BIRD.YYYYMMDD-SEQ.wav) - sequence number
         pattern2 = r'^([a-zA-Z]+\d+[a-zA-Z]*\d*)\.(\d{8})-(\d+)\.wav$'
@@ -130,7 +131,7 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
             bird, day, seq = match2.groups()
             # Use sequence number as milliseconds offset from midnight to preserve order
             time = str(int(seq)).zfill(6)  # Convert to 6-digit string (microseconds)
-            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+            return {'bird': normalize_bird_name(bird), 'day': day, 'time': time, 'filename': filename, 'success': True}
 
         # Pattern 3: bk1bk3.20081118.wav (BIRD.YYYYMMDD.wav) - no sequence (index 0)
         pattern3 = r'^([a-zA-Z]+\d+[a-zA-Z]*\d*)\.(\d{8})\.wav$'
@@ -138,7 +139,7 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
         if match3:
             bird, day = match3.groups()
             time = '000000'  # First song of the day (sequence 0)
-            return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+            return {'bird': normalize_bird_name(bird), 'day': day, 'time': time, 'filename': filename, 'success': True}
 
         # Original patterns - keep for backward compatibility
         split_filename = filename.split('_')
@@ -157,7 +158,7 @@ def parse_audio_filename(file_path: str) -> Dict[str, Any]:
             logger.warning(f'🔍 Unrecognized filename format: {filename}')
             raise ValueError(f'Unrecognized filename format: {filename}')
 
-        return {'bird': bird, 'day': day, 'time': time, 'filename': filename, 'success': True}
+        return {'bird': normalize_bird_name(bird), 'day': day, 'time': time, 'filename': filename, 'success': True}
 
     except Exception as e:
         logger.error(f'💥 Failed to parse filename {file_path}: {e}')

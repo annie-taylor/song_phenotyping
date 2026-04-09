@@ -57,6 +57,7 @@ from song_phenotyping.tools.spectrogram_configs import SpectrogramParams
 from song_phenotyping.tools.audio_path_management import *
 from song_phenotyping.tools.filerecords import *
 from song_phenotyping.tools.logging_utils import setup_logger
+from song_phenotyping.tools.bird_name import normalize_bird_name
 
 logger = setup_logger(__name__, 'spectrogram_saving.log')
 
@@ -212,6 +213,11 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
     save_specs_for_wseg_birds : Run Stage A using paths returned by this function.
     """
 
+    # Normalize bird_subset to canonical names so filters match regardless of
+    # which abbreviation convention the caller used.
+    if bird_subset is not None:
+        bird_subset = [normalize_bird_name(b) for b in bird_subset]
+
     # When copy_locally is requested, check for an existing local cache first.
     # This avoids unnecessary server access on subsequent runs.
     if copy_locally and save_path and os.path.exists(save_path):
@@ -244,7 +250,7 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
             try:
                 file_path = os.path.join(root, file)
                 path_parts = root.split(os.sep)
-                bird = path_parts[-2]
+                bird = normalize_bird_name(path_parts[-2])
 
                 # Apply bird subset filter early
                 if bird_subset is not None and bird not in bird_subset:
@@ -340,9 +346,10 @@ def filepaths_from_wseg(seg_directory: str, save_path: str = None,
             if not matching_files:
                 continue
             path_parts = root.split(os.sep)
-            bird = path_parts[-1]
-            if not _bird_pat.match(bird):
+            raw_bird = path_parts[-1]
+            if not _bird_pat.match(raw_bird):
                 continue
+            bird = normalize_bird_name(raw_bird)
             if bird_subset is not None and bird not in bird_subset:
                 continue
             if bird not in metadata_file_paths:
@@ -422,6 +429,11 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
     save_specs_for_evsonganaly_birds : Run Stage A using paths returned by this function.
     """
 
+    # Normalize bird_subset to canonical names so filters match regardless of
+    # which abbreviation convention the caller used.
+    if bird_subset is not None:
+        bird_subset = [normalize_bird_name(b) for b in bird_subset]
+
     # When copy_locally is requested, check for an existing local cache first.
     # This avoids unnecessary server access on subsequent runs.
     if copy_locally and save_path and os.path.exists(save_path):
@@ -460,16 +472,17 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
             if len(path_parts) >= 2:
                 date = path_parts[-1]
 
-            # Apply bird subset filter
-            if bird_subset is not None and not any(bird in path_parts for bird in bird_subset):
-                continue
-
-            # Find bird name using pattern matching
+            # Find and normalize bird name before applying subset filter so
+            # the filter works regardless of which abbreviation is in the path.
             bird = None
             for part in path_parts:
                 if bird_pattern.match(part):
-                    bird = part
+                    bird = normalize_bird_name(part)
                     break
+
+            # Apply bird subset filter using normalized name
+            if bird_subset is not None and bird not in bird_subset:
+                continue
 
             # Check if this is a preferred directory type
             if preferred_subdirs is None:
@@ -515,9 +528,10 @@ def filepaths_from_evsonganaly(wav_directory: str = None, save_path: str = None,
             if not not_mat_files:
                 continue
             path_parts = root.split(os.sep)
-            bird = next((p for p in path_parts if bird_pattern.match(p)), None)
-            if bird is None:
+            raw_bird = next((p for p in path_parts if bird_pattern.match(p)), None)
+            if raw_bird is None:
                 continue
+            bird = normalize_bird_name(raw_bird)
             if bird_subset is not None and bird not in bird_subset:
                 continue
             for f in not_mat_files:
@@ -1143,6 +1157,11 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
     """
     logger.info(f"🔍 Discovering files from local cache: {save_path}")
 
+    # Normalize bird_subset to canonical names so filters match regardless of
+    # which abbreviation convention the caller used.
+    if bird_subset is not None:
+        bird_subset = [normalize_bird_name(b) for b in bird_subset]
+
     metadata_file_paths = {}
     audio_file_paths = {}
 
@@ -1158,8 +1177,11 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
         if not os.path.isdir(bird_folder) or item in ['copied_data']:
             continue
 
-        # Apply bird subset filter
-        if bird_subset is not None and item not in bird_subset:
+        # Normalize the directory name to get the canonical bird ID used as dict key.
+        bird_id = normalize_bird_name(item)
+
+        # Apply bird subset filter using canonical name
+        if bird_subset is not None and bird_id not in bird_subset:
             continue
 
         # Check if we have cached files for this bird
@@ -1168,7 +1190,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
             logger.debug(f"  ⚠️ No audio_paths.txt found for {item}")
             continue
 
-        logger.info(f"  🐦 Reading cached files for bird: {item}")
+        logger.info(f"  🐦 Reading cached files for bird: {bird_id}")
 
         # Read audio_paths.txt to get LOCAL metadata paths
         bird_metadata_files = []
@@ -1183,7 +1205,7 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
                     parts = line.split('|')
                     if len(parts) >= 3:
                         # TODO potential issue here with assuming directory structure in filepath!!!
-                        bird_id, local_path, server_path = parts[0], parts[1], parts[2]
+                        _bid, local_path, server_path = parts[0], parts[1], parts[2]
 
                         # NORMALIZE paths using Path - this handles E: vs E:\ automatically
                         local_path = str(Path(local_path))
@@ -1208,9 +1230,9 @@ def filepaths_from_local_cache(save_path: str, bird_subset: list = None) -> Tupl
             continue
 
         if bird_metadata_files:
-            metadata_file_paths[item] = bird_metadata_files
-            audio_file_paths[item] = bird_audio_files
-            logger.info(f"  📄 Found {len(bird_metadata_files)} local cached files for {item}")
+            metadata_file_paths[bird_id] = bird_metadata_files
+            audio_file_paths[bird_id] = bird_audio_files
+            logger.info(f"  📄 Found {len(bird_metadata_files)} local cached files for {bird_id}")
 
     total_birds = len(metadata_file_paths)
     total_files = sum(len(files) for files in metadata_file_paths.values())

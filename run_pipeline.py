@@ -33,6 +33,8 @@ import logging
 import sys
 from pathlib import Path
 
+from song_phenotyping.tools.bird_name import normalize_bird_name
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -460,6 +462,8 @@ def run_evsonganaly(save_path: str, source_dir: str, bird: str, songs_per_bird,
     from song_phenotyping.labelling import label_bird
     from song_phenotyping.tools.pipeline_paths import run_root
 
+    bird = normalize_bird_name(bird)
+
     spec_cfg   = spec_cfg   or {}
     emb_cfg    = emb_cfg    or {}
     lab_cfg    = lab_cfg    or {}
@@ -543,6 +547,8 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
     from song_phenotyping.labelling import label_bird
     from song_phenotyping.phenotyping import phenotype_bird
     from song_phenotyping.tools.pipeline_paths import run_root
+
+    bird = normalize_bird_name(bird)
 
     spec_cfg   = spec_cfg   or {}
     emb_cfg    = emb_cfg    or {}
@@ -660,6 +666,8 @@ def run_from_embedding(save_path: str, birds, emb_cfg=None, lab_cfg=None, pheno_
     if not birds:
         raise ValueError("run_from_embedding() requires an explicit birds list.")
 
+    birds = [normalize_bird_name(b) for b in birds]
+
     for bird in birds:
         bird_root = str(Path(save_path) / bird)
         run_path  = str(run_root(bird_root, run_name))
@@ -757,6 +765,8 @@ def run_from_labelling(save_path: str, birds, metrics=None, metric_weights=None,
     if not birds:
         raise ValueError("run_from_labelling() requires an explicit birds list.")
 
+    birds = [normalize_bird_name(b) for b in birds]
+
     if run_name is None:
         run_name = "default"
 
@@ -820,6 +830,8 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
 
     if not birds:
         raise ValueError("run_from_phenotyping() requires an explicit birds list.")
+
+    birds = [normalize_bird_name(b) for b in birds]
 
     for bird in birds:
         bird_root = str(Path(save_path) / bird)
