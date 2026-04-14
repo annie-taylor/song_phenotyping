@@ -14,7 +14,7 @@ Output tree layout
                 02_features/     ← Stage B  flattened feature HDF5 files
                 03_embeddings/   ← Stage C  UMAP HDF5 + pkl models
                 04_labels/       ← Stage D  cluster label HDF5 files
-                syllable_database/  ← auto-built label lookup CSV
+                syllable_database/  ← syllable_features.{csv,h5} + feature_params.json
                 05_phenotype/    ← Stage E  detailed phenotype pkl files
             results/
                 master_summary.csv
@@ -46,6 +46,7 @@ SPECS_DIR       = "stages/01_specs"
 FEATURES_DIR    = "stages/02_features"
 EMBEDDINGS_DIR  = "stages/03_embeddings"
 LABELS_DIR      = "stages/04_labels"
+SYLLABLE_DB_DIR = "stages/syllable_database"
 PHENOTYPE_DIR   = "stages/05_phenotype"
 
 # ---------------------------------------------------------------------------

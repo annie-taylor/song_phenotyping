@@ -14,7 +14,10 @@ Public API
 ----------
 - :func:`generate_song_catalog` — chronological song view for one bird.
 - :func:`generate_syllable_type_catalog` — per-label spectrogram grid.
-- :func:`generate_all_catalogs` — convenience wrapper that calls both.
+- :func:`generate_sequencing_catalog` — transition matrices and repeat stats.
+- :func:`generate_cluster_quality_catalog` — per-cluster feature stats,
+  eigensyllables, and repeat-ramping analysis.
+- :func:`generate_all_catalogs` — convenience wrapper that calls all of the above.
 - :class:`CatalogConfig` — configurable display parameters.
 
 Examples
@@ -44,6 +47,8 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import tables
+from scipy.ndimage import zoom as _ndimage_zoom
+from scipy.stats import linregress as _linregress
 
 from song_phenotyping.tools.audio_utils import read_audio_file
 from song_phenotyping.tools.label_handler import LabelHandler, LabelType
@@ -880,6 +885,572 @@ def generate_sequencing_catalog(
 
 
 # ---------------------------------------------------------------------------
+# Cluster quality catalog — helpers
+# ---------------------------------------------------------------------------
+
+# Acoustic features included in the quality catalog
+_CQ_FEATURES = [
+    'duration_ms',
+    'spectral_centroid_mean',
+    'spectral_bandwidth_mean',
+    'spectral_rolloff_mean',
+    'rms_energy_mean',
+    'prev_syllable_gap_ms',
+    'next_syllable_gap_ms',
+]
+
+_EIGENSYL_WIDTH = 64   # time bins after normalisation
+_EIGENSYL_MAX_N = 100  # max spectrograms per cluster used for eigensyllable
+
+
+def _time_normalise(spec: np.ndarray, target_width: int = _EIGENSYL_WIDTH) -> np.ndarray:
+    """Resize *spec* to ``(n_freq, target_width)`` via bilinear interpolation."""
+    n_freq, n_time = spec.shape
+    if n_time == target_width:
+        return spec
+    return _ndimage_zoom(spec, (1.0, target_width / n_time), order=1)
+
+
+def _ncc_align(spec: np.ndarray, ref: np.ndarray, max_shift_frac: float = 0.15) -> np.ndarray:
+    """Shift *spec* along the time axis to maximise NCC with *ref*.
+
+    Parameters
+    ----------
+    spec, ref : ndarray, shape (n_freq, n_time)
+        Both must be the same shape after time-normalisation.
+    max_shift_frac : float
+        Maximum allowed shift as a fraction of the time width.
+
+    Returns
+    -------
+    ndarray
+        Shifted copy of *spec*.
+    """
+    n_time = spec.shape[1]
+    max_shift = max(1, int(n_time * max_shift_frac))
+    ref_norm = ref / (np.linalg.norm(ref) + 1e-12)
+
+    best_shift = 0
+    best_ncc = -np.inf
+    for shift in range(-max_shift, max_shift + 1):
+        rolled = np.roll(spec, shift, axis=1)
+        ncc = np.sum(ref_norm * rolled) / (np.linalg.norm(rolled) + 1e-12)
+        if ncc > best_ncc:
+            best_ncc = ncc
+            best_shift = shift
+    return np.roll(spec, best_shift, axis=1)
+
+
+def _compute_eigensyllable(
+        specs: List[np.ndarray],
+        max_n: int = _EIGENSYL_MAX_N,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (mean, std) eigensyllable for a collection of spectrograms.
+
+    Steps:
+    1. Cap at *max_n* instances.
+    2. Time-normalise all to :data:`_EIGENSYL_WIDTH` bins.
+    3. Find medoid (min mean MSE to all others).
+    4. NCC-align all to medoid (±15 % shift).
+    5. Return pixelwise mean and std.
+
+    Parameters
+    ----------
+    specs : list of ndarray, shape (n_freq, n_time)
+        Raw (unnormalised) syllable spectrograms.
+    max_n : int
+        Maximum number of instances to use.
+
+    Returns
+    -------
+    mean_spec, std_spec : ndarray, shape (n_freq, n_time_norm)
+    """
+    if not specs:
+        raise ValueError('No spectrograms provided')
+    sample = specs[:max_n]
+
+    # Time-normalise
+    normed = np.stack([_time_normalise(s) for s in sample])  # (n, freq, width)
+
+    # Find medoid via MSE
+    n = len(normed)
+    if n == 1:
+        medoid_idx = 0
+    else:
+        flat = normed.reshape(n, -1)
+        dists = np.sum(
+            (flat[:, np.newaxis, :] - flat[np.newaxis, :, :]) ** 2,
+            axis=-1,
+        )  # (n, n)
+        np.fill_diagonal(dists, 0.0)
+        medoid_idx = int(np.argmin(dists.sum(axis=1)))
+
+    ref = normed[medoid_idx]
+
+    # NCC-align all to medoid
+    aligned = np.stack([_ncc_align(s, ref) for s in normed])
+
+    mean_spec = aligned.mean(axis=0)
+    std_spec  = aligned.std(axis=0)
+    return mean_spec, std_spec
+
+
+def _add_repeat_position(df: pd.DataFrame, label_col: str) -> pd.DataFrame:
+    """Add a ``position_in_repeat`` column to *df*.
+
+    Within each song (identified by ``song_file`` + ``position_in_song``),
+    consecutive rows sharing the same label form a "run".  The first
+    occurrence in a run gets position 1, the second position 2, etc.
+    Rows with label ``-1`` (noise) always get position ``NaN``.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Must contain ``song_file``, ``position_in_song``, and *label_col*.
+    label_col : str
+        Column with cluster labels.
+
+    Returns
+    -------
+    DataFrame
+        A copy of *df* with an added ``position_in_repeat`` column.
+    """
+    df = df.sort_values(['song_file', 'position_in_song']).copy()
+    pos_in_rep = np.full(len(df), np.nan)
+
+    for _, song_df in df.groupby('song_file', sort=False):
+        idxs = song_df.index.tolist()
+        labels = song_df[label_col].tolist()
+        run_pos = 1
+        for k, idx in enumerate(idxs):
+            lbl = labels[k]
+            if pd.isna(lbl) or lbl == -1:
+                run_pos = 1
+                continue
+            if k > 0 and labels[k - 1] == lbl:
+                pos_in_rep[df.index.get_loc(idx)] = run_pos
+                run_pos += 1
+            else:
+                run_pos = 1
+                pos_in_rep[df.index.get_loc(idx)] = run_pos
+                run_pos += 1
+
+    df['position_in_repeat'] = pos_in_rep
+    return df
+
+
+def _render_eigensyllable(mean_spec: np.ndarray, std_spec: np.ndarray,
+                          label: Any, dpi: int) -> str:
+    """Return a base64 PNG showing mean + std eigensyllable side by side."""
+    fig, axes = plt.subplots(1, 2, figsize=(6, 2))
+    vmin = mean_spec.min()
+    vmax = mean_spec.max()
+    axes[0].imshow(mean_spec, aspect='auto', origin='lower', cmap='plasma',
+                   vmin=vmin, vmax=vmax)
+    axes[0].set_title(f'Eigensyllable (label {label})', fontsize=8)
+    axes[0].axis('off')
+    axes[1].imshow(std_spec, aspect='auto', origin='lower', cmap='viridis')
+    axes[1].set_title('Std deviation map', fontsize=8)
+    axes[1].axis('off')
+    fig.tight_layout(pad=0.5)
+    return _fig_to_b64(fig, dpi)
+
+
+# ---------------------------------------------------------------------------
+# Cluster quality catalog — main function
+# ---------------------------------------------------------------------------
+
+def generate_cluster_quality_catalog(
+    bird_path: str,
+    rank: int = 0,
+    config: Optional[CatalogConfig] = None,
+) -> str:
+    """Generate an HTML cluster quality catalog for one bird.
+
+    Presents per-cluster acoustic feature statistics, spectrogram thumbnails,
+    eigensyllables, and (for repeat clusters) a ramping analysis of loudness
+    and spectral centroid across repetition positions.
+
+    Parameters
+    ----------
+    bird_path : str
+        Path to the bird's root directory (the run-scoped path, same as
+        passed to :func:`generate_all_catalogs`).
+    rank : int, optional
+        Clustering rank to use.  Default is ``0``.
+    config : CatalogConfig or None, optional
+        Display parameters.  Uses default :class:`CatalogConfig` when ``None``.
+
+    Returns
+    -------
+    str
+        Absolute path to the generated HTML file, or ``''`` on failure.
+    """
+    cfg = config or CatalogConfig()
+    from song_phenotyping.tools.pipeline_paths import (
+        CATALOG_DIR, SPECS_DIR, STAGES_DIR,
+    )
+    bird_path = Path(bird_path)
+    bird_name = bird_path.name
+    out_dir = bird_path / CATALOG_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f'{bird_name}_cluster_quality_rank{rank}.html'
+
+    if out_path.exists() and not cfg.overwrite:
+        return str(out_path)
+
+    # ------------------------------------------------------------------
+    # Load syllable_features.csv
+    # ------------------------------------------------------------------
+    csv_path = bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
+    if not csv_path.exists():
+        logger.warning(f'Cluster quality catalog: syllable_features.csv not found: {csv_path}')
+        return ''
+
+    try:
+        df_all = pd.read_csv(csv_path)
+    except Exception as e:
+        logger.warning(f'Cluster quality catalog: could not load CSV ({e})')
+        return ''
+
+    # Find cluster label column for this rank
+    prefix = f'cluster_rank{rank}_'
+    label_cols = [c for c in df_all.columns if c.startswith(prefix)]
+    if not label_cols:
+        logger.warning(f'Cluster quality catalog: no cluster_rank{rank}_* column found in CSV')
+        return ''
+    label_col = label_cols[0]
+
+    # Present features available in this CSV
+    features = [f for f in _CQ_FEATURES if f in df_all.columns]
+    if not features:
+        logger.warning('Cluster quality catalog: none of the expected feature columns found')
+        return ''
+
+    # Identify unique cluster labels (include -1 noise)
+    df_all[label_col] = df_all[label_col].fillna(-1).astype(int)
+    cluster_labels = sorted(df_all[label_col].unique())
+
+    # ------------------------------------------------------------------
+    # Load spectrograms grouped by cluster label
+    # ------------------------------------------------------------------
+    specs_dir = bird_path / SPECS_DIR
+    label_to_specs: Dict[int, List[np.ndarray]] = {lbl: [] for lbl in cluster_labels}
+    hash_to_label: Dict[str, int] = {}
+    if 'hash_id' in df_all.columns:
+        hash_to_label = dict(zip(df_all['hash_id'].astype(str), df_all[label_col]))
+
+    for syl_file in sorted(specs_dir.glob('syllables_*.h5')) if specs_dir.exists() else []:
+        try:
+            with tables.open_file(str(syl_file), 'r') as hf:
+                specs_arr = hf.root.spectrograms.read()   # (n, freq, time)
+                if hasattr(hf.root, 'hashes'):
+                    hashes = [
+                        h.decode('utf-8') if isinstance(h, bytes) else str(h)
+                        for h in hf.root.hashes.read()
+                    ]
+                else:
+                    hashes = []
+            for i, spec in enumerate(specs_arr):
+                if i < len(hashes) and hashes[i] in hash_to_label:
+                    lbl = hash_to_label[hashes[i]]
+                    if lbl in label_to_specs:
+                        label_to_specs[lbl].append(spec)
+        except Exception as e:
+            logger.warning(f'Cluster quality catalog: error loading {syl_file.name}: {e}')
+
+    sections = []
+    n_with_specs = sum(1 for v in label_to_specs.values() if v)
+
+    # ------------------------------------------------------------------
+    # Between-cluster: summary table
+    # ------------------------------------------------------------------
+    try:
+        summary_rows = []
+        for lbl in cluster_labels:
+            grp = df_all[df_all[label_col] == lbl]
+            row = {'label': lbl, 'n': len(grp)}
+            for feat in features:
+                vals = grp[feat].dropna()
+                row[f'{feat}_mean'] = vals.mean() if len(vals) else np.nan
+                row[f'{feat}_std']  = vals.std()  if len(vals) else np.nan
+            summary_rows.append(row)
+        summary_df = pd.DataFrame(summary_rows)
+
+        # HTML table
+        header_cells = '<th>Label</th><th>N</th>' + ''.join(
+            f'<th>{f}<br><span style="font-weight:normal;color:#aaa;">mean±std</span></th>'
+            for f in features
+        )
+        data_rows = []
+        for _, r in summary_df.iterrows():
+            cells = (
+                f'<td style="text-align:center;">'
+                f'<span style="background:{_css_color(r["label"])};padding:2px 6px;'
+                f'border-radius:3px;">{int(r["label"])}</span></td>'
+                f'<td style="text-align:right;">{int(r["n"])}</td>'
+            )
+            for feat in features:
+                m = r.get(f'{feat}_mean', np.nan)
+                s = r.get(f'{feat}_std',  np.nan)
+                cells += (
+                    f'<td style="text-align:right;">'
+                    f'{"N/A" if np.isnan(m) else f"{m:.2f}"}'
+                    f'&nbsp;<span style="color:#888;">±&nbsp;'
+                    f'{"N/A" if np.isnan(s) else f"{s:.2f}"}</span></td>'
+                )
+            data_rows.append(f'<tr>{cells}</tr>')
+
+        tbl_html = (
+            '<table style="border-collapse:collapse;font-size:0.85em;'
+            'white-space:nowrap;">'
+            f'<tr style="border-bottom:2px solid #444;">{header_cells}</tr>'
+            + ''.join(data_rows)
+            + '</table>'
+        )
+        sections.append(
+            f'<div class="type-section"><h2>Cluster Summary</h2>{tbl_html}</div>'
+        )
+    except Exception as e:
+        logger.warning(f'Cluster quality catalog: summary table failed ({e})', exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Between-cluster: z-scored feature profile heatmap
+    # ------------------------------------------------------------------
+    try:
+        feat_matrix = summary_df[[f'{f}_mean' for f in features]].values.astype(float)
+        col_means = np.nanmean(feat_matrix, axis=0)
+        col_stds  = np.nanstd(feat_matrix,  axis=0)
+        col_stds[col_stds == 0] = 1.0
+        z_matrix = (feat_matrix - col_means) / col_stds
+
+        fig, ax = plt.subplots(figsize=(max(6, len(features) * 1.1),
+                                        max(3, len(cluster_labels) * 0.5)))
+        im = ax.imshow(z_matrix, cmap='RdBu_r', aspect='auto',
+                       vmin=-2.5, vmax=2.5)
+        plt.colorbar(im, ax=ax, shrink=0.8, label='z-score')
+        ax.set_xticks(range(len(features)))
+        ax.set_xticklabels(features, rotation=40, ha='right', fontsize=8)
+        ax.set_yticks(range(len(cluster_labels)))
+        ax.set_yticklabels([str(l) for l in cluster_labels], fontsize=8)
+        ax.set_title(f'Feature Profile (z-scored) — {bird_name} rank {rank}')
+        fig.tight_layout()
+        b64 = _fig_to_b64(fig, cfg.dpi)
+        sections.append(
+            f'<div class="type-section"><h2>Feature Profile Heatmap</h2>'
+            f'<img src="data:image/png;base64,{b64}"></div>'
+        )
+    except Exception as e:
+        logger.warning(f'Cluster quality catalog: feature heatmap failed ({e})', exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Between-cluster: pairwise distance matrix
+    # ------------------------------------------------------------------
+    try:
+        valid_rows = ~np.any(np.isnan(feat_matrix), axis=1)
+        if valid_rows.sum() >= 2:
+            valid_matrix = feat_matrix[valid_rows]
+            valid_labels = [cluster_labels[i] for i in range(len(cluster_labels)) if valid_rows[i]]
+            n_cl = len(valid_labels)
+            dist_mat = np.zeros((n_cl, n_cl))
+            for i in range(n_cl):
+                for j in range(n_cl):
+                    dist_mat[i, j] = np.linalg.norm(valid_matrix[i] - valid_matrix[j])
+
+            fig, ax = plt.subplots(figsize=(max(4, n_cl * 0.6), max(4, n_cl * 0.6)))
+            im = ax.imshow(dist_mat, cmap='viridis_r', aspect='equal')
+            plt.colorbar(im, ax=ax, shrink=0.8, label='Euclidean dist')
+            ax.set_xticks(range(n_cl))
+            ax.set_xticklabels([str(l) for l in valid_labels], rotation=45, ha='right', fontsize=8)
+            ax.set_yticks(range(n_cl))
+            ax.set_yticklabels([str(l) for l in valid_labels], fontsize=8)
+            ax.set_title(f'Pairwise Cluster Distance — {bird_name} rank {rank}')
+            fig.tight_layout()
+            b64 = _fig_to_b64(fig, cfg.dpi)
+            sections.append(
+                f'<div class="type-section"><h2>Pairwise Cluster Distance</h2>'
+                f'<img src="data:image/png;base64,{b64}"></div>'
+            )
+    except Exception as e:
+        logger.warning(f'Cluster quality catalog: distance matrix failed ({e})', exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Add repeat position column (needed for ramping analysis)
+    # ------------------------------------------------------------------
+    if 'song_file' in df_all.columns and 'position_in_song' in df_all.columns:
+        try:
+            df_all = _add_repeat_position(df_all, label_col)
+        except Exception as e:
+            logger.warning(f'Cluster quality catalog: repeat-position annotation failed ({e})')
+
+    # ------------------------------------------------------------------
+    # Per-cluster sections
+    # ------------------------------------------------------------------
+    for lbl in cluster_labels:
+        grp = df_all[df_all[label_col] == lbl]
+        lbl_specs = label_to_specs.get(lbl, [])
+        lbl_color = _css_color(lbl)
+
+        header = (
+            f'<div class="type-section">'
+            f'<h2 style="color:#fff;background:{lbl_color};'
+            f'display:inline-block;padding:4px 12px;border-radius:4px;">'
+            f'Cluster {lbl} &nbsp; <span style="font-weight:normal;font-size:0.85em;">'
+            f'(n={len(grp)})</span></h2>'
+        )
+        body_parts = [header]
+
+        # — CV bar chart —
+        try:
+            cv_data = {}
+            for feat in features:
+                vals = grp[feat].dropna()
+                if len(vals) > 1 and vals.mean() != 0:
+                    cv_data[feat] = vals.std() / abs(vals.mean())
+            if cv_data:
+                fig, ax = plt.subplots(figsize=(6, 2.5))
+                ax.bar(range(len(cv_data)), list(cv_data.values()),
+                       color=[_label_color(lbl)] * len(cv_data))
+                ax.set_xticks(range(len(cv_data)))
+                ax.set_xticklabels(list(cv_data.keys()), rotation=30, ha='right', fontsize=8)
+                ax.set_ylabel('CV')
+                ax.set_title(f'Feature CV — cluster {lbl}', fontsize=9)
+                fig.tight_layout()
+                b64 = _fig_to_b64(fig, cfg.dpi)
+                body_parts.append(
+                    f'<img src="data:image/png;base64,{b64}" '
+                    f'style="display:inline-block;vertical-align:top;">'
+                )
+        except Exception as e:
+            logger.warning(f'Cluster quality: CV chart failed for {lbl} ({e})')
+
+        # — Feature boxplots —
+        try:
+            feat_vals = {f: grp[f].dropna().values for f in features if f in grp.columns}
+            if feat_vals:
+                fig, ax = plt.subplots(figsize=(7, 2.8))
+                positions = list(range(len(feat_vals)))
+                bp = ax.boxplot(
+                    list(feat_vals.values()), positions=positions,
+                    vert=True, patch_artist=True, widths=0.6,
+                    medianprops={'color': 'white'},
+                    boxprops={'facecolor': lbl_color, 'alpha': 0.7},
+                )
+                ax.set_xticks(positions)
+                ax.set_xticklabels(list(feat_vals.keys()), rotation=30, ha='right', fontsize=8)
+                ax.set_title(f'Feature distributions — cluster {lbl}', fontsize=9)
+                fig.tight_layout()
+                b64 = _fig_to_b64(fig, cfg.dpi)
+                body_parts.append(
+                    f'<img src="data:image/png;base64,{b64}" '
+                    f'style="display:inline-block;vertical-align:top;">'
+                )
+        except Exception as e:
+            logger.warning(f'Cluster quality: boxplots failed for {lbl} ({e})')
+
+        # — Spectrogram thumbnails —
+        try:
+            n_show = min(cfg.n_per_type, len(lbl_specs))
+            if n_show > 0:
+                b64 = _render_syllable_grid(
+                    specs=lbl_specs[:n_show],
+                    label=lbl,
+                    label_source='auto',
+                    n_cols=cfg.grid_cols,
+                    syl_fig_size=cfg.syl_fig_size,
+                    dpi=cfg.dpi,
+                )
+                body_parts.append(
+                    f'<div><h3 style="font-size:0.9em;color:#aaa;">Thumbnails ({n_show} shown)</h3>'
+                    f'<img src="data:image/png;base64,{b64}"></div>'
+                )
+        except Exception as e:
+            logger.warning(f'Cluster quality: thumbnails failed for {lbl} ({e})')
+
+        # — Eigensyllable —
+        try:
+            if len(lbl_specs) >= 3:
+                mean_spec, std_spec = _compute_eigensyllable(lbl_specs)
+                b64 = _render_eigensyllable(mean_spec, std_spec, lbl, cfg.dpi)
+                body_parts.append(
+                    f'<div><h3 style="font-size:0.9em;color:#aaa;">Eigensyllable</h3>'
+                    f'<img src="data:image/png;base64,{b64}"></div>'
+                )
+        except Exception as e:
+            logger.warning(f'Cluster quality: eigensyllable failed for {lbl} ({e})')
+
+        # — Ramping analysis (repeat clusters only) —
+        try:
+            if 'position_in_repeat' in df_all.columns and len(grp) > 5:
+                rep_df = grp.dropna(subset=['position_in_repeat'])
+                max_rep = rep_df['position_in_repeat'].max() if not rep_df.empty else 1
+                if max_rep >= 3:
+                    ramp_features = [f for f in ('rms_energy_mean', 'spectral_centroid_mean')
+                                     if f in rep_df.columns]
+                    if ramp_features:
+                        fig, axes = plt.subplots(1, len(ramp_features),
+                                                 figsize=(4 * len(ramp_features), 3),
+                                                 squeeze=False)
+                        for ax, rf in zip(axes[0], ramp_features):
+                            pos_grp = rep_df.groupby('position_in_repeat')[rf].mean()
+                            x = pos_grp.index.values.astype(float)
+                            y = pos_grp.values
+                            if len(x) >= 3:
+                                slope, intercept, r, *_ = _linregress(x, y)
+                                ax.scatter(x, y, color=lbl_color, s=30, zorder=3)
+                                ax.plot(x, slope * x + intercept, 'w--', linewidth=1)
+                                ax.set_title(
+                                    f'{rf}\nslope={slope:.3g}', fontsize=8
+                                )
+                            else:
+                                ax.scatter(x, y, color=lbl_color, s=30)
+                                ax.set_title(rf, fontsize=8)
+                            ax.set_xlabel('Position in repeat', fontsize=8)
+                            ax.set_facecolor('#222')
+                        fig.suptitle(f'Ramping — cluster {lbl}', fontsize=9)
+                        fig.tight_layout()
+                        b64 = _fig_to_b64(fig, cfg.dpi)
+                        body_parts.append(
+                            f'<div><h3 style="font-size:0.9em;color:#aaa;">Ramping Analysis</h3>'
+                            f'<img src="data:image/png;base64,{b64}"></div>'
+                        )
+        except Exception as e:
+            logger.warning(f'Cluster quality: ramping failed for {lbl} ({e})')
+
+        body_parts.append('</div>')  # close type-section
+        sections.extend(body_parts)
+
+    if not sections:
+        logger.warning(f'Cluster quality catalog: no sections generated for {bird_name} rank {rank}')
+        return ''
+
+    n_clusters = len(cluster_labels)
+    html_parts = [
+        _HTML_HEAD.format(
+            title=f'{bird_name} — Cluster Quality (rank {rank})',
+            generated=datetime.now().strftime('%Y-%m-%d %H:%M'),
+            bird=bird_name,
+            params=f'rank={rank}',
+            summary=f'{n_clusters} clusters &nbsp;|&nbsp; features: {", ".join(features)}',
+        )
+    ]
+    html_parts.extend(sections)
+    html_parts.append(_HTML_FOOT)
+
+    out_path.write_text(''.join(html_parts), encoding='utf-8')
+    logger.info(f'Cluster quality catalog written: {out_path}')
+    return str(out_path)
+
+
+def _css_color(label: Any) -> str:
+    """Return an inline CSS colour string for a cluster label."""
+    rgb = _label_color(label)
+    return 'rgba({},{},{},0.85)'.format(
+        int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Convenience: generate both catalogs for a bird
 # ---------------------------------------------------------------------------
 
@@ -908,8 +1479,9 @@ def generate_all_catalogs(
     Returns
     -------
     dict of str → str
-        Maps catalog type (``'song_catalog'``, ``'syllable_types_auto'``,
-        ``'syllable_types_manual'``) to the absolute HTML output path.
+        Maps catalog type to the absolute HTML output path.  Keys may include
+        ``'song_catalog'``, ``'syllable_types_auto'``, ``'syllable_types_manual'``,
+        ``'sequencing'``, and ``'cluster_quality'``.
         Only successfully generated catalogs are included.
     """
     cfg = config or CatalogConfig()
@@ -948,6 +1520,10 @@ def generate_all_catalogs(
     path = generate_sequencing_catalog(bird_path, rank=rank, config=cfg)
     if path:
         results['sequencing'] = path
+
+    path = generate_cluster_quality_catalog(bird_path, rank=rank, config=cfg)
+    if path:
+        results['cluster_quality'] = path
 
     return results
 

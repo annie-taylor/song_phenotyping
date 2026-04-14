@@ -68,18 +68,27 @@ Leave them as `None` to fall back to `config.yaml` values.
 ```
 pipeline_runs/
 └── or18or24/
-    ├── stages/              ← internal pipeline artifacts (not for everyday browsing)
-    │   ├── 01_specs/        Stage A  HDF5 spectrograms
-    │   ├── 02_features/     Stage B  HDF5 flattened features
-    │   ├── 03_embeddings/   Stage C  UMAP HDF5 + pkl models
-    │   ├── 04_labels/       Stage D  cluster label HDF5 files
-    │   └── 05_phenotype/    Stage E  detailed phenotype pkl files
-    └── results/             ← human-facing outputs
-        ├── master_summary.csv
-        ├── phenotype_results.csv
-        ├── catalog/         HTML song catalogs
-        └── plots/           PDFs / images
+    └── <run_hash>/          ← e.g. "59ea943a" (SHA256[:8] of all computational params)
+        ├── stages/          ← internal pipeline artifacts (not for everyday browsing)
+        │   ├── 01_specs/        Stage A  HDF5 spectrograms
+        │   ├── 02_features/     Stage B  HDF5 flattened features
+        │   ├── 03_embeddings/   Stage C  UMAP HDF5 + pkl models
+        │   ├── 04_labels/       Stage D  cluster label HDF5 files
+        │   ├── syllable_database/  syllable_features.{csv,h5} + feature_params.json
+        │   └── 05_phenotype/    Stage E  detailed phenotype pkl files
+        └── results/         ← human-facing outputs
+            ├── master_summary.csv
+            ├── phenotype_results.csv
+            ├── run_config.json
+            ├── catalog/     HTML catalogs (song, syllable-type, sequencing, cluster quality)
+            └── plots/       PDFs / images
 ```
+
+The run hash (`<run_hash>`) is computed automatically from all computational
+parameters (spectrogram settings, UMAP grid, HDBSCAN grid, phenotyping
+thresholds, songs_per_bird, songs_seed).  Different parameter combinations
+produce different directories; identical parameters reuse the same directory
+and skip already-completed stages.
 
 ## 5. Config reference
 
@@ -142,8 +151,9 @@ Every key has a default; omit it to accept the default.
 | Key | Default | Notes |
 |-----|---------|-------|
 | `min_syllable_proportion` | 0.02 | Min fraction of songs for a syllable type |
-| `repeat_significance_threshold` | 0.2 | |
-| `dyad_threshold` | 0.7 | |
+| `repeat_significance_threshold` | 0.4 | Min fraction of syllable instances in a repeat |
+| `dyad_threshold` | 0.95 | Fraction of length-2 repeats for dyad classification |
+| `intro_note_position_threshold` | 0.5 | Min fraction at song position 0 to classify as intro note |
 | `use_top_n_clusterings` | 5 | |
 | `generate_plots` | true | Write phenotype summary figures |
 
@@ -262,3 +272,59 @@ git pull                    ←    (no code changes on PC)
 - If you need to run a quick experiment with different parameters, use the
   override constants in `run_pipeline.py` (they are never committed since you
   shouldn't commit the override values).
+
+---
+
+## 9. Analysis scripts
+
+These scripts are standalone and operate on completed pipeline output.
+They do not modify pipeline artifacts.
+
+### Cross-bird phenotype comparison
+
+```bash
+# Build cohort_comparison.csv (one row per bird)
+python scripts/cohort_comparison.py E:/xfoster_pipeline_runs
+
+# Also generate an HTML report with bar charts
+python scripts/cohort_comparison.py E:/xfoster_pipeline_runs --html
+
+# Use a specific run hash for all birds
+python scripts/cohort_comparison.py E:/xfoster_pipeline_runs --run_name 59ea943a
+```
+
+Output files are written to `<save_path>/cohort_comparison.{csv,html}`.
+
+The CSV includes:
+
+| Column | Description |
+|--------|-------------|
+| `bird_name` | Canonical bird name |
+| `repertoire_size` | Number of distinct syllable types (above min proportion) |
+| `entropy` / `entropy_scaled` | Transition entropy (raw and weighted) |
+| `entropy_excl_intro` / `entropy_scaled_excl_intro` | Same, excluding intro notes |
+| `repeat_bool` / `dyad_bool` | Has significant repeats / dyads |
+| `has_intro_notes` | Whether intro notes were auto-detected |
+| `intro_recurs_in_song` | Whether intro notes appear mid-song in some songs |
+| `mean_intro_count_per_song` | Mean intro notes per song |
+| `mean_duration_ms` | Mean syllable duration across all syllables |
+| `mean_prev_syllable_gap_ms` | Mean gap between consecutive syllables |
+| `mean_song_length_syllables` | Mean song length in syllables |
+
+### Cluster quality catalog (per bird)
+
+Generated automatically at the end of each run as part of `generate_all_catalogs()`.
+Saved to `<bird>/<run>/results/catalog/<bird>_cluster_quality_rank0.html`.
+
+Sections:
+- **Cluster summary table** — N, mean ± std for all acoustic features
+- **Feature profile heatmap** — z-scored feature means per cluster
+- **Pairwise distance matrix** — Euclidean distance between cluster centroids
+- **Per-cluster:** CV bar chart · feature boxplots · spectrogram thumbnails · eigensyllable + std map
+- **Ramping analysis** (repeat clusters only) — loudness and spectral centroid vs repetition position
+
+### Sequencing catalog (per bird)
+
+Generated automatically.  Saved to `<bird>/<run>/results/catalog/<bird>_sequencing_rank0.html`.
+
+Sections: summary stats · syllable proportions · transition count matrix · transition probability matrix · repeat counts heatmap.

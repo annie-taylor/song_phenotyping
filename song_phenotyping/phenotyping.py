@@ -5,18 +5,25 @@ produced by Stage D, reconstructs syllable sequences from raw spec files,
 and computes a standardised set of phenotypic measures:
 
 * **Vocabulary** — repertoire size and syllable proportions.
-* **Entropy** — song-level and transition-level information content.
-* **Transitions** — first-order Markov transition matrices.
+* **Entropy** — song-level and transition-level information content,
+  computed both including and excluding introductory notes
+  (``entropy_excl_intro`` / ``entropy_scaled_excl_intro``).
+* **Transitions** — first-order Markov transition matrices, with syllable
+  types ordered by their mean ``position_in_song`` from
+  ``syllable_features.csv`` (so the matrix follows typical song order).
 * **Repeats** — detection and characterisation of stereotyped syllable
   repetitions (dyads, longer motifs).
+* **Intro notes** — auto-detection of introductory notes (syllables that
+  disproportionately appear at position 0), with recurrence and count stats.
 
-Results are written to ``phenotype_results.csv`` in the bird directory,
-and detailed data structures (for PDF generation) are pickled to
-``syllable_data/phenotype_detailed/``.
+Results are written to ``phenotype_results.csv`` in the run's ``results/``
+directory, and detailed data structures (for catalog generation) are
+pickled to ``stages/05_phenotype/``.
 
 Public API
 ----------
 - :func:`phenotype_bird` — run Stage E for a single bird.
+- :func:`detect_intro_notes` — identify intro note syllable types from a sequence.
 - :class:`PhenotypingConfig` — configurable analysis parameters.
 """
 
@@ -74,6 +81,10 @@ class PhenotypingConfig:
         Whether to save scatter plots and heatmaps.  Default is ``True``.
     figure_dpi : int, optional
         Resolution of saved figures in dots per inch.  Default is ``300``.
+    intro_note_position_threshold : float, optional
+        Minimum fraction of a syllable type's instances that must appear at
+        position 0 (first syllable in song) for it to be classified as an
+        introductory note.  Default is ``0.5``.
     heatmap_annotation_size : int, optional
         Font size for transition-matrix heatmap annotations.  Default is ``8``.
 
@@ -91,6 +102,9 @@ class PhenotypingConfig:
     repeat_candidate_range: range = None         # repeat lengths to search (default: range(2, 20))
     dyad_threshold: float = 0.95                  # proportion of length-2 repeats for syllable to be a dyad
     adaptive_repeat_factor: float = 0.25         # scales per-syllable min prevalence for repeat filtering
+
+    # Introductory note detection
+    intro_note_position_threshold: float = 0.5  # min fraction of instances at song position 0 to classify as intro note
 
     # Processing options
     use_top_n_clusterings: int = 5  # how many top clustering results to process
@@ -403,7 +417,9 @@ def calculate_phenotypes_for_label_type(
         label_type: str,
         bird_name: str,
         config: PhenotypingConfig,
-        clustering_metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]: # Add metadata from clustering results
+        clustering_metadata: Optional[Dict[str, Any]] = None,
+        label_position_order: Optional[Dict] = None,
+) -> Dict[str, Any]:
     """
     Calculate all phenotype metrics for one label type.
 
@@ -412,6 +428,10 @@ def calculate_phenotypes_for_label_type(
         label_type: 'manual' or 'hdbscan'
         bird_name: Bird identifier
         config: Configuration object
+        clustering_metadata: Optional dict of clustering metadata to merge into results
+        label_position_order: Optional ``{label: mean_position_in_song}`` mapping.
+            When provided, syllable types in transition matrices are ordered by
+            their typical position in the song rather than alphabetically.
 
     Returns:
         Dictionary of phenotype metrics
@@ -425,19 +445,42 @@ def calculate_phenotypes_for_label_type(
         handler = LabelHandler(enum_type)
 
         # Calculate vocabulary and basic stats
-        vocab_results = analyze_vocabulary_and_entropy(syllables, handler, config)
+        vocab_results = analyze_vocabulary_and_entropy(
+            syllables, handler, config, label_position_order=label_position_order
+        )
 
         # Calculate transition patterns
-        transition_results = analyze_transitions(syllables, handler)
+        transition_results = analyze_transitions(
+            syllables, handler, label_position_order=label_position_order
+        )
 
         # Calculate repeat patterns
         repeat_results = analyze_repeats(syllables, handler, config)
 
+        # Detect intro notes and compute excl_intro entropy metrics
+        intro_results = detect_intro_notes(syllables, handler, config)
+        if intro_results['has_intro_notes']:
+            syls_excl_intro = _filter_intro_notes_from_sequence(
+                syllables, intro_results['intro_note_labels_set'], handler
+            )
+            excl_vocab = analyze_vocabulary_and_entropy(
+                syls_excl_intro, handler, config, label_position_order=label_position_order
+            )
+            entropy_excl = excl_vocab.get('entropy', np.nan)
+            entropy_scaled_excl = excl_vocab.get('entropy_scaled', np.nan)
+        else:
+            entropy_excl = vocab_results.get('entropy', np.nan)
+            entropy_scaled_excl = vocab_results.get('entropy_scaled', np.nan)
+
         # Combine all results
+        intro_export = {k: v for k, v in intro_results.items() if k != 'intro_note_labels_set'}
         phenotype_results = {
             **vocab_results,
             **transition_results,
             **repeat_results,
+            **intro_export,
+            'entropy_excl_intro': entropy_excl,
+            'entropy_scaled_excl_intro': entropy_scaled_excl,
             'bird_name': bird_name,
             'label_type': label_type,
             'n_songs': _count_songs_in_sequence(syllables, handler),
@@ -461,6 +504,8 @@ def _create_empty_phenotype_results() -> Dict[str, Any]:
         'repertoire_size': np.nan,
         'entropy': np.nan,
         'entropy_scaled': np.nan,
+        'entropy_excl_intro': np.nan,
+        'entropy_scaled_excl_intro': np.nan,
         'repeat_bool': False,
         'dyad_bool': False,
         'num_dyad': 0,
@@ -471,12 +516,22 @@ def _create_empty_phenotype_results() -> Dict[str, Any]:
         'skew_repeat_syls': np.nan,
         'kurt_repeat_syls': np.nan,
         'n_songs': 0,
-        'n_syllables_total': 0
+        'n_syllables_total': 0,
+        'has_intro_notes': False,
+        'intro_note_labels': [],
+        'intro_recurs_in_song': False,
+        'mean_intro_count_per_song': 0.0,
+        'std_intro_count_per_song': 0.0,
+        'intro_repeat_distribution': {},
     }
 
 
-def analyze_vocabulary_and_entropy(syllables: List[Union[str, int]], handler: LabelHandler,
-                                   config: PhenotypingConfig) -> Dict[str, Any]:
+def analyze_vocabulary_and_entropy(
+        syllables: List[Union[str, int]],
+        handler: LabelHandler,
+        config: PhenotypingConfig,
+        label_position_order: Optional[Dict] = None,
+) -> Dict[str, Any]:
     """
     Analyze vocabulary size, syllable proportions, and sequence entropy.
 
@@ -484,6 +539,8 @@ def analyze_vocabulary_and_entropy(syllables: List[Union[str, int]], handler: La
         syllables: Complete syllable sequence including start/stop tokens
         handler: LabelHandler for the specific label type
         config: Configuration object
+        label_position_order: Optional ``{label: mean_position_in_song}`` mapping
+            for position-ordered transition matrices.
 
     Returns:
         Dictionary with vocabulary and entropy metrics
@@ -495,7 +552,9 @@ def analyze_vocabulary_and_entropy(syllables: List[Union[str, int]], handler: La
         )
 
         # Calculate transition matrix for entropy computation
-        transition_counts_df, t_mat_df, _, _ = _calculate_transition_counts(syllables, handler)
+        transition_counts_df, t_mat_df, _, _ = _calculate_transition_counts(
+            syllables, handler, label_position_order=label_position_order
+        )
 
         # Calculate entropy measures
         entropy, entropy_scaled = _calculate_entropy(t_mat_df, syl_proportions, handler)
@@ -521,20 +580,29 @@ def analyze_vocabulary_and_entropy(syllables: List[Union[str, int]], handler: La
         }
 
 
-def analyze_transitions(syllables: List[Union[str, int]], handler: LabelHandler) -> Dict[str, Any]:
+def analyze_transitions(
+        syllables: List[Union[str, int]],
+        handler: LabelHandler,
+        label_position_order: Optional[Dict] = None,
+) -> Dict[str, Any]:
     """
     Analyze syllable transition patterns and matrices.
 
     Args:
         syllables: Complete syllable sequence including start/stop tokens
         handler: LabelHandler for the specific label type
+        label_position_order: Optional ``{label: mean_position_in_song}`` mapping
+            used to sort syllable types by their typical song position rather
+            than alphabetically.
 
     Returns:
         Dictionary with transition analysis results
     """
     try:
         # Calculate transition matrices
-        transition_counts_df, t_mat_df, t2_mat_df, t3_mat_df = _calculate_transition_counts(syllables, handler)
+        transition_counts_df, t_mat_df, t2_mat_df, t3_mat_df = _calculate_transition_counts(
+            syllables, handler, label_position_order=label_position_order
+        )
 
         return {
             'transition_counts': transition_counts_df,
@@ -643,14 +711,249 @@ def _generate_vocabulary(syllables: List[Union[str, int]], handler: LabelHandler
     return vocabulary, vocab_size, syl_counts, n_syls_total, syl_proportions
 
 
-def _calculate_transition_counts(syllables: List[Union[str, int]], handler: LabelHandler) -> Tuple[
-    pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _cluster_result_to_method_id(cluster_result: Dict[str, Any]) -> str:
+    """Reconstruct the ``method_id`` string for a clustering result.
+
+    This mirrors the ``_create_method_id`` logic in ``scripts/syllable_database.py``
+    so we can look up the matching ``cluster_{method_id}`` column in
+    ``syllable_features.csv``.
+
+    Parameters
+    ----------
+    cluster_result : dict
+        As returned by :func:`load_clustering_results`.
+
+    Returns
+    -------
+    str
+        Method ID string, e.g. ``"rank0_hdbscan_n15_d0p1_cs5_s3_euclidean"``.
+    """
+    idx = cluster_result.get('rank', 0)
+    method = cluster_result.get('clustering_method', 'hdbscan')
+    n_neighbors = cluster_result.get('n_neighbors', 'na')
+    min_dist = cluster_result.get('min_dist', 'na')
+    min_cluster_size = cluster_result.get('min_cluster_size', 'na')
+    min_samples = cluster_result.get('min_samples', 'na')
+    metric = cluster_result.get('metric', 'euclidean')
+    method_id = (
+        f"rank{idx}_{method}_n{n_neighbors}_d{min_dist}"
+        f"_cs{min_cluster_size}_s{min_samples}_{metric}"
+    )
+    return method_id.replace('.', 'p')
+
+
+def _split_into_songs(syllables: List, handler: LabelHandler) -> List[List]:
+    """Split a syllable sequence into individual songs.
+
+    Songs are delimited by start/end tokens.  Only complete start→end spans
+    are returned; leading or trailing partial spans are discarded.
+
+    Parameters
+    ----------
+    syllables : list
+        Full syllable sequence including start/end tokens.
+    handler : LabelHandler
+        Provides ``start_token`` and ``end_token``.
+
+    Returns
+    -------
+    list of list
+        One inner list per song, containing only the syllable labels
+        (start/end tokens excluded).
+    """
+    songs = []
+    current: Optional[List] = None
+    for token in syllables:
+        if token == handler.start_token:
+            current = []
+        elif token == handler.end_token:
+            if current is not None:
+                songs.append(current)
+            current = None
+        else:
+            if current is not None:
+                current.append(token)
+    return songs
+
+
+def detect_intro_notes(
+        syllables: List[Union[str, int]],
+        handler: LabelHandler,
+        config: 'PhenotypingConfig',
+) -> Dict[str, Any]:
+    """Identify introductory note syllable types from a syllable sequence.
+
+    A syllable type is classified as an **introductory note** when at least
+    ``config.intro_note_position_threshold`` of its instances appear at
+    position 0 (first syllable) within a song.
+
+    For each identified intro note type the function computes:
+
+    * Whether the intro note also recurs at non-first positions within songs
+      (``intro_recurs_in_song``).
+    * Mean and std of intro note counts per song.
+    * The full repeat-length distribution of consecutive intro notes that open
+      each song.
+
+    Parameters
+    ----------
+    syllables : list
+        Full syllable sequence including start/end tokens.
+    handler : LabelHandler
+        Provides start/end token values.
+    config : PhenotypingConfig
+        ``intro_note_position_threshold`` controls detection sensitivity.
+
+    Returns
+    -------
+    dict
+        Keys:
+
+        ``has_intro_notes`` (bool)
+            Whether any intro note types were detected.
+        ``intro_note_labels`` (list)
+            Syllable type labels classified as intro notes.
+        ``intro_recurs_in_song`` (bool)
+            True if any intro note type appears at positions > 0 in some songs.
+        ``mean_intro_count_per_song`` (float)
+            Mean number of intro note syllables per song (across all songs).
+        ``std_intro_count_per_song`` (float)
+            Standard deviation of intro note count per song.
+        ``intro_repeat_distribution`` (dict)
+            Mapping ``{run_length: count}`` of consecutive opening intro notes.
+        ``intro_note_labels_set`` (set)
+            Fast-lookup set of intro label values (for filtering).
+    """
+    songs = _split_into_songs(syllables, handler)
+    if not songs:
+        return _empty_intro_results()
+
+    # Compute per-label position lists
+    label_positions: Dict = {}
+    for song in songs:
+        for pos, label in enumerate(song):
+            label_positions.setdefault(label, []).append(pos)
+
+    # Classify intro notes: fraction of instances at position 0
+    threshold = config.intro_note_position_threshold
+    intro_labels = []
+    for label, positions in label_positions.items():
+        frac_at_zero = positions.count(0) / len(positions)
+        if frac_at_zero >= threshold:
+            intro_labels.append(label)
+
+    if not intro_labels:
+        return _empty_intro_results()
+
+    intro_set = set(intro_labels)
+
+    # Check whether intro notes recur at non-first positions
+    recurs = any(
+        any(pos > 0 for pos in label_positions[lbl])
+        for lbl in intro_labels
+    )
+
+    # Count intro notes per song and run-length distribution
+    counts_per_song = []
+    run_length_dist: Dict[int, int] = {}
+    for song in songs:
+        # Count total intro instances in this song
+        n_intro = sum(1 for lbl in song if lbl in intro_set)
+        counts_per_song.append(n_intro)
+
+        # Run length = number of consecutive intro notes at the start of the song
+        run = 0
+        for lbl in song:
+            if lbl in intro_set:
+                run += 1
+            else:
+                break
+        run_length_dist[run] = run_length_dist.get(run, 0) + 1
+
+    counts_arr = np.array(counts_per_song, dtype=float)
+
+    return {
+        'has_intro_notes': True,
+        'intro_note_labels': intro_labels,
+        'intro_recurs_in_song': recurs,
+        'mean_intro_count_per_song': float(np.mean(counts_arr)),
+        'std_intro_count_per_song': float(np.std(counts_arr)),
+        'intro_repeat_distribution': run_length_dist,
+        'intro_note_labels_set': intro_set,
+    }
+
+
+def _empty_intro_results() -> Dict[str, Any]:
+    """Return the no-intro-notes sentinel dict."""
+    return {
+        'has_intro_notes': False,
+        'intro_note_labels': [],
+        'intro_recurs_in_song': False,
+        'mean_intro_count_per_song': 0.0,
+        'std_intro_count_per_song': 0.0,
+        'intro_repeat_distribution': {},
+        'intro_note_labels_set': set(),
+    }
+
+
+def _filter_intro_notes_from_sequence(
+        syllables: List[Union[str, int]],
+        intro_set: set,
+        handler: LabelHandler,
+) -> List[Union[str, int]]:
+    """Return a copy of *syllables* with all intro note tokens removed.
+
+    Start/end tokens are preserved so song boundaries remain intact.
+    The resulting sequence may have empty songs (start immediately followed
+    by end) if a song consisted entirely of intro notes; these are kept so
+    that song-count statistics remain consistent.
+    """
+    return [
+        token for token in syllables
+        if token in (handler.start_token, handler.end_token) or token not in intro_set
+    ]
+
+
+def _compute_label_position_order(syllable_features_path: str, label_col: str) -> Optional[Dict]:
+    """Return a mapping ``{label: mean_position_in_song}`` from syllable_features.csv.
+
+    Used to sort cluster labels by their typical position in the song rather
+    than alphabetically, which makes transition matrices more interpretable.
+
+    Parameters
+    ----------
+    syllable_features_path : str
+        Absolute path to ``syllable_features.csv``.
+    label_col : str
+        Column name containing the cluster labels (e.g. ``"cluster_rank0_label"``).
+
+    Returns
+    -------
+    dict or None
+        ``{label: mean_position_in_song}`` if successful, ``None`` on any error.
+    """
+    try:
+        df = pd.read_csv(syllable_features_path, usecols=['position_in_song', label_col])
+        return df.groupby(label_col)['position_in_song'].mean().to_dict()
+    except Exception:
+        return None
+
+
+def _calculate_transition_counts(
+        syllables: List[Union[str, int]],
+        handler: LabelHandler,
+        label_position_order: Optional[Dict] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Calculate syllable transition probabilities and higher-order matrices.
 
     Args:
         syllables: Complete syllable sequence including start/stop tokens
         handler: LabelHandler for the specific label type being processed
+        label_position_order: Optional mapping ``{label: mean_position_in_song}``.
+            When provided, syllable types are ordered by their typical position
+            in the song (ascending) rather than alphabetically.  Start/end
+            tokens remain at the first and last positions respectively.
 
     Returns:
         Tuple of (transition_counts_df, t_mat_df, t2_mat_df, t3_mat_df)
@@ -700,9 +1003,18 @@ def _calculate_transition_counts(syllables: List[Union[str, int]], handler: Labe
             next_idx = syl_to_int_map[next_syl]
             syl_transition_counts[next_idx, current_idx] += 1
 
-    # Order syllables with start/end tokens at beginning/end
-    ordered_syls = [s for s in unique_syls if s not in [start_token, end_token]]
-    ordered_syls = [start_token] + sorted(ordered_syls) + [end_token]
+    # Order syllables with start/end tokens at beginning/end.
+    # When label_position_order is available, sort by mean position_in_song
+    # (typical sequence order); fall back to alphabetical sort.
+    other_syls = [s for s in unique_syls if s not in [start_token, end_token]]
+    if label_position_order:
+        other_syls = sorted(
+            other_syls,
+            key=lambda s: label_position_order.get(s, float('inf')),
+        )
+    else:
+        other_syls = sorted(other_syls)
+    ordered_syls = [start_token] + other_syls + [end_token]
 
     # Create reordered matrices
     n_ordered = len(ordered_syls)
@@ -1124,40 +1436,57 @@ def create_unified_phenotype_row(
     """
     rows = []
 
+    def _phenotype_row_fields(results: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract CSV-serialisable phenotype fields from a results dict."""
+        intro_labels = results.get('intro_note_labels', [])
+        intro_dist = results.get('intro_repeat_distribution', {})
+        return {
+            'repertoire_size': results.get('repertoire_size', np.nan),
+            'entropy': results.get('entropy', np.nan),
+            'entropy_scaled': results.get('entropy_scaled', np.nan),
+            'entropy_excl_intro': results.get('entropy_excl_intro', np.nan),
+            'entropy_scaled_excl_intro': results.get('entropy_scaled_excl_intro', np.nan),
+            'repeat_bool': results.get('repeat_bool', False),
+            'dyad_bool': results.get('dyad_bool', False),
+            'num_dyad': results.get('num_dyad', 0),
+            'num_longer_reps': results.get('num_longer_reps', 0),
+            'mean_repeat_syls': results.get('mean_repeat_syls', np.nan),
+            'median_repeat_syls': results.get('median_repeat_syls', np.nan),
+            'var_repeat_syls': results.get('var_repeat_syls', np.nan),
+            'skew_repeat_syls': results.get('skew_repeat_syls', np.nan),
+            'kurt_repeat_syls': results.get('kurt_repeat_syls', np.nan),
+            'n_songs': results.get('n_songs', 0),
+            'n_syllables_total': results.get('n_syllables_total', 0),
+            # Intro note fields (lists/dicts serialised as strings for CSV)
+            'has_intro_notes': results.get('has_intro_notes', False),
+            'intro_note_labels': str(intro_labels) if intro_labels else '',
+            'intro_recurs_in_song': results.get('intro_recurs_in_song', False),
+            'mean_intro_count_per_song': results.get('mean_intro_count_per_song', 0.0),
+            'std_intro_count_per_song': results.get('std_intro_count_per_song', 0.0),
+            'intro_repeat_distribution': str(intro_dist) if intro_dist else '',
+        }
+
+    _EMPTY_CLUSTER_META = {
+        'clustering_method': np.nan,
+        'composite_score': np.nan,
+        'nmi': np.nan,
+        'silhouette': np.nan,
+        'dbi': np.nan,
+        'n_clusters': np.nan,
+        'n_neighbors': np.nan,
+        'min_dist': np.nan,
+        'metric': np.nan,
+        'min_cluster_size': np.nan,
+        'min_samples': np.nan,
+    }
+
     # Add manual row first if manual labels exist
     if manual_results.get('repertoire_size') is not None and not np.isnan(manual_results.get('repertoire_size', np.nan)):
         manual_row = {
             'bird_name': bird_name,
             'rank': 'manual',
-
-            # Phenotype metrics (no prefixes)
-            'repertoire_size': manual_results.get('repertoire_size', np.nan),
-            'entropy': manual_results.get('entropy', np.nan),
-            'entropy_scaled': manual_results.get('entropy_scaled', np.nan),
-            'repeat_bool': manual_results.get('repeat_bool', False),
-            'dyad_bool': manual_results.get('dyad_bool', False),
-            'num_dyad': manual_results.get('num_dyad', 0),
-            'num_longer_reps': manual_results.get('num_longer_reps', 0),
-            'mean_repeat_syls': manual_results.get('mean_repeat_syls', np.nan),
-            'median_repeat_syls': manual_results.get('median_repeat_syls', np.nan),
-            'var_repeat_syls': manual_results.get('var_repeat_syls', np.nan),
-            'skew_repeat_syls': manual_results.get('skew_repeat_syls', np.nan),
-            'kurt_repeat_syls': manual_results.get('kurt_repeat_syls', np.nan),
-            'n_songs': manual_results.get('n_songs', 0),
-            'n_syllables_total': manual_results.get('n_syllables_total', 0),
-
-            # Clustering metadata (empty for manual)
-            'clustering_method': np.nan,
-            'composite_score': np.nan,
-            'nmi': np.nan,
-            'silhouette': np.nan,
-            'dbi': np.nan,
-            'n_clusters': np.nan,
-            'n_neighbors': np.nan,
-            'min_dist': np.nan,
-            'metric': np.nan,
-            'min_cluster_size': np.nan,
-            'min_samples': np.nan
+            **_phenotype_row_fields(manual_results),
+            **_EMPTY_CLUSTER_META,
         }
         rows.append(manual_row)
 
@@ -1165,24 +1494,8 @@ def create_unified_phenotype_row(
     for i, (auto_result, cluster_result) in enumerate(zip(auto_results, clustering_results)):
         auto_row = {
             'bird_name': bird_name,
-            'rank': i,  # 0, 1, 2, etc. for automated rankings
-
-            # Phenotype metrics (no prefixes)
-            'repertoire_size': auto_result.get('repertoire_size', np.nan),
-            'entropy': auto_result.get('entropy', np.nan),
-            'entropy_scaled': auto_result.get('entropy_scaled', np.nan),
-            'repeat_bool': auto_result.get('repeat_bool', False),
-            'dyad_bool': auto_result.get('dyad_bool', False),
-            'num_dyad': auto_result.get('num_dyad', 0),
-            'num_longer_reps': auto_result.get('num_longer_reps', 0),
-            'mean_repeat_syls': auto_result.get('mean_repeat_syls', np.nan),
-            'median_repeat_syls': auto_result.get('median_repeat_syls', np.nan),
-            'var_repeat_syls': auto_result.get('var_repeat_syls', np.nan),
-            'skew_repeat_syls': auto_result.get('skew_repeat_syls', np.nan),
-            'kurt_repeat_syls': auto_result.get('kurt_repeat_syls', np.nan),
-            'n_songs': auto_result.get('n_songs', 0),
-            'n_syllables_total': auto_result.get('n_syllables_total', 0),
-
+            'rank': i,
+            **_phenotype_row_fields(auto_result),
             # Clustering metadata
             'clustering_method': cluster_result.get('clustering_method', 'hdbscan'),
             'composite_score': cluster_result.get('composite_score', np.nan),
@@ -1194,7 +1507,7 @@ def create_unified_phenotype_row(
             'min_dist': cluster_result.get('min_dist', np.nan),
             'metric': cluster_result.get('metric', 'euclidean'),
             'min_cluster_size': cluster_result.get('min_cluster_size', np.nan),
-            'min_samples': cluster_result.get('min_samples', np.nan)
+            'min_samples': cluster_result.get('min_samples', np.nan),
         }
         rows.append(auto_row)
 
@@ -1203,31 +1516,8 @@ def create_unified_phenotype_row(
         empty_row = {
             'bird_name': bird_name,
             'rank': 0,
-            'repertoire_size': np.nan,
-            'entropy': np.nan,
-            'entropy_scaled': np.nan,
-            'repeat_bool': False,
-            'dyad_bool': False,
-            'num_dyad': 0,
-            'num_longer_reps': 0,
-            'mean_repeat_syls': np.nan,
-            'median_repeat_syls': np.nan,
-            'var_repeat_syls': np.nan,
-            'skew_repeat_syls': np.nan,
-            'kurt_repeat_syls': np.nan,
-            'n_songs': 0,
-            'n_syllables_total': 0,
-            'clustering_method': np.nan,
-            'composite_score': np.nan,
-            'nmi': np.nan,
-            'silhouette': np.nan,
-            'dbi': np.nan,
-            'n_clusters': np.nan,
-            'n_neighbors': np.nan,
-            'min_dist': np.nan,
-            'metric': np.nan,
-            'min_cluster_size': np.nan,
-            'min_samples': np.nan
+            **_phenotype_row_fields(_create_empty_phenotype_results()),
+            **_EMPTY_CLUSTER_META,
         }
         rows.append(empty_row)
 
@@ -1291,14 +1581,21 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
         logger.info(
             f"Clustering results available for {bird_name}: {has_clustering} ({len(clustering_results)} results)")
 
+        # Locate syllable_features.csv (needed for position-ordered transitions)
+        from song_phenotyping.tools.pipeline_paths import SYLLABLE_DB_DIR, run_stage_path as _rsp
+        syllable_features_path = str(_rsp(bird_path, run_name, SYLLABLE_DB_DIR) / 'syllable_features.csv')
+
         # Process manual labels if available
         manual_results = {}
         if has_manual:
             logger.info(f"Processing manual labels for {bird_name}")
             manual_syllables = syllable_data['manual_syllables']
             logger.info(f"Manual syllables sequence length: {len(manual_syllables)}")
+            # For manual labels, position order uses the 'manual_label' column
+            manual_pos_order = _compute_label_position_order(syllable_features_path, 'manual_label')
             manual_results = calculate_phenotypes_for_label_type(
-                manual_syllables, 'manual', bird_name, config
+                manual_syllables, 'manual', bird_name, config,
+                label_position_order=manual_pos_order,
             )
             logger.info(f"Manual results: repertoire_size={manual_results.get('repertoire_size', 'N/A')}")
         else:
@@ -1317,8 +1614,12 @@ def phenotype_bird(bird_path: str, config: PhenotypingConfig = None, run_name: s
                 logger.info(f"Auto syllables sequence length for rank {i}: {len(auto_syllables)}")
 
                 if auto_syllables:
+                    method_id = _cluster_result_to_method_id(cluster_result)
+                    label_col = f'cluster_{method_id}'
+                    pos_order = _compute_label_position_order(syllable_features_path, label_col)
                     auto_result = calculate_phenotypes_for_label_type(
-                        auto_syllables, 'hdbscan', bird_name, config
+                        auto_syllables, 'hdbscan', bird_name, config,
+                        label_position_order=pos_order,
                     )
                     logger.info(f"Auto results rank {i}: repertoire_size={auto_result.get('repertoire_size', 'N/A')}")
                 else:
