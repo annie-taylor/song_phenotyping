@@ -9,22 +9,20 @@ quick one-off run without editing the config file.
 Typical usage
 -------------
 1. Copy ``config.yaml.example`` → ``config.yaml`` and fill in your paths.
-2. Run:  python run_pipeline.py
+2. Run::
 
-To process a single bird for a quick test::
+    python run_pipeline.py                     # full A→E run
+    python run_pipeline.py --from E            # re-run Stage E + catalog only
+    python run_pipeline.py --from E --birds or18or24 rd25wh57
+    python run_pipeline.py --from E --run_name 59ea943a
+    python run_pipeline.py --from D            # re-run Stage D + E + catalog
+    python run_pipeline.py --from catalog      # regenerate HTML catalogs only
 
-    BIRDS = ['or18or24']          # edit here, or set in config.yaml
+``--from`` choices: A (default, full run), C (UMAP onwards), D (labelling
+onwards), E (phenotyping onwards), catalog (catalog only).
 
-To re-run labelling from existing embeddings with different metrics::
-
-    if __name__ == '__main__':
-        cfg = _load_pipeline_cfg()
-        run_from_labelling(
-            save_path=cfg['save_path'],
-            birds=cfg['birds'],
-            metrics=['silhouette', 'dbi'],   # removed ch
-            replace_labels=True,
-        )
+The ``--birds`` and ``--run_name`` flags override ``config.yaml`` and the
+ALL-CAPS constants.  The run hash is never affected by the entry stage.
 
 See SETUP.md for a full stage re-entry guide.
 """
@@ -930,50 +928,145 @@ def run_wseg_cohort(save_path, wseg_metadata, birds, songs_per_bird,
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Song phenotyping pipeline runner.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Stage re-entry examples
+-----------------------
+  # Re-run everything (default):
+  python run_pipeline.py
+
+  # Re-run from Stage C (UMAP) onwards — uses birds / run_name from config.yaml:
+  python run_pipeline.py --from C
+
+  # Re-run from Stage D (labelling) for specific birds:
+  python run_pipeline.py --from D --birds or18or24 rd25wh57
+
+  # Re-run Stage E + catalog only, pinning the run hash:
+  python run_pipeline.py --from E --run_name 59ea943a
+
+  # Re-run catalog only (no phenotyping):
+  python run_pipeline.py --from catalog
+""",
+    )
+    parser.add_argument(
+        '--from',
+        dest='from_stage',
+        default='A',
+        choices=['A', 'C', 'D', 'E', 'catalog'],
+        metavar='STAGE',
+        help=(
+            'Stage to re-enter from.  One of: A (full run, default), '
+            'C (UMAP), D (labelling), E (phenotyping), catalog. '
+            'Stages before the chosen entry point are skipped.'
+        ),
+    )
+    parser.add_argument(
+        '--birds',
+        nargs='+',
+        default=None,
+        metavar='BIRD',
+        help='Bird IDs to process.  Overrides config.yaml birds and the BIRDS constant.',
+    )
+    parser.add_argument(
+        '--run_name',
+        default=None,
+        metavar='HASH',
+        help='Run name / hash to resume.  Overrides config.yaml run_name and the RUN_NAME constant.',
+    )
+    args = parser.parse_args()
+
     cfg = _load_pipeline_cfg()
     _setup_pipeline_logging(cfg['save_path'], cfg['run_name'])
 
-    # -------------------------------------------------------------------
-    # Full pipeline (default)
-    # -------------------------------------------------------------------
-    # To re-run only later stages, replace the block below with one of:
-    #
-    #   run_from_labelling(cfg['save_path'], birds=['or18or24'],
-    #                      metrics=['silhouette', 'dbi'])
-    #
-    #   run_from_phenotyping(cfg['save_path'], birds=['or18or24'])
-    #
-    # See SETUP.md → "Re-entering the pipeline" for full examples.
-    # -------------------------------------------------------------------
+    # CLI overrides take priority over in-script constants and config.yaml
+    birds    = args.birds    or cfg['birds']
+    run_name = args.run_name or cfg['run_name']
 
-    if cfg['evsong_source']:
-        run_evsonganaly_cohort(
+    stage = args.from_stage
+
+    if stage == 'A':
+        if cfg['evsong_source']:
+            run_evsonganaly_cohort(
+                save_path        = cfg['save_path'],
+                evsong_source    = cfg['evsong_source'],
+                birds            = birds,
+                songs_per_bird   = cfg['songs_per_bird'],
+                songs_seed       = cfg['songs_seed'],
+                spec_cfg         = cfg['spec_cfg'],
+                emb_cfg          = cfg['emb_cfg'],
+                lab_cfg          = cfg['lab_cfg'],
+                pheno_cfg        = cfg['pheno_cfg'],
+                generate_catalog = cfg['generate_catalog'],
+                run_name         = run_name,
+                copy_locally     = cfg['copy_locally'],
+            )
+        if cfg['wseg_metadata']:
+            run_wseg_cohort(
+                save_path        = cfg['save_path'],
+                wseg_metadata    = cfg['wseg_metadata'],
+                birds            = birds,
+                songs_per_bird   = cfg['songs_per_bird'],
+                songs_seed       = cfg['songs_seed'],
+                spec_cfg         = cfg['spec_cfg'],
+                emb_cfg          = cfg['emb_cfg'],
+                lab_cfg          = cfg['lab_cfg'],
+                pheno_cfg        = cfg['pheno_cfg'],
+                generate_catalog = cfg['generate_catalog'],
+                run_name         = run_name,
+                copy_locally     = cfg['copy_locally'],
+            )
+
+    elif stage == 'C':
+        if not birds:
+            raise SystemExit('--from C requires --birds or a birds list in config.yaml')
+        run_from_embedding(
             save_path        = cfg['save_path'],
-            evsong_source    = cfg['evsong_source'],
-            birds            = cfg['birds'],
-            songs_per_bird   = cfg['songs_per_bird'],
-            songs_seed       = cfg['songs_seed'],
-            spec_cfg         = cfg['spec_cfg'],
+            birds            = birds,
             emb_cfg          = cfg['emb_cfg'],
             lab_cfg          = cfg['lab_cfg'],
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
-            run_name         = cfg['run_name'],
-            copy_locally     = cfg['copy_locally'],
+            run_name         = run_name,
         )
 
-    if cfg['wseg_metadata']:
-        run_wseg_cohort(
+    elif stage == 'D':
+        if not birds:
+            raise SystemExit('--from D requires --birds or a birds list in config.yaml')
+        run_from_labelling(
             save_path        = cfg['save_path'],
-            wseg_metadata    = cfg['wseg_metadata'],
-            birds            = cfg['birds'],
-            songs_per_bird   = cfg['songs_per_bird'],
-            songs_seed       = cfg['songs_seed'],
-            spec_cfg         = cfg['spec_cfg'],
-            emb_cfg          = cfg['emb_cfg'],
-            lab_cfg          = cfg['lab_cfg'],
+            birds            = birds,
+            metrics          = cfg['lab_cfg'].get('metrics'),
+            metric_weights   = cfg['lab_cfg'].get('metric_weights'),
+            replace_labels   = cfg['lab_cfg'].get('replace_labels', False),
             pheno_cfg        = cfg['pheno_cfg'],
             generate_catalog = cfg['generate_catalog'],
-            run_name         = cfg['run_name'],
-            copy_locally     = cfg['copy_locally'],
+            run_name         = run_name,
         )
+
+    elif stage == 'E':
+        if not birds:
+            raise SystemExit('--from E requires --birds or a birds list in config.yaml')
+        run_from_phenotyping(
+            save_path        = cfg['save_path'],
+            birds            = birds,
+            pheno_cfg        = cfg['pheno_cfg'],
+            generate_catalog = cfg['generate_catalog'],
+            run_name         = run_name,
+        )
+
+    elif stage == 'catalog':
+        if not birds:
+            raise SystemExit('--from catalog requires --birds or a birds list in config.yaml')
+        from song_phenotyping.catalog import generate_all_catalogs
+        from song_phenotyping.tools.pipeline_paths import run_root
+        _birds = [normalize_bird_name(b) for b in birds]
+        _run_name = run_name or 'default'
+        for bird in _birds:
+            bird_root = str(Path(cfg['save_path']) / bird)
+            run_path  = str(run_root(bird_root, _run_name))
+            print(f'[catalog] {bird}  ({run_path})')
+            _run_catalog(run_path, True, bird)
