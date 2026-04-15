@@ -82,9 +82,11 @@ class PhenotypingConfig:
     figure_dpi : int, optional
         Resolution of saved figures in dots per inch.  Default is ``300``.
     intro_note_position_threshold : float, optional
-        Minimum fraction of a syllable type's instances that must appear at
-        position 0 (first syllable in song) for it to be classified as an
-        introductory note.  Default is ``0.5``.
+        Minimum fraction of songs that must *open* with a given syllable type
+        for it to be classified as an introductory note.  For example, a value
+        of ``0.5`` means the label must be the first syllable in at least half
+        of all songs.  This is independent of how many times the intro note
+        repeats per song.  Default is ``0.5``.
     heatmap_annotation_size : int, optional
         Font size for transition-matrix heatmap annotations.  Default is ``8``.
 
@@ -783,9 +785,12 @@ def detect_intro_notes(
 ) -> Dict[str, Any]:
     """Identify introductory note syllable types from a syllable sequence.
 
-    A syllable type is classified as an **introductory note** when at least
-    ``config.intro_note_position_threshold`` of its instances appear at
-    position 0 (first syllable) within a song.
+    A syllable type is classified as an **introductory note** when it is the
+    first syllable in at least ``config.intro_note_position_threshold`` of all
+    songs.  This is robust to intro notes that repeat (e.g. 10 consecutive
+    intro notes at song onset) — only the song-level question matters:
+    "did this song open with this label?", not "what fraction of this label's
+    instances were first?".
 
     For each identified intro note type the function computes:
 
@@ -803,6 +808,8 @@ def detect_intro_notes(
         Provides start/end token values.
     config : PhenotypingConfig
         ``intro_note_position_threshold`` controls detection sensitivity.
+        Interpreted as the minimum fraction of songs that must *open* with
+        a given label for it to be classified as an intro note.
 
     Returns
     -------
@@ -814,7 +821,8 @@ def detect_intro_notes(
         ``intro_note_labels`` (list)
             Syllable type labels classified as intro notes.
         ``intro_recurs_in_song`` (bool)
-            True if any intro note type appears at positions > 0 in some songs.
+            True if any intro note type appears at non-opening positions in
+            some songs (i.e. after a non-intro syllable has been sung).
         ``mean_intro_count_per_song`` (float)
             Mean number of intro note syllables per song (across all songs).
         ``std_intro_count_per_song`` (float)
@@ -828,19 +836,25 @@ def detect_intro_notes(
     if not songs:
         return _empty_intro_results()
 
-    # Compute per-label position lists
+    n_songs = len(songs)
+    threshold = config.intro_note_position_threshold
+
+    # Count how many songs each label opens (i.e. appears as the first syllable)
+    songs_led_by: Dict = {}
+    # Also track all positions each label appears at (for recurrence check)
     label_positions: Dict = {}
     for song in songs:
+        if song:
+            first = song[0]
+            songs_led_by[first] = songs_led_by.get(first, 0) + 1
         for pos, label in enumerate(song):
             label_positions.setdefault(label, []).append(pos)
 
-    # Classify intro notes: fraction of instances at position 0
-    threshold = config.intro_note_position_threshold
-    intro_labels = []
-    for label, positions in label_positions.items():
-        frac_at_zero = positions.count(0) / len(positions)
-        if frac_at_zero >= threshold:
-            intro_labels.append(label)
+    # Classify intro notes: fraction of songs opened by this label >= threshold
+    intro_labels = [
+        label for label, n_led in songs_led_by.items()
+        if n_led / n_songs >= threshold
+    ]
 
     if not intro_labels:
         return _empty_intro_results()

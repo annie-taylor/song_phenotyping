@@ -153,7 +153,7 @@ Every key has a default; omit it to accept the default.
 | `min_syllable_proportion` | 0.02 | Min fraction of songs for a syllable type |
 | `repeat_significance_threshold` | 0.4 | Min fraction of syllable instances in a repeat |
 | `dyad_threshold` | 0.95 | Fraction of length-2 repeats for dyad classification |
-| `intro_note_position_threshold` | 0.5 | Min fraction at song position 0 to classify as intro note |
+| `intro_note_position_threshold` | 0.5 | Min fraction of songs that must *open* with a label to classify it as intro note |
 | `use_top_n_clusterings` | 5 | |
 | `generate_plots` | true | Write phenotype summary figures |
 
