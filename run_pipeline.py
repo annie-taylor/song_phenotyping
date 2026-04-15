@@ -18,8 +18,8 @@ Typical usage
     python run_pipeline.py --from D            # re-run Stage D + E + catalog
     python run_pipeline.py --from catalog      # regenerate HTML catalogs only
 
-``--from`` choices: A (default, full run), C (UMAP onwards), D (labelling
-onwards), E (phenotyping onwards), catalog (catalog only).
+``--from`` choices: A (default, full run), B (flattening onwards), C (UMAP
+onwards), D (labelling onwards), E (phenotyping onwards), catalog (catalog only).
 
 The ``--birds`` and ``--run_name`` flags override ``config.yaml`` and the
 ALL-CAPS constants.  The run hash is never affected by the entry stage.
@@ -624,6 +624,92 @@ def run_wseg(save_path: str, metadata_dir: str, bird: str, songs_per_bird,
 # Stage re-entry runners
 # ---------------------------------------------------------------------------
 
+def run_from_flattening(save_path: str, birds, spec_cfg=None, emb_cfg=None, lab_cfg=None,
+                        pheno_cfg=None, generate_catalog=True, run_name: str = None):
+    """Re-run Stages B→E from existing spectrograms (stages/01_specs/).
+
+    Use when Stage B (flattening) failed or its output is missing/corrupt.
+    Stage A is skipped.
+
+    Requires: ``<bird>/<run_name>/stages/01_specs/`` HDF5 files.
+
+    Parameters
+    ----------
+    save_path : str
+        Pipeline output root.
+    birds : list of str
+        Birds to process.
+    spec_cfg : dict, optional
+        Spectrogram / flattening parameter overrides (target_shape, etc.).
+    emb_cfg : dict, optional
+        Embedding overrides.
+    lab_cfg : dict, optional
+        Labelling overrides.
+    pheno_cfg : dict, optional
+        Phenotyping overrides.
+    generate_catalog : bool, optional
+        Whether to regenerate HTML catalogs after Stage E.  Default ``True``.
+    run_name : str, optional
+        Run identifier.  If ``None``, defaults to ``"default"``.
+    """
+    from song_phenotyping.flattening import flatten_bird_spectrograms
+    from song_phenotyping.embedding import explore_embedding_parameters_robust
+    from song_phenotyping.labelling import label_bird
+    from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
+
+    spec_cfg  = spec_cfg  or {}
+    emb_cfg   = emb_cfg   or {}
+    lab_cfg   = lab_cfg   or {}
+    pheno_cfg = pheno_cfg or {}
+    if run_name is None:
+        run_name = "default"
+
+    if not birds:
+        raise ValueError("run_from_flattening() requires an explicit birds list.")
+
+    birds = [normalize_bird_name(b) for b in birds]
+    spec_params = _build_spec_params(None, spec_cfg)
+
+    for bird in birds:
+        bird_root = str(Path(save_path) / bird)
+        run_path  = str(run_root(bird_root, run_name))
+        print(f"\n[B→E] Re-running from flattening for {bird}  (run={run_name})")
+
+        print("[ B ] Flattening spectrograms...")
+        flatten_bird_spectrograms(directory=save_path, bird=bird, params=spec_params,
+                                  run_name=run_name)
+
+        print("[ C ] Computing UMAP embeddings...")
+        explore_embedding_parameters_robust(
+            save_path=save_path, bird=bird,
+            run_name=run_name,
+            max_workers=emb_cfg.get('max_workers'),
+            overwrite=emb_cfg.get('overwrite', False),
+        )
+
+        print("[ D ] Clustering / labelling...")
+        label_bird(
+            save_path=save_path,
+            bird=bird,
+            run_name=run_name,
+            metrics=lab_cfg.get('metrics', _DEFAULT_METRICS),
+            metric_weights=lab_cfg.get('metric_weights'),
+            replace_labels=lab_cfg.get('replace_labels', True),
+            hdbscan_params=_build_hdbscan_grid(lab_cfg),
+            generate_cluster_pdf=lab_cfg.get('generate_cluster_pdf', False),
+            max_workers=lab_cfg.get('max_workers'),
+        )
+
+        print("[ E ] Phenotyping...")
+        phenotype_bird(bird_path=bird_root, config=_build_phenotype_config(pheno_cfg),
+                       run_name=run_name)
+
+        _build_label_lookup(run_path, bird)
+        _run_catalog(run_path, generate_catalog, bird)
+        print(f"[OK] Done. Outputs at: {run_path}")
+
+
 def run_from_embedding(save_path: str, birds, emb_cfg=None, lab_cfg=None, pheno_cfg=None,
                        generate_catalog=True, run_name: str = None):
     """Re-run Stages C→E from existing flattened features (stages/02_features/).
@@ -939,6 +1025,9 @@ Stage re-entry examples
   # Re-run everything (default):
   python run_pipeline.py
 
+  # Re-run from Stage B (flattening) onwards — e.g. Stage B failed:
+  python run_pipeline.py --from B --birds or18or24 rd25wh57 --run_name 59ea943a
+
   # Re-run from Stage C (UMAP) onwards — uses birds / run_name from config.yaml:
   python run_pipeline.py --from C
 
@@ -956,11 +1045,11 @@ Stage re-entry examples
         '--from',
         dest='from_stage',
         default='A',
-        choices=['A', 'C', 'D', 'E', 'catalog'],
+        choices=['A', 'B', 'C', 'D', 'E', 'catalog'],
         metavar='STAGE',
         help=(
             'Stage to re-enter from.  One of: A (full run, default), '
-            'C (UMAP), D (labelling), E (phenotyping), catalog. '
+            'B (flattening), C (UMAP), D (labelling), E (phenotyping), catalog. '
             'Stages before the chosen entry point are skipped.'
         ),
     )
@@ -1019,6 +1108,20 @@ Stage re-entry examples
                 run_name         = run_name,
                 copy_locally     = cfg['copy_locally'],
             )
+
+    elif stage == 'B':
+        if not birds:
+            raise SystemExit('--from B requires --birds or a birds list in config.yaml')
+        run_from_flattening(
+            save_path        = cfg['save_path'],
+            birds            = birds,
+            spec_cfg         = cfg['spec_cfg'],
+            emb_cfg          = cfg['emb_cfg'],
+            lab_cfg          = cfg['lab_cfg'],
+            pheno_cfg        = cfg['pheno_cfg'],
+            generate_catalog = cfg['generate_catalog'],
+            run_name         = run_name,
+        )
 
     elif stage == 'C':
         if not birds:
