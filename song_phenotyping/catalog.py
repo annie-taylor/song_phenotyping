@@ -782,14 +782,14 @@ def generate_sequencing_catalog(
             and not repeat_counts_raw.empty
         ) else set()
 
-        # Determine dyad-dominated syllables: length-2 repeats > 50% of all repeats for that syllable
+        # Determine dyad-dominated syllables: length-2 repeats > 95% of all repeats for that syllable
         dyad_syls = set()
         if repeat_counts_raw is not None and not getattr(repeat_counts_raw, 'empty', True):
             for syl in repeat_counts_raw.columns:
                 col = repeat_counts_raw[syl]
                 total = col.sum()
                 if total > 0 and 2 in col.index:
-                    if col[2] / total > 0.5:
+                    if col[2] / total > 0.95:
                         dyad_syls.add(syl)
 
         syllable_counts_map = pheno.get('syllable_counts') or {}
@@ -827,7 +827,7 @@ def generate_sequencing_catalog(
                 + ''.join(id_rows)
                 + '</table>'
                 '<p style="color:#888;font-size:0.8em;margin-top:6px;">'
-                'Dyad: &gt;50% of repeats have length 2 (excluded from mean/median repeat stats). '
+                'Dyad: &gt;95% of repeats have length 2 (excluded from mean/median repeat stats). '
                 'Repeats: appears in significant repeat distribution. '
                 'Intro note stats reflect all songs regardless of repeat classification.</p>'
             )
@@ -1206,7 +1206,7 @@ def generate_cluster_quality_catalog(
                 for _syl in _pheno_repeat_counts.columns:
                     _col = _pheno_repeat_counts[_syl]
                     _tot = _col.sum()
-                    if _tot > 0 and 2 in _col.index and _col[2] / _tot > 0.5:
+                    if _tot > 0 and 2 in _col.index and _col[2] / _tot > 0.95:
                         _pheno_dyad_syls.add(_syl)
     except Exception as _e:
         logger.warning(f'Syllable characteristics catalog: could not load pkl ({_e})')

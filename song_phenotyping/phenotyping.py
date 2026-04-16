@@ -70,7 +70,7 @@ class PhenotypingConfig:
         Defaults to ``range(2, 20)`` when ``None``.
     dyad_threshold : float, optional
         Fraction of length-2 repeats above which a syllable is classified
-        as a dyad.  Default is ``0.7``.
+        as a dyad.  Default is ``0.95``.
     adaptive_repeat_factor : float, optional
         Scales the per-syllable minimum prevalence used to filter spurious
         repeats.  Default is ``0.25``.
