@@ -1289,7 +1289,8 @@ def generate_cluster_quality_catalog(
     for lbl in cluster_labels:
         grp = df_all[df_all[label_col] == lbl]
         lbl_specs = label_to_specs.get(lbl, [])
-        lbl_color = _css_color(lbl)
+        lbl_color = _css_color(lbl)       # CSS string — use only in HTML
+        lbl_mpl   = _label_color(lbl)     # normalized (r,g,b) tuple — use in matplotlib
 
         header = (
             f'<div class="type-section">'
@@ -1334,7 +1335,7 @@ def generate_cluster_quality_catalog(
                     list(feat_vals.values()), positions=positions,
                     vert=True, patch_artist=True, widths=0.6,
                     medianprops={'color': 'white'},
-                    boxprops={'facecolor': lbl_color, 'alpha': 0.7},
+                    boxprops={'facecolor': lbl_mpl, 'alpha': 0.7},
                 )
                 ax.set_xticks(positions)
                 ax.set_xticklabels(list(feat_vals.keys()), rotation=30, ha='right', fontsize=8)
@@ -1397,13 +1398,13 @@ def generate_cluster_quality_catalog(
                             y = pos_grp.values
                             if len(x) >= 3:
                                 slope, intercept, r, *_ = _linregress(x, y)
-                                ax.scatter(x, y, color=lbl_color, s=30, zorder=3)
+                                ax.scatter(x, y, color=lbl_mpl, s=30, zorder=3)
                                 ax.plot(x, slope * x + intercept, 'w--', linewidth=1)
                                 ax.set_title(
                                     f'{rf}\nslope={slope:.3g}', fontsize=8
                                 )
                             else:
-                                ax.scatter(x, y, color=lbl_color, s=30)
+                                ax.scatter(x, y, color=lbl_mpl, s=30)
                                 ax.set_title(rf, fontsize=8)
                             ax.set_xlabel('Position in repeat', fontsize=8)
                             ax.set_facecolor('#222')

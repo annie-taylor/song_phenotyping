@@ -345,7 +345,7 @@ def _run_catalog(bird_path: str, generate_catalog: bool, bird: str):
             if catalog_dir.exists():
                 renamed = 0
                 for f in catalog_dir.glob(f'{hash_name}_*.html'):
-                    f.rename(f.parent / f.name.replace(hash_name, bird, 1))
+                    f.replace(f.parent / f.name.replace(hash_name, bird, 1))
                     renamed += 1
                 if renamed:
                     print(f"[ Catalog ] Renamed {renamed} file(s): {hash_name}_* → {bird}_*")
