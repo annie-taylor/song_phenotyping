@@ -17,9 +17,12 @@ Typical usage
     python run_pipeline.py --from E --run_name 59ea943a
     python run_pipeline.py --from D            # re-run Stage D + E + catalog
     python run_pipeline.py --from catalog      # regenerate HTML catalogs only
+    python run_pipeline.py --manual-only       # Stage A + E (manual labels), skip B/C/D
 
 ``--from`` choices: A (default, full run), B (flattening onwards), C (UMAP
 onwards), D (labelling onwards), E (phenotyping onwards), catalog (catalog only).
+``--manual-only`` skips automated clustering entirely; requires manual labels
+embedded in the audio annotation data (evsonganaly with manual annotations).
 
 The ``--birds`` and ``--run_name`` flags override ``config.yaml`` and the
 ALL-CAPS constants.  The run hash is never affected by the entry stage.
@@ -932,6 +935,140 @@ def run_from_phenotyping(save_path: str, birds, pheno_cfg=None, generate_catalog
 
 
 # ---------------------------------------------------------------------------
+# Manual-only runner (Stage A → E, skipping B/C/D)
+# ---------------------------------------------------------------------------
+
+def run_manual_only(save_path: str, birds=None, songs_per_bird=9999, songs_seed=None,
+                    spec_cfg=None, pheno_cfg=None, generate_catalog=True,
+                    run_name=None, evsong_source=None, wseg_metadata=None,
+                    copy_locally=False):
+    """Run Stage A then Stage E using manual syllable labels only.
+
+    Skips Stages B (flattening), C (UMAP), and D (HDBSCAN) entirely.
+    Use when a researcher has manually annotated syllable labels and wants
+    phenotyping statistics and catalogs without automated clustering.
+
+    Manual labels must be embedded in the spec files written by Stage A
+    (evsonganaly data with manual annotations satisfies this automatically).
+    ``phenotype_results.csv`` will contain a single row with ``rank='manual'``.
+
+    The syllable acoustic feature database is still built from Stage A spec
+    files (no Stage B required).  Song and manual syllable-type catalogs are
+    generated; sequencing and syllable-characteristics catalogs are omitted
+    since they require automated cluster labels.
+
+    Parameters
+    ----------
+    save_path : str
+        Pipeline output root.
+    birds : list of str or None, optional
+        Bird IDs to process.  ``None`` = all discovered birds.
+    songs_per_bird : int, optional
+        Maximum songs per bird.  Default 9999 (all).
+    songs_seed : int or None, optional
+        Random seed for song subset selection.
+    spec_cfg : dict, optional
+        Spectrogram parameter overrides.
+    pheno_cfg : dict, optional
+        Phenotyping parameter overrides.
+    generate_catalog : bool, optional
+        Whether to generate HTML catalogs.  Default ``True``.
+    run_name : str, optional
+        Output directory name.  Defaults to ``'manual'``.
+    evsong_source : str or None, optional
+        evsonganaly source directory.
+    wseg_metadata : str or None, optional
+        wseg metadata directory.
+    copy_locally : bool, optional
+        Copy audio from Macaw to ``save_path`` before processing.
+    """
+    from song_phenotyping.ingestion import (
+        filepaths_from_evsonganaly, save_specs_for_evsonganaly_birds,
+        filepaths_from_wseg, save_specs_for_wseg_birds,
+    )
+    from song_phenotyping.phenotyping import phenotype_bird
+    from song_phenotyping.tools.pipeline_paths import run_root
+
+    spec_cfg  = spec_cfg  or {}
+    pheno_cfg = pheno_cfg or {}
+
+    if run_name is None:
+        run_name = 'manual'
+
+    spec_params = _build_spec_params(songs_per_bird, spec_cfg)
+    birds_norm = [normalize_bird_name(b) for b in birds] if birds else None
+    all_birds = set()
+
+    # Stage A — evsonganaly
+    if evsong_source:
+        meta, audio = filepaths_from_evsonganaly(
+            wav_directory=evsong_source,
+            bird_subset=birds_norm,
+            save_path=save_path,
+            copy_locally=copy_locally,
+        )
+        discovered = sorted(meta.keys())
+        if discovered:
+            print(f"[ A ] Saving evsonganaly specs for: {discovered}")
+            save_specs_for_evsonganaly_birds(
+                metadata_file_paths=meta,
+                audio_file_paths=audio,
+                save_path=save_path,
+                songs_per_bird=songs_per_bird,
+                params=spec_params,
+                songs_seed=songs_seed,
+                run_name=run_name,
+            )
+            all_birds.update(discovered)
+
+    # Stage A — wseg
+    if wseg_metadata:
+        meta, audio = filepaths_from_wseg(
+            seg_directory=wseg_metadata,
+            bird_subset=birds_norm,
+            save_path=save_path,
+            copy_locally=copy_locally,
+        )
+        discovered = sorted(meta.keys())
+        if discovered:
+            print(f"[ A ] Saving wseg specs for: {discovered}")
+            save_specs_for_wseg_birds(
+                metadata_file_paths=meta,
+                audio_file_paths=audio,
+                save_path=save_path,
+                songs_per_bird=songs_per_bird,
+                params=spec_params,
+                songs_seed=songs_seed,
+                run_name=run_name,
+            )
+            all_birds.update(discovered)
+
+    if not all_birds:
+        print("No birds found — check evsong_source / wseg_metadata and bird list.")
+        return
+
+    # Stages B, C, D — skipped
+    print("\n[ B/C/D ] Skipped (manual-only mode)\n")
+
+    # Stage E + syllable DB + catalog — per bird
+    for bird in sorted(all_birds):
+        bird_root = str(Path(save_path) / bird)
+        run_path  = str(run_root(bird_root, run_name))
+        print(f"\n{'='*60}")
+        print(f"  Manual-only pipeline for {bird}")
+        print(f"  Run : {run_name}  →  {run_path}")
+        print(f"{'='*60}\n")
+
+        print("[ E ] Phenotyping (manual labels only)...")
+        phenotype_bird(bird_path=bird_root,
+                       config=_build_phenotype_config(pheno_cfg),
+                       run_name=run_name)
+        _build_label_lookup(run_path, bird)
+        _run_catalog(run_path, generate_catalog, bird)
+        print(f"[OK] Done. Outputs at: {run_path}")
+
+
+# ---------------------------------------------------------------------------
 # Cohort runners
 # ---------------------------------------------------------------------------
 
@@ -1039,6 +1176,10 @@ Stage re-entry examples
 
   # Re-run catalog only (no phenotyping):
   python run_pipeline.py --from catalog
+
+  # Run Stage A + phenotyping for manual labels only (skip B/C/D):
+  python run_pipeline.py --manual-only
+  python run_pipeline.py --manual-only --birds or18or24 rd25wh57 --run_name my_manual_run
 """,
     )
     parser.add_argument(
@@ -1066,6 +1207,18 @@ Stage re-entry examples
         metavar='HASH',
         help='Run name / hash to resume.  Overrides config.yaml run_name and the RUN_NAME constant.',
     )
+    parser.add_argument(
+        '--manual-only',
+        dest='manual_only',
+        action='store_true',
+        default=False,
+        help=(
+            'Run Stage A then phenotyping using manual labels only. '
+            'Skips B (flattening), C (UMAP), and D (labelling). '
+            'Output directory defaults to run_name="manual" unless --run_name is given. '
+            'Requires manual labels to be embedded in the audio annotation data.'
+        ),
+    )
     args = parser.parse_args()
 
     cfg = _load_pipeline_cfg()
@@ -1076,6 +1229,22 @@ Stage re-entry examples
     run_name = args.run_name or cfg['run_name']
 
     stage = args.from_stage
+
+    if args.manual_only:
+        run_manual_only(
+            save_path        = cfg['save_path'],
+            birds            = birds,
+            songs_per_bird   = cfg['songs_per_bird'],
+            songs_seed       = cfg['songs_seed'],
+            spec_cfg         = cfg['spec_cfg'],
+            pheno_cfg        = cfg['pheno_cfg'],
+            generate_catalog = cfg['generate_catalog'],
+            run_name         = run_name,
+            evsong_source    = cfg.get('evsong_source'),
+            wseg_metadata    = cfg.get('wseg_metadata'),
+            copy_locally     = cfg.get('copy_locally', False),
+        )
+        sys.exit(0)
 
     if stage == 'A':
         if cfg['evsong_source']:
