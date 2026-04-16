@@ -1292,12 +1292,15 @@ def select_wseg_file_pairs_from_metadata(metadata_files: List[str],
 def process_single_file(metadata_file_path: str, audio_file_path: str, save_path: str, params: SpectrogramParams,
                         read_songpath_from_metadata: bool, verbose: bool,
                         prefer_local: bool = True, run_name: str = "default",
-                        save_manual: bool = True) -> Dict[str, str]:
+                        save_manual: bool = True, bird_name: str = None) -> Dict[str, str]:
     """
     Process a single metadata file and save spectrograms if conditions are met.
 
     Args:
         prefer_local: If True, prefer local audio files over server files
+        bird_name: If provided, use this as the bird ID for output path construction
+            instead of parsing it from the audio filename.  Needed when audio files
+            are named after tutor birds rather than the foster bird being processed.
     """
     # Check if metadata file exists
     if not os.path.exists(metadata_file_path):
@@ -1340,10 +1343,15 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
     if not metadata['is_valid_song']:
         return {'status': 'skipped', 'reason': 'Single syllable file'}
 
-    # Parse filename for output path
+    # Parse filename for date/time components needed to build the output filename
     filename_info = parse_audio_filename(audio_file_path)
     if not filename_info['success']:
         return {'status': 'failed', 'reason': 'Could not parse filename'}
+
+    # Use the explicit bird_name if provided; otherwise fall back to the name
+    # parsed from the audio filename.  Cross-foster audio files are named after
+    # tutor birds, so without bird_name the specs would land in the wrong directory.
+    effective_bird = bird_name if bird_name is not None else filename_info['bird']
 
     # Check song duration meets minimum threshold
     total_duration_ms = metadata['offsets'][-1] - metadata['onsets'][0]
@@ -1351,10 +1359,10 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
         return {'status': 'skipped', 'reason': 'Song too short (< 2 seconds)'}
 
     # Create output path and check if already exists
-    paths = create_output_paths(save_path, filename_info['bird'], run_name)
+    paths = create_output_paths(save_path, effective_bird, run_name)
     output_path = os.path.join(
-        paths['syllable_specs_dir'],  # Always syllable_data/specs
-        f"syllables_{filename_info['bird']}_{filename_info['day']}_{filename_info['time']}.h5"
+        paths['syllable_specs_dir'],
+        f"syllables_{effective_bird}_{filename_info['day']}_{filename_info['time']}.h5"
     )
     if os.path.exists(output_path):
         return {'status': 'skipped', 'reason': 'Output file already exists'}
@@ -1378,9 +1386,14 @@ def process_single_file(metadata_file_path: str, audio_file_path: str, save_path
 def save_data_specs(candidate_files: List[str], save_path: str,
                     params: SpectrogramParams, verbose: bool = False, read_songpath_from_metadata: bool = True,
                     prefer_local: bool = True, run_name: str = "default",
-                    save_manual: bool = True) -> Dict[str, List[str]]:
+                    save_manual: bool = True, bird_name: str = None) -> Dict[str, List[str]]:
     """
     Process metadata files and save spectrograms to HDF5 files with detailed progress tracking.
+
+    bird_name : str, optional
+        If provided, use this name for output path construction instead of parsing
+        it from the audio filename.  Required for cross-foster data where audio
+        files are named after tutor birds rather than the foster bird being processed.
     """
     results = {
         'processed': [],
@@ -1399,7 +1412,7 @@ def save_data_specs(candidate_files: List[str], save_path: str,
             result = process_single_file(
                 metadata_file_path, audio_file_path, save_path, params,
                 read_songpath_from_metadata, verbose, prefer_local,
-                run_name=run_name, save_manual=save_manual,
+                run_name=run_name, save_manual=save_manual, bird_name=bird_name,
             )
 
             results[result['status']].append(metadata_file_path)
@@ -1529,6 +1542,7 @@ def save_specs_for_evsonganaly_birds(metadata_file_paths: dict, audio_file_paths
                     verbose=verbose,
                     read_songpath_from_metadata=False,
                     run_name=run_name,
+                    bird_name=bird,
                 )
 
                 # Report detailed results
@@ -1673,6 +1687,7 @@ def save_specs_for_wseg_birds(metadata_file_paths: Dict[str, List[str]],
                     read_songpath_from_metadata=True,
                     run_name=run_name,
                     save_manual=False,
+                    bird_name=bird,
                 )
 
                 # Report detailed results
