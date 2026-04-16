@@ -130,6 +130,13 @@ def _load_phenotype_row(run_dir: Path, rank: int = 0) -> Optional[dict]:
         if auto.empty:
             return None
         row = auto.iloc[0].to_dict()
+        # Reject rows where Stage E ran on empty data
+        if not row.get('n_syllables_total', 0) or not row.get('repertoire_size', 0):
+            logger.warning(
+                f'{csv.parent.parent.name}: n_syllables_total={row.get("n_syllables_total")} '
+                f'repertoire_size={row.get("repertoire_size")} — skipping (empty data)'
+            )
+            return None
         # Parse intro_note_labels back to a list if it's a non-empty string
         raw_labels = row.get('intro_note_labels', '')
         if isinstance(raw_labels, str) and raw_labels.strip():
