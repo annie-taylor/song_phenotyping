@@ -16,7 +16,8 @@ Public API
 - :func:`generate_syllable_type_catalog` — per-label spectrogram grid.
 - :func:`generate_sequencing_catalog` — transition matrices and repeat stats.
 - :func:`generate_cluster_quality_catalog` — per-cluster feature stats,
-  eigensyllables, and repeat-ramping analysis.
+  discriminative feature violins, outgoing transitions, and repeat-ramping
+  analysis.  Output file uses the name ``syllable_characteristics``.
 - :func:`generate_all_catalogs` — convenience wrapper that calls all of the above.
 - :class:`CatalogConfig` — configurable display parameters.
 
@@ -735,9 +736,14 @@ def generate_sequencing_catalog(
         ('n_syllables_total', 'Total syllables'),
         ('entropy', 'Transition entropy'),
         ('entropy_scaled', 'Entropy (scaled)'),
+        ('has_intro_notes', 'Has intro notes'),
+        ('intro_note_labels', 'Intro note syllables'),
+        ('mean_intro_count_per_song', 'Mean intro notes per song'),
+        ('std_intro_count_per_song', 'Std intro notes per song'),
+        ('intro_recurs_in_song', 'Intro note recurs in song'),
         ('repeat_bool', 'Has repeats'),
         ('dyad_bool', 'Has dyads'),
-        ('num_dyad', 'Dyad count'),
+        ('num_dyad', 'Dyad count (excluded from mean/median)'),
         ('num_longer_reps', 'Longer repeats'),
         ('mean_repeat_syls', 'Mean repeat length'),
         ('median_repeat_syls', 'Median repeat length'),
@@ -764,6 +770,72 @@ def generate_sequencing_catalog(
             + '</table></div>'
         )
         sections.append(tbl)
+
+    # ------------------------------------------------------------------
+    # 1b. Syllable identity table
+    # ------------------------------------------------------------------
+    try:
+        intro_labels = set(pheno.get('intro_note_labels') or [])
+        repeat_counts_raw = pheno.get('repeat_counts')
+        repeating_syls = set(repeat_counts_raw.columns.tolist()) if (
+            repeat_counts_raw is not None and hasattr(repeat_counts_raw, 'columns')
+            and not repeat_counts_raw.empty
+        ) else set()
+
+        # Determine dyad-dominated syllables: length-2 repeats > 50% of all repeats for that syllable
+        dyad_syls = set()
+        if repeat_counts_raw is not None and not getattr(repeat_counts_raw, 'empty', True):
+            for syl in repeat_counts_raw.columns:
+                col = repeat_counts_raw[syl]
+                total = col.sum()
+                if total > 0 and 2 in col.index:
+                    if col[2] / total > 0.5:
+                        dyad_syls.add(syl)
+
+        syllable_counts_map = pheno.get('syllable_counts') or {}
+        all_syls = sorted(syllable_counts_map.keys(), key=lambda s: -syllable_counts_map.get(s, 0))
+        if all_syls:
+            id_rows = []
+            for syl in all_syls:
+                tags = []
+                if syl in intro_labels:
+                    tags.append('<span style="background:#5b7fa6;color:#fff;padding:1px 5px;'
+                                'border-radius:3px;font-size:0.8em;">intro</span>')
+                if syl in dyad_syls:
+                    tags.append('<span style="background:#8a6f3e;color:#fff;padding:1px 5px;'
+                                'border-radius:3px;font-size:0.8em;">dyad</span>')
+                elif syl in repeating_syls:
+                    tags.append('<span style="background:#4a7a4a;color:#fff;padding:1px 5px;'
+                                'border-radius:3px;font-size:0.8em;">repeats</span>')
+                tag_str = ' '.join(tags) if tags else '<span style="color:#666;">—</span>'
+                lbl_color = _css_color(syl)
+                id_rows.append(
+                    f'<tr>'
+                    f'<td style="padding:3px 10px;text-align:center;">'
+                    f'<span style="background:{lbl_color};padding:2px 7px;border-radius:3px;">{syl}</span></td>'
+                    f'<td style="padding:3px 10px;text-align:right;">{syllable_counts_map.get(syl, "")}</td>'
+                    f'<td style="padding:3px 10px;">{tag_str}</td>'
+                    f'</tr>'
+                )
+            id_tbl = (
+                '<table style="border-collapse:collapse;font-size:0.9em;">'
+                '<tr style="border-bottom:1px solid #555;">'
+                '<th style="padding:3px 10px;">Syllable</th>'
+                '<th style="padding:3px 10px;">Count</th>'
+                '<th style="padding:3px 10px;">Identity</th>'
+                '</tr>'
+                + ''.join(id_rows)
+                + '</table>'
+                '<p style="color:#888;font-size:0.8em;margin-top:6px;">'
+                'Dyad: &gt;50% of repeats have length 2 (excluded from mean/median repeat stats). '
+                'Repeats: appears in significant repeat distribution. '
+                'Intro note stats reflect all songs regardless of repeat classification.</p>'
+            )
+            sections.append(
+                f'<div class="type-section"><h2>Syllable Identity</h2>{id_tbl}</div>'
+            )
+    except Exception as e:
+        logger.warning(f'Sequencing catalog: syllable identity table failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # 2. Syllable proportions bar chart
@@ -812,10 +884,17 @@ def generate_sequencing_catalog(
             im = ax.imshow(arr, cmap=cmap, aspect='auto')
             plt.colorbar(im, ax=ax, shrink=0.8)
             if tick_labels:
+                def _fmt_tick(t, i, n_ticks):
+                    if i == 0:
+                        return 'START'
+                    if i == n_ticks - 1:
+                        return 'END'
+                    return str(t)
+                fmt_labels = [_fmt_tick(t, i, n) for i, t in enumerate(tick_labels)]
                 ax.set_xticks(range(n))
-                ax.set_xticklabels([str(t) for t in tick_labels], rotation=45, ha='right', fontsize=8)
+                ax.set_xticklabels(fmt_labels, rotation=45, ha='right', fontsize=8)
                 ax.set_yticks(range(n))
-                ax.set_yticklabels([str(t) for t in tick_labels], fontsize=8)
+                ax.set_yticklabels(fmt_labels, fontsize=8)
             # Annotate cells for small matrices
             if n <= 12 and matrix_key == 'transition_counts':
                 for i in range(n):
@@ -840,9 +919,13 @@ def generate_sequencing_catalog(
     repeat_counts = pheno.get('repeat_counts')
     if repeat_counts is not None and hasattr(repeat_counts, 'empty') and not repeat_counts.empty:
         try:
-            arr = repeat_counts.values.T.astype(float)
+            arr = repeat_counts.values.astype(float)   # shape: (n_repeat_lengths, n_syllables)
             syls = list(repeat_counts.columns)
             repeat_lens = list(repeat_counts.index)
+            # Drop repeat-length rows that are all zero
+            nonzero_rows = arr.any(axis=1)
+            arr = arr[nonzero_rows]
+            repeat_lens = [repeat_lens[i] for i in range(len(repeat_lens)) if nonzero_rows[i]]
             fig, ax = plt.subplots(figsize=(max(6, len(syls) * 0.6), max(3, len(repeat_lens) * 0.5)))
             im = ax.imshow(arr, cmap='Reds', aspect='auto')
             plt.colorbar(im, ax=ax, shrink=0.8)
@@ -1065,11 +1148,11 @@ def generate_cluster_quality_catalog(
     rank: int = 0,
     config: Optional[CatalogConfig] = None,
 ) -> str:
-    """Generate an HTML cluster quality catalog for one bird.
+    """Generate an HTML syllable characteristics catalog for one bird.
 
     Presents per-cluster acoustic feature statistics, spectrogram thumbnails,
-    eigensyllables, and (for repeat clusters) a ramping analysis of loudness
-    and spectral centroid across repetition positions.
+    eigensyllables, discriminative feature distributions, transition outflows,
+    and (for repeat clusters) a ramping analysis.
 
     Parameters
     ----------
@@ -1088,43 +1171,72 @@ def generate_cluster_quality_catalog(
     """
     cfg = config or CatalogConfig()
     from song_phenotyping.tools.pipeline_paths import (
-        CATALOG_DIR, SPECS_DIR, STAGES_DIR,
+        CATALOG_DIR, SPECS_DIR, STAGES_DIR, PHENOTYPE_DIR,
     )
     bird_path = Path(bird_path)
     bird_name = bird_path.name
     out_dir = bird_path / CATALOG_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f'{bird_name}_cluster_quality_rank{rank}.html'
+    out_path = out_dir / f'{bird_name}_syllable_characteristics_rank{rank}.html'
 
     if out_path.exists() and not cfg.overwrite:
         return str(out_path)
+
+    # ------------------------------------------------------------------
+    # Load phenotype pickle (for transition data and intro notes)
+    # ------------------------------------------------------------------
+    _pheno_data = {}
+    _pheno_intro_labels = set()
+    _pheno_transition_matrix = None
+    _pheno_transition_counts = None
+    _pheno_repeat_counts = None
+    _pheno_repeating_syls = set()
+    _pheno_dyad_syls = set()
+    try:
+        pkl_path = bird_path / PHENOTYPE_DIR / f'automated_phenotype_data_rank{rank}.pkl'
+        if pkl_path.exists():
+            _raw = pd.read_pickle(str(pkl_path))
+            _pheno_data = _raw.get('phenotype_results', _raw)
+            _pheno_intro_labels = set(_pheno_data.get('intro_note_labels') or [])
+            _pheno_transition_matrix = _pheno_data.get('transition_matrix')
+            _pheno_transition_counts = _pheno_data.get('transition_counts')
+            _pheno_repeat_counts = _pheno_data.get('repeat_counts')
+            if _pheno_repeat_counts is not None and not getattr(_pheno_repeat_counts, 'empty', True):
+                _pheno_repeating_syls = set(_pheno_repeat_counts.columns.tolist())
+                for _syl in _pheno_repeat_counts.columns:
+                    _col = _pheno_repeat_counts[_syl]
+                    _tot = _col.sum()
+                    if _tot > 0 and 2 in _col.index and _col[2] / _tot > 0.5:
+                        _pheno_dyad_syls.add(_syl)
+    except Exception as _e:
+        logger.warning(f'Syllable characteristics catalog: could not load pkl ({_e})')
 
     # ------------------------------------------------------------------
     # Load syllable_features.csv
     # ------------------------------------------------------------------
     csv_path = bird_path / STAGES_DIR / 'syllable_database' / 'syllable_features.csv'
     if not csv_path.exists():
-        logger.warning(f'Cluster quality catalog: syllable_features.csv not found: {csv_path}')
+        logger.warning(f'Syllable characteristics catalog: syllable_features.csv not found: {csv_path}')
         return ''
 
     try:
         df_all = pd.read_csv(csv_path)
     except Exception as e:
-        logger.warning(f'Cluster quality catalog: could not load CSV ({e})')
+        logger.warning(f'Syllable characteristics catalog: could not load CSV ({e})')
         return ''
 
     # Find cluster label column for this rank
     prefix = f'cluster_rank{rank}_'
     label_cols = [c for c in df_all.columns if c.startswith(prefix)]
     if not label_cols:
-        logger.warning(f'Cluster quality catalog: no cluster_rank{rank}_* column found in CSV')
+        logger.warning(f'Syllable characteristics catalog: no cluster_rank{rank}_* column found in CSV')
         return ''
     label_col = label_cols[0]
 
     # Present features available in this CSV
     features = [f for f in _CQ_FEATURES if f in df_all.columns]
     if not features:
-        logger.warning('Cluster quality catalog: none of the expected feature columns found')
+        logger.warning('Syllable characteristics catalog: none of the expected feature columns found')
         return ''
 
     # Identify unique cluster labels (include -1 noise)
@@ -1212,11 +1324,13 @@ def generate_cluster_quality_catalog(
             f'<div class="type-section"><h2>Cluster Summary</h2>{tbl_html}</div>'
         )
     except Exception as e:
-        logger.warning(f'Cluster quality catalog: summary table failed ({e})', exc_info=True)
+        logger.warning(f'Syllable characteristics catalog: summary table failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # Between-cluster: z-scored feature profile heatmap
     # ------------------------------------------------------------------
+    z_matrix = np.zeros((len(cluster_labels), len(features)))  # fallback for violin plots
+    feat_matrix = np.zeros((len(cluster_labels), len(features)))
     try:
         feat_matrix = summary_df[[f'{f}_mean' for f in features]].values.astype(float)
         col_means = np.nanmean(feat_matrix, axis=0)
@@ -1238,10 +1352,15 @@ def generate_cluster_quality_catalog(
         b64 = _fig_to_b64(fig, cfg.dpi)
         sections.append(
             f'<div class="type-section"><h2>Feature Profile Heatmap</h2>'
+            f'<p style="color:#aaa;font-size:0.85em;margin-top:0;">'
+            f'Each cell shows how a syllable type\'s mean feature value compares to the average '
+            f'across all syllable types. <span style="color:#d46060;">Red = higher than average</span>, '
+            f'<span style="color:#6090d4;">blue = lower than average</span>. '
+            f'|z| &gt; 1.5 indicates a feature that meaningfully distinguishes that syllable type.</p>'
             f'<img src="data:image/png;base64,{b64}"></div>'
         )
     except Exception as e:
-        logger.warning(f'Cluster quality catalog: feature heatmap failed ({e})', exc_info=True)
+        logger.warning(f'Syllable characteristics catalog: feature heatmap failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # Between-cluster: pairwise distance matrix
@@ -1272,7 +1391,7 @@ def generate_cluster_quality_catalog(
                 f'<img src="data:image/png;base64,{b64}"></div>'
             )
     except Exception as e:
-        logger.warning(f'Cluster quality catalog: distance matrix failed ({e})', exc_info=True)
+        logger.warning(f'Syllable characteristics catalog: distance matrix failed ({e})', exc_info=True)
 
     # ------------------------------------------------------------------
     # Add repeat position column (needed for ramping analysis)
@@ -1281,7 +1400,7 @@ def generate_cluster_quality_catalog(
         try:
             df_all = _add_repeat_position(df_all, label_col)
         except Exception as e:
-            logger.warning(f'Cluster quality catalog: repeat-position annotation failed ({e})')
+            logger.warning(f'Syllable characteristics catalog: repeat-position annotation failed ({e})')
 
     # ------------------------------------------------------------------
     # Per-cluster sections
@@ -1292,12 +1411,30 @@ def generate_cluster_quality_catalog(
         lbl_color = _css_color(lbl)       # CSS string — use only in HTML
         lbl_mpl   = _label_color(lbl)     # normalized (r,g,b) tuple — use in matplotlib
 
+        identity_tags = []
+        if lbl in _pheno_intro_labels:
+            identity_tags.append(
+                '<span style="background:#5b7fa6;color:#fff;padding:2px 8px;'
+                'border-radius:3px;font-size:0.85em;margin-left:8px;">intro note</span>'
+            )
+        if lbl in _pheno_dyad_syls:
+            identity_tags.append(
+                '<span style="background:#8a6f3e;color:#fff;padding:2px 8px;'
+                'border-radius:3px;font-size:0.85em;margin-left:8px;">dyad</span>'
+            )
+        elif lbl in _pheno_repeating_syls:
+            identity_tags.append(
+                '<span style="background:#4a7a4a;color:#fff;padding:2px 8px;'
+                'border-radius:3px;font-size:0.85em;margin-left:8px;">repeats</span>'
+            )
+        identity_str = ''.join(identity_tags)
         header = (
             f'<div class="type-section">'
             f'<h2 style="color:#fff;background:{lbl_color};'
             f'display:inline-block;padding:4px 12px;border-radius:4px;">'
             f'Cluster {lbl} &nbsp; <span style="font-weight:normal;font-size:0.85em;">'
             f'(n={len(grp)})</span></h2>'
+            f'{identity_str}'
         )
         body_parts = [header]
 
@@ -1323,7 +1460,7 @@ def generate_cluster_quality_catalog(
                     f'style="display:inline-block;vertical-align:top;">'
                 )
         except Exception as e:
-            logger.warning(f'Cluster quality: CV chart failed for {lbl} ({e})')
+            logger.warning(f'Syllable characteristics: CV chart failed for {lbl} ({e})')
 
         # — Feature boxplots —
         try:
@@ -1347,7 +1484,93 @@ def generate_cluster_quality_catalog(
                     f'style="display:inline-block;vertical-align:top;">'
                 )
         except Exception as e:
-            logger.warning(f'Cluster quality: boxplots failed for {lbl} ({e})')
+            logger.warning(f'Syllable characteristics: boxplots failed for {lbl} ({e})')
+
+        # — Violin plots for most discriminative features —
+        try:
+            # Identify top-3 features by |z-score| for this cluster in the feature profile
+            lbl_idx = cluster_labels.index(lbl)
+            if lbl_idx < len(z_matrix):
+                z_row = z_matrix[lbl_idx]
+                top_feat_idxs = np.argsort(np.abs(z_row))[::-1][:3]
+                top_feats = [features[i] for i in top_feat_idxs if i < len(features)]
+            else:
+                top_feats = features[:3]
+            violin_data = {}
+            for feat in top_feats:
+                all_other = df_all[df_all[label_col] != lbl][feat].dropna().values
+                this_vals = grp[feat].dropna().values
+                if len(this_vals) >= 3:
+                    violin_data[feat] = (this_vals, all_other)
+            if violin_data:
+                fig, axes = plt.subplots(1, len(violin_data),
+                                         figsize=(4 * len(violin_data), 3.2), squeeze=False)
+                for ax_v, (feat, (this_v, other_v)) in zip(axes[0], violin_data.items()):
+                    parts = ax_v.violinplot(
+                        [other_v, this_v] if len(other_v) >= 3 else [this_v],
+                        showmedians=True,
+                    )
+                    colors_v = ['#555', lbl_mpl] if len(other_v) >= 3 else [lbl_mpl]
+                    for pc, col in zip(parts['bodies'], colors_v):
+                        pc.set_facecolor(col)
+                        pc.set_alpha(0.75)
+                    xlabels = ['others', 'this'] if len(other_v) >= 3 else ['this']
+                    ax_v.set_xticks([1, 2] if len(xlabels) == 2 else [1])
+                    ax_v.set_xticklabels(xlabels, fontsize=8)
+                    z_val = z_row[features.index(feat)] if feat in features else 0
+                    ax_v.set_title(f'{feat}\n(z={z_val:.2f})', fontsize=8)
+                    ax_v.set_facecolor('#222')
+                fig.suptitle(f'Discriminative features — cluster {lbl}', fontsize=9)
+                fig.tight_layout()
+                b64 = _fig_to_b64(fig, cfg.dpi)
+                body_parts.append(
+                    f'<div><h3 style="font-size:0.9em;color:#aaa;">Most Discriminative Features</h3>'
+                    f'<img src="data:image/png;base64,{b64}"></div>'
+                )
+        except Exception as e:
+            logger.warning(f'Syllable characteristics: violin plots failed for {lbl} ({e})')
+
+        # — Outgoing transition statistics —
+        try:
+            if _pheno_transition_matrix is not None and not _pheno_transition_matrix.empty:
+                tm = _pheno_transition_matrix
+                if lbl in tm.index:
+                    # Outgoing: row for this label, normalized across columns
+                    out_probs = tm.loc[lbl]
+                    # Rename START/END tokens
+                    def _fmt_syl(s, idxs):
+                        if s == idxs[0]:
+                            return 'START'
+                        if s == idxs[-1]:
+                            return 'END'
+                        return str(s)
+                    all_idx = list(tm.index)
+                    out_labels = [_fmt_syl(s, all_idx) for s in out_probs.index]
+                    out_vals = out_probs.values.astype(float)
+                    mask = out_vals > 0.01  # hide near-zero transitions
+                    if mask.sum() >= 1:
+                        fig, ax = plt.subplots(figsize=(max(4, mask.sum() * 0.7 + 1), 2.5))
+                        x_pos = np.arange(mask.sum())
+                        ax.bar(x_pos, out_vals[mask],
+                               color=[lbl_mpl if out_labels[i] not in ('START', 'END')
+                                      else '#777' for i in range(len(out_labels)) if mask[i]])
+                        ax.set_xticks(x_pos)
+                        ax.set_xticklabels([l for l, m in zip(out_labels, mask) if m],
+                                           rotation=30, ha='right', fontsize=9)
+                        ax.set_ylabel('Transition prob.', fontsize=8)
+                        ax.set_title(f'Outgoing transitions — cluster {lbl}', fontsize=9)
+                        ax.set_ylim(0, 1.05)
+                        ax.set_facecolor('#222')
+                        fig.tight_layout()
+                        b64 = _fig_to_b64(fig, cfg.dpi)
+                        body_parts.append(
+                            f'<div><h3 style="font-size:0.9em;color:#aaa;">Outgoing Transitions</h3>'
+                            f'<p style="color:#888;font-size:0.8em;margin:0 0 4px;">Where does this syllable '
+                            f'tend to go next? (Transitions &lt;1% omitted)</p>'
+                            f'<img src="data:image/png;base64,{b64}"></div>'
+                        )
+        except Exception as e:
+            logger.warning(f'Syllable characteristics: transition chart failed for {lbl} ({e})')
 
         # — Spectrogram thumbnails —
         try:
@@ -1366,7 +1589,7 @@ def generate_cluster_quality_catalog(
                     f'<img src="data:image/png;base64,{b64}"></div>'
                 )
         except Exception as e:
-            logger.warning(f'Cluster quality: thumbnails failed for {lbl} ({e})')
+            logger.warning(f'Syllable characteristics: thumbnails failed for {lbl} ({e})')
 
         # — Eigensyllable —
         try:
@@ -1378,7 +1601,7 @@ def generate_cluster_quality_catalog(
                     f'<img src="data:image/png;base64,{b64}"></div>'
                 )
         except Exception as e:
-            logger.warning(f'Cluster quality: eigensyllable failed for {lbl} ({e})')
+            logger.warning(f'Syllable characteristics: eigensyllable failed for {lbl} ({e})')
 
         # — Ramping analysis (repeat clusters only) —
         try:
@@ -1416,30 +1639,30 @@ def generate_cluster_quality_catalog(
                             f'<img src="data:image/png;base64,{b64}"></div>'
                         )
         except Exception as e:
-            logger.warning(f'Cluster quality: ramping failed for {lbl} ({e})')
+            logger.warning(f'Syllable characteristics: ramping failed for {lbl} ({e})')
 
         body_parts.append('</div>')  # close type-section
         sections.extend(body_parts)
 
     if not sections:
-        logger.warning(f'Cluster quality catalog: no sections generated for {bird_name} rank {rank}')
+        logger.warning(f'Syllable characteristics catalog: no sections generated for {bird_name} rank {rank}')
         return ''
 
     n_clusters = len(cluster_labels)
     html_parts = [
         _HTML_HEAD.format(
-            title=f'{bird_name} — Cluster Quality (rank {rank})',
+            title=f'{bird_name} — Syllable Characteristics (rank {rank})',
             generated=datetime.now().strftime('%Y-%m-%d %H:%M'),
             bird=bird_name,
             params=f'rank={rank}',
-            summary=f'{n_clusters} clusters &nbsp;|&nbsp; features: {", ".join(features)}',
+            summary=f'{n_clusters} syllable types &nbsp;|&nbsp; features: {", ".join(features)}',
         )
     ]
     html_parts.extend(sections)
     html_parts.append(_HTML_FOOT)
 
     out_path.write_text(''.join(html_parts), encoding='utf-8')
-    logger.info(f'Cluster quality catalog written: {out_path}')
+    logger.info(f'Syllable characteristics catalog written: {out_path}')
     return str(out_path)
 
 
@@ -1482,7 +1705,7 @@ def generate_all_catalogs(
     dict of str → str
         Maps catalog type to the absolute HTML output path.  Keys may include
         ``'song_catalog'``, ``'syllable_types_auto'``, ``'syllable_types_manual'``,
-        ``'sequencing'``, and ``'cluster_quality'``.
+        ``'sequencing'``, and ``'syllable_characteristics'``.
         Only successfully generated catalogs are included.
     """
     cfg = config or CatalogConfig()
@@ -1524,7 +1747,7 @@ def generate_all_catalogs(
 
     path = generate_cluster_quality_catalog(bird_path, rank=rank, config=cfg)
     if path:
-        results['cluster_quality'] = path
+        results['syllable_characteristics'] = path
 
     return results
 

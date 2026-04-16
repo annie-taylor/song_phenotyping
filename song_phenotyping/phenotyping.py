@@ -981,16 +981,6 @@ def _calculate_transition_counts(
     unique_syls = np.unique(syllables)
     syl_to_int_map = {syl: idx for idx, syl in enumerate(unique_syls)}
 
-    # Handle potential negative indices by remapping
-    if any(isinstance(syl, int) and syl < 0 for syl in unique_syls):
-        max_positive = max((syl for syl in unique_syls if isinstance(syl, int) and syl >= 0), default=-1)
-        remap_start = max_positive + 1
-
-        for syl in unique_syls:
-            if isinstance(syl, int) and syl < 0:
-                syl_to_int_map[syl] = remap_start
-                remap_start += 1
-
     # Remove carriage return if present
     if '\r' in syl_to_int_map:
         del syl_to_int_map['\r']
