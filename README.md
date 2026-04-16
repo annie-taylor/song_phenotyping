@@ -86,25 +86,56 @@ pipeline_runs/
 
 You can re-run from any stage without reprocessing earlier ones:
 
+```bash
+python run_pipeline.py --from B --birds or18or24   # flattening onwards
+python run_pipeline.py --from C                    # UMAP onwards
+python run_pipeline.py --from D --birds or18or24   # labelling onwards
+python run_pipeline.py --from E --run_name 59ea943a  # phenotyping + catalog only
+python run_pipeline.py --from catalog --birds or18or24  # catalog only
+```
+
+Or via the Python API:
+
 ```python
 from run_pipeline import run_from_embedding, run_from_labelling, run_from_phenotyping
 
-# Re-run from Stage C (UMAP params changed)
 run_from_embedding(save_path="...", birds=["or18or24"])
+run_from_labelling(save_path="...", birds=["or18or24"], metrics=["silhouette", "dbi"])
+run_from_phenotyping(save_path="...", birds=["or18or24"])
+```
 
-# Re-run from Stage D (clustering metrics changed)
-run_from_labelling(
-    save_path="...",
-    birds=["or18or24"],
-    metrics=["silhouette", "dbi"],
-    metric_weights={"silhouette": 2.0, "dbi": 1.0},
-)
+## Manual-labels-only mode
 
-# Re-run only Stage E (phenotype thresholds changed)
-run_from_phenotyping(
-    save_path="...",
+If you have manually annotated syllable labels and want phenotyping statistics
+without running the automated UMAP/HDBSCAN pipeline, use `--manual-only`.
+This runs Stage A (spectrogram extraction) then Stage E (phenotyping) directly,
+skipping Stages B, C, and D. Results land in `<bird>/manual/` by default.
+
+```bash
+# All birds configured in config.yaml
+python run_pipeline.py --manual-only
+
+# Specific birds, custom output directory name
+python run_pipeline.py --manual-only --birds or18or24 rd25wh57 --run_name labeled_jan2025
+```
+
+Outputs: `phenotype_results.csv` with a single `rank='manual'` row, syllable
+acoustic feature database, song catalog, and manual syllable-type catalog.
+The sequencing and syllable-characteristics catalogs are omitted (they require
+automated cluster labels).
+
+Manual labels must be embedded in the audio annotation data. For evsonganaly
+data with manual annotations this happens automatically during Stage A.
+
+```python
+# Python API equivalent
+from run_pipeline import run_manual_only
+
+run_manual_only(
+    save_path="/data/pipeline_runs",
     birds=["or18or24"],
-    pheno_cfg={"min_syllable_proportion": 0.03},
+    evsong_source="/data/raw/evsonganaly",  # or wseg_metadata=...
+    run_name="labeled_jan2025",
 )
 ```
 

@@ -166,12 +166,56 @@ can re-run from any point without reprocessing earlier stages.
 
 ### When to use which entry point
 
-| Scenario | Function | Skips |
-|----------|----------|-------|
-| Source data changed | `run_evsonganaly_cohort()` (full run) | — |
-| UMAP parameters changed | `run_from_embedding()` | A, B |
-| Metrics / HDBSCAN changed | `run_from_labelling()` | A, B, C |
-| Phenotype thresholds changed | `run_from_phenotyping()` | A, B, C, D |
+| Scenario | Function / flag | Skips |
+|----------|-----------------|-------|
+| Source data changed | `run_evsonganaly_cohort()` / `--from A` (full run) | — |
+| Manual labels only, no clustering | `run_manual_only()` / `--manual-only` | B, C, D |
+| UMAP parameters changed | `run_from_embedding()` / `--from C` | A, B |
+| Metrics / HDBSCAN changed | `run_from_labelling()` / `--from D` | A, B, C |
+| Phenotype thresholds changed | `run_from_phenotyping()` / `--from E` | A, B, C, D |
+| Regenerate catalogs only | `--from catalog` | A, B, C, D, E |
+
+### Manual-labels-only mode
+
+Use `--manual-only` when a researcher has manually annotated syllable labels
+and wants phenotyping statistics without automated UMAP/HDBSCAN clustering.
+Stage A is run to save spectrograms (and store manual labels from the annotation
+data), then Stage E runs immediately using those manual labels. Stages B, C, D
+are skipped entirely.
+
+Results land in `<bird>/manual/` by default (override with `--run_name`).
+
+```bash
+# All birds in config.yaml
+python run_pipeline.py --manual-only
+
+# Specific birds, custom output name
+python run_pipeline.py --manual-only --birds or18or24 rd25wh57 --run_name labeled_jan2025
+```
+
+**Outputs:**
+- `phenotype_results.csv` — single row with `rank='manual'`
+- `stages/syllable_database/syllable_features.csv` — acoustic features per syllable
+- `results/catalog/<bird>_song_catalog_rank0.html` — song catalog with manual labels
+- `results/catalog/<bird>_syllable_types_manual_rank0.html` — per-label grid
+
+Sequencing and syllable-characteristics catalogs are omitted (require automated
+cluster labels). The syllable database is built from Stage A spec files — no Stage B needed.
+
+**Requirement:** manual labels must be embedded in the audio annotation data.
+For evsonganaly data with manual annotations this is automatic during Stage A.
+
+```python
+# Python API equivalent
+from run_pipeline import run_manual_only
+
+run_manual_only(
+    save_path='E:/pipeline_runs',
+    birds=['or18or24'],
+    evsong_source='/data/raw/evsonganaly',  # or wseg_metadata='...'
+    run_name='labeled_jan2025',
+)
+```
 
 ### Option A — edit `run_pipeline.py` `__main__` block
 
